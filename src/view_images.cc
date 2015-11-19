@@ -858,7 +858,13 @@ int main( int argc, char *argv[] )
 	    }
 	    else if ( aphoto_step == 1 && ev_win == win_image ) {
 		cmd_id = 0;
-		if ( ev_type == MotionNotify ) {
+		if ( ev_type == MotionNotify
+		     || ( ev_type == ButtonPress && ev_btn == 2 ) ) {
+		    if ( ev_type == ButtonPress ) {
+			/* Use center of image when using center button */
+			ev_x = img_buf.x_length() / 2;
+			ev_y = img_buf.y_length() / 2;
+		    }
 		    newgcfunction(win_image, GXxor);
 		    newrgbcolor(win_image, 0x00,0xff,0x00);
 		    /* draw large cross */
@@ -875,7 +881,7 @@ int main( int argc, char *argv[] )
 		    newgcfunction(win_image, GXcopy);
 		    flag_drawed = true;
 		}
-		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
+		if ( ev_type == ButtonPress && (ev_btn == 1 || ev_btn == 2) ) {
 		    if ( 0 <= aphoto_tmp.obj_x &&
 			 aphoto_tmp.obj_x < img_buf.x_length() &&
 			 0 <= aphoto_tmp.obj_y &&
