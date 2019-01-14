@@ -1,0 +1,21 @@
+#!/bin/sh
+
+if [ "$1" != "" ]; then
+    if [ -d "$1" ]; then
+	BNAME=`basename $1`
+	REF_LIST=`ls $1 | grep '.preview.tiff$' | sed -e 's/[.]preview[.]tiff$//'`
+	echo "Creating directory (folder): $BNAME"
+	mkdir $BNAME 1> /dev/null 2> /dev/null
+	if [ $? = 0 ]; then
+	    for i in $REF_LIST; do
+		echo cp -p ${i}.*.tiff ${BNAME}/.
+		cp -p ${i}.*.tiff ${BNAME}/.
+	    done
+	else
+	    echo "[ERROR] Cannot create directory (folder)."
+	    echo "Please erase directory (folder): $BNAME"
+	fi
+    fi
+else
+    echo "Set a class directory (folder) to 1st arg."
+fi
