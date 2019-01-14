@@ -27,6 +27,8 @@ int main( int argc, char *argv[] )
     tstring filename_sky;
     bool flag_output_8bit = false;
     double dark_factor = 1.0;
+    double flat_factor = 1.0;
+    double flat_idx_factor = 1.0;
     double softdark = 0;
     double softsky = 0;
     int arg_cnt;
@@ -38,10 +40,12 @@ int main( int argc, char *argv[] )
 	sio.eprintf("Process target frames\n");
 	sio.eprintf("\n");
         sio.eprintf("[USAGE]\n");
-	sio.eprintf("$ %s [-8] [-d param] [-s sky.tiff] img_0.tiff img_1.tiff ...\n", argv[0]);
+	sio.eprintf("$ %s [-8] [-d param] [-f param] [-fi param] [-s sky.tiff] img_0.tiff img_1.tiff ...\n", argv[0]);
 	sio.eprintf("\n");
 	sio.eprintf("-8 ... If set, output 8-bit processed images for 8-bit original images\n");
 	sio.eprintf("-d param ... Set dark factor to param. Default is 1.0.\n");
+	sio.eprintf("-f param ... Set flat factor to param. Default is 1.0.\n");
+	sio.eprintf("-fi param ... Set flat index factor (flat ^ x) to param. Default is 1.0.\n");
 	sio.eprintf("NOTE: %s is used when it exists\n",filename_dark);
 	sio.eprintf("NOTE: %s is used when it exists\n",filename_flat);
 	goto quit;
@@ -63,6 +67,20 @@ int main( int argc, char *argv[] )
 	    argstr = argv[arg_cnt];
 	    dark_factor = argstr.atof();
 	    sio.printf("Using dark factor: %g\n", dark_factor);
+	    arg_cnt ++;
+	}
+	else if ( argstr == "-f" ) {
+	    arg_cnt ++;
+	    argstr = argv[arg_cnt];
+	    flat_factor = argstr.atof();
+	    sio.printf("Using flat factor: %g\n", flat_factor);
+	    arg_cnt ++;
+	}
+	else if ( argstr == "-fi" ) {
+	    arg_cnt ++;
+	    argstr = argv[arg_cnt];
+	    flat_idx_factor = argstr.atof();
+	    sio.printf("Using flat index (flat^idx) factor: %g\n", flat_idx_factor);
 	    arg_cnt ++;
 	}
 	else if ( argstr == "-s" ) {
@@ -143,7 +161,18 @@ int main( int argc, char *argv[] )
 	}
 	if ( bytes == 1 ) sio.printf("Found an 8-bit flat image\n");
 	else sio.printf("Found a 16-bit flat image\n");
-	img_flat_buf *= (1.0/32768.0);
+	if ( flat_factor != 1.0 || flat_idx_factor != 1.0 ) {
+	    for ( i=0 ; i < img_flat_buf.length() ; i++ ) {
+	        img_flat_buf[i] -= 32768.0;
+		img_flat_buf[i] *= flat_factor;
+		img_flat_buf[i] += 32768.0;
+	        img_flat_buf[i] *= (1.0/32768.0);
+		img_flat_buf[i] = pow(img_flat_buf[i], flat_idx_factor);
+	    }
+	}
+	else {
+	    img_flat_buf *= (1.0/32768.0);
+	}
     }
     //img_flat_buf.dprint();
 
