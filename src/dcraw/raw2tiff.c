@@ -169,6 +169,14 @@ static int bayer_to_half( int bayer_matrix,	       /* bayer type       */
     unsigned char *strip_buf_in = NULL;
     uint16 *strip_buf_out = NULL;
 
+    if ( byps != 2 ) {
+        fprintf(stderr,"[ERROR] 'byps' should be 2\n");
+	goto quit;
+    }
+    if ( spp != 3 ) {
+        fprintf(stderr,"[ERROR] 'spp' should be 3\n");
+	goto quit;
+    }
    
     strip_buf_in = (unsigned char *)malloc(sizeof(uint16) * 2 * width * 2);
     if ( strip_buf_in == NULL ) {
@@ -310,17 +318,26 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 
     uint32 i, num_i, line_cnt_out;
     unsigned char *strip_buf_in = NULL;		/* to read 2 sensor lines  */
-    uint16 *stripe_buf = NULL;			/* work buffer for 4 lines */
-    //    uint16 *strip_buf_out = NULL;		/* buffer for output       */
+    float *stripe_buf = NULL;			/* work buffer for 4 lines */
+    uint16 *strip_buf_out = NULL;		/* buffer for final output */
 
     uint32 stripe0unit_width = spp * (1+width+1);
     uint32 idx_stripe = 0;
     
-    uint16 *stripe0ptr[4] = {NULL,NULL,NULL,NULL}; /* fixed ptr of stripe_buf */
-    uint16 *stripe_ptr[4] = {NULL,NULL,NULL,NULL}; /* rotational ptr of stripe_buf */
+    float *stripe0ptr[4] = {NULL,NULL,NULL,NULL}; /* fixed ptr of stripe_buf */
+    float *stripe_ptr[4] = {NULL,NULL,NULL,NULL}; /* rotational ptr of stripe_buf */
 
-    double interp_0_25 = 0.25;
-    double interp_0_5 = 0.5;
+    float interp_0_25 = 0.25;
+    float interp_0_5 = 0.5;
+
+    if ( byps != 2 ) {
+        fprintf(stderr,"[ERROR] 'byps' should be 2\n");
+	goto quit;
+    }
+    if ( spp != 3 ) {
+        fprintf(stderr,"[ERROR] 'spp' should be 3\n");
+	goto quit;
+    }
 
     if ( bayer_direct != 0 ) {
         interp_0_25 = 0.0;
@@ -333,12 +350,12 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 	goto quit;
     }
 
-    stripe_buf = (uint16 *)malloc(byps * stripe0unit_width * 4);
+    stripe_buf = (float *)malloc(sizeof(float) * stripe0unit_width * 4);
     if ( stripe_buf == NULL ) {
         fprintf(stderr,"[ERROR] malloc() failed\n");
 	goto quit;
     }
-    memset(stripe_buf, 0, byps * stripe0unit_width * 4);
+    memset(stripe_buf, 0, sizeof(float) * stripe0unit_width * 4);
     stripe0ptr[0] = stripe_buf + spp*1 /* offset for interpolation */;
     stripe0ptr[1] = stripe0ptr[0] + stripe0unit_width;
     stripe0ptr[2] = stripe0ptr[1] + stripe0unit_width;
@@ -360,14 +377,14 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
     stripe_ptr[1] = stripe0ptr[(idx_stripe+1) % 4];
     stripe_ptr[2] = stripe0ptr[(idx_stripe+2) % 4];
     stripe_ptr[3] = stripe0ptr[(idx_stripe+3) % 4];
-    memset(stripe_ptr[2] - spp*1, 0, byps * stripe0unit_width * 2);
+    memset(stripe_ptr[2] - spp*1, 0, sizeof(float) * stripe0unit_width * 2);
     idx_stripe += 2;
     
-    //strip_buf_out = (uint16 *)malloc(byps * spp * width_out);
-    //if ( strip_buf_out == NULL ) {
-    //    fprintf(stderr,"[ERROR] malloc() failed\n");
-    //	goto quit;
-    //}
+    strip_buf_out = (uint16 *)malloc(byps * spp * width_out);
+    if ( strip_buf_out == NULL ) {
+        fprintf(stderr,"[ERROR] malloc() failed\n");
+    	goto quit;
+    }
 
     /* */
     line_cnt_out = 0;
@@ -394,9 +411,7 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 		  v_r |= strip_buf_in[j_in]; j_in ++;
 		  /* */
 		  v_r <<= shift_for_scale_r;
-		  if ( 65535 < v_r ) v_r = 65535;
 		  v_g <<= shift_for_scale_g;
-		  if ( 65535 < v_g ) v_g = 65535;
 		  /**/
 		                               j_out ++; /* left RGB pixel */
 		  stripe_ptr[0][j_out]     += v_g * interp_0_25;
@@ -438,9 +453,7 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 		  v_g |= strip_buf_in[j_in]; j_in ++;
 		  /* */
 		  v_b <<= shift_for_scale_b;
-		  if ( 65535 < v_b ) v_b = 65535;
 		  v_g <<= shift_for_scale_g;
-		  if ( 65535 < v_g ) v_g = 65535;
 		  /**/
 		                               j_out ++; /* left RGB pixel */
 		                               j_out ++;
@@ -484,9 +497,7 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 		  v_g |= strip_buf_in[j_in]; j_in ++;
 		  /* */
 		  v_r <<= shift_for_scale_r;
-		  if ( 65535 < v_r ) v_r = 65535;
 		  v_g <<= shift_for_scale_g;
-		  if ( 65535 < v_g ) v_g = 65535;
 		  /*
 		   * R: (+ 1 0.5 0.5 0.5 0.5 0.25 0.25 0.25 0.25) (* 0.25 0.5)
 		   */
@@ -531,9 +542,7 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 		  v_b |= strip_buf_in[j_in]; j_in ++;
 		  /* */
 		  v_b <<= shift_for_scale_b;
-		  if ( 65535 < v_b ) v_b = 65535;
 		  v_g <<= shift_for_scale_g;
-		  if ( 65535 < v_g ) v_g = 65535;
 		  /**/
 		                               j_out ++; /* left RGB pixel */
 		  stripe_ptr[1][j_out]     += v_g * interp_0_25;
@@ -586,8 +595,13 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 	 */
 	if ( y_out + 1 <= i*2 && line_cnt_out < height_out ) {
 	    //fprintf(stderr,"[DEBUG] line_cnt_out = %d\n",(int)line_cnt_out);
+	    for ( j=0 ; j < spp * width_out ; j++ ) {
+	        float v = stripe_ptr[0][spp * x_out + j] + 0.5;
+		if ( 65535.0 < v ) strip_buf_out[j] = 65535;
+		else strip_buf_out[j] = (uint16)v;
+	    }
 	    if ( TIFFWriteEncodedStrip(tiff_out, line_cnt_out,
-				       stripe_ptr[0] + spp * x_out,
+				       strip_buf_out,
 				       byps * spp * width_out) == 0 ) {
 	        fprintf(stderr,"[ERROR] TIFFWriteEncodedStrip() failed\n");
 		goto quit;
@@ -596,8 +610,13 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 	}	
 	if ( y_out <= i*2 && line_cnt_out < height_out ) {
 	    //fprintf(stderr,"[DEBUG] line_cnt_out = %d\n",(int)line_cnt_out);
+	    for ( j=0 ; j < spp * width_out ; j++ ) {
+	        float v = stripe_ptr[1][spp * x_out + j] + 0.5;
+		if ( 65535.0 < v ) strip_buf_out[j] = 65535;
+		else strip_buf_out[j] = (uint16)v;
+	    }
 	    if ( TIFFWriteEncodedStrip(tiff_out, line_cnt_out,
-				       stripe_ptr[1] + spp * x_out,
+				       strip_buf_out,
 				       byps * spp * width_out) == 0 ) {
 	        fprintf(stderr,"[ERROR] TIFFWriteEncodedStrip() failed\n");
 		goto quit;
@@ -610,14 +629,14 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 	stripe_ptr[1] = stripe0ptr[(idx_stripe+1) % 4];
 	stripe_ptr[2] = stripe0ptr[(idx_stripe+2) % 4];
 	stripe_ptr[3] = stripe0ptr[(idx_stripe+3) % 4];
-	memset(stripe_ptr[2] - spp*1, 0, byps * stripe0unit_width * 2);
+	memset(stripe_ptr[2] - spp*1, 0, sizeof(float) * stripe0unit_width * 2);
 	idx_stripe += 2;
 
     }
 
     return_status = 0;
  quit:
-    //if ( strip_buf_out != NULL ) free(strip_buf_out);
+    if ( strip_buf_out != NULL ) free(strip_buf_out);
     if ( stripe_buf != NULL ) free(stripe_buf);
     if ( strip_buf_in != NULL ) free(strip_buf_in);
 
