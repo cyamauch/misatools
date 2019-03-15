@@ -10,7 +10,7 @@ using namespace sli;
 #include "icc_srgb_profile.c"
 
 /* Maximum byte length of 3-d image buffer to get median */
-static const uint64_t Max_stat_buf_bytes = (uint64_t)500 * 1024 * 1024;
+static const uint64_t Max_stat_buf_bytes = (uint64_t)200 * 1024 * 1024;
 
 int main( int argc, char *argv[] )
 {
@@ -84,6 +84,7 @@ int main( int argc, char *argv[] )
 	    for ( i=0 ; i < filenames_in.length() ; i++ ) {	/* files */
 		filename_in = filenames_in[i].cstr();
 		sio.printf("  Reading %s\n",filename_in);
+		img_load_buf.init(sz_type, false);
 		if ( read_tiff24or48(filename_in, &img_load_buf, NULL) < 0 ) {
 		    sio.eprintf("[ERROR] read_tiff24or48() failed\n");
 		    goto quit;
