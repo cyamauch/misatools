@@ -391,7 +391,8 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
     num_i = height / 2;
     for ( i=0 ; i < num_i + 1 ; i ++ ) {
         const size_t n_to_read = sizeof(uint16) * width * 2; /* 2 lines */
-        uint32 j, num_j, j_in, j_out;
+        uint32 j, num_j, j_in;
+        long j_out;		/* should be signed integer! */
 	uint32 v_r, v_g, v_b;
 	num_j = width / 2;
 	if ( i < num_i ) {
