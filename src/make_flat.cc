@@ -32,6 +32,7 @@ int main( int argc, char *argv[] )
     
     size_t i, j, k, cnt_dark, k_step, width, height;
     int target_channel = 3;
+    bool flag_dither = true;
     double flat_pow = 1.0;
     uint64_t nbytes_img_stat_full;
     float *ptr;
@@ -49,6 +50,7 @@ int main( int argc, char *argv[] )
 		    argv[0]);
 	sio.eprintf("\n");
 	sio.eprintf("-b r,g or b ... If set, create single band (channel) flat\n");
+	sio.eprintf("-t ... If set, output truncated real without dither\n");
 	/*
 	sio.eprintf("-x param\n");
 	sio.eprintf("   param=1.0: normal flat\n");
@@ -76,6 +78,10 @@ int main( int argc, char *argv[] )
 		sio.eprintf("[ERROR] Invalid arg: %s\n", argv[arg_cnt]);
 		goto quit;
 	    }
+	    arg_cnt ++;
+	}
+	else if ( argstr == "-t" ) {
+	    flag_dither = false;
 	    arg_cnt ++;
 	}
 	else if ( argstr == "-x" ) {	/* experiment */
@@ -225,7 +231,9 @@ int main( int argc, char *argv[] )
 	}
     }
     
-    sio.printf("Writing %s ...\n", filename_out[target_channel]);
+    sio.printf("Writing '%s' ", filename_out[target_channel]);
+    if ( flag_dither == true ) sio.printf("using dither ...\n");
+    else sio.printf("NOT using dither ...\n");
 
     /* zero- and max-check */
     ptr = result_buf.array_ptr();
@@ -250,8 +258,8 @@ int main( int argc, char *argv[] )
 	icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
     }
 
-    if ( write_float_to_tiff24or48(result_buf, 0.0, 65535.0, icc_buf,
-				   filename_out[target_channel]) < 0 ) {
+    if ( write_float_to_tiff24or48(result_buf, 0.0, 65535.0, flag_dither, 
+				   icc_buf, filename_out[target_channel]) < 0 ) {
         sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
 	goto quit;
     }

@@ -26,6 +26,7 @@ int main( int argc, char *argv[] )
     const char *filename_flat = "flat.tiff";
     tstring filename_sky;
     bool flag_output_8bit = false;
+    bool flag_dither = true;
     double dark_factor = 1.0;
     double flat_factor = 1.0;
     double flat_idx_factor = 1.0;
@@ -40,9 +41,10 @@ int main( int argc, char *argv[] )
 	sio.eprintf("Process target frames\n");
 	sio.eprintf("\n");
         sio.eprintf("[USAGE]\n");
-	sio.eprintf("$ %s [-8] [-d param] [-f param] [-fi param] [-s sky.tiff] img_0.tiff img_1.tiff ...\n", argv[0]);
+	sio.eprintf("$ %s [-8] [-t] [-d param] [-f param] [-fi param] [-s sky.tiff] img_0.tiff img_1.tiff ...\n", argv[0]);
 	sio.eprintf("\n");
 	sio.eprintf("-8 ... If set, output 8-bit processed images for 8-bit original images\n");
+	sio.eprintf("-t ... If set, output truncated real without dither\n");
 	sio.eprintf("-d param ... Set dark factor to param. Default is 1.0.\n");
 	sio.eprintf("-f param ... Set flat factor to param. Default is 1.0.\n");
 	sio.eprintf("-fi param ... Set flat index factor (flat ^ x) to param. Default is 1.0.\n");
@@ -60,6 +62,10 @@ int main( int argc, char *argv[] )
 	argstr = argv[arg_cnt];
 	if ( argstr == "-8" ) {
 	    flag_output_8bit = true;
+	    arg_cnt ++;
+	}
+	else if ( argstr == "-t" ) {
+	    flag_dither = false;
 	    arg_cnt ++;
 	}
 	else if ( argstr == "-d" ) {
@@ -86,7 +92,7 @@ int main( int argc, char *argv[] )
 	else if ( argstr == "-s" ) {
 	    arg_cnt ++;
 	    filename_sky = argv[arg_cnt];
-	    sio.printf("Using sky frame: %s\n", filename_sky.cstr());
+	    sio.printf("Using sky frame: '%s'\n", filename_sky.cstr());
 	    arg_cnt ++;
 	}
 	else {
@@ -117,7 +123,7 @@ int main( int argc, char *argv[] )
 
         
     if ( f_in.open("r", filename_dark) < 0 ) {
-	sio.eprintf("[ERROR] Not found: %s\n",filename_dark);
+	sio.eprintf("[ERROR] Not found: '%s'\n",filename_dark);
 	goto quit;
     }
     else {
@@ -125,7 +131,7 @@ int main( int argc, char *argv[] )
 	mdarray_double dark_rgb(false);
 	f_in.close();
 	dark_rgb.resize_1d(3);
-	sio.printf("Loading %s\n", filename_dark);
+	sio.printf("Loading '%s'\n", filename_dark);
 	if ( read_tiff24or48_to_float(filename_dark,
 				      &img_dark_buf, NULL, &bytes) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename_dark);
@@ -152,7 +158,7 @@ int main( int argc, char *argv[] )
     else {
 	size_t bytes;
 	f_in.close();
-	sio.printf("Loading %s\n", filename_flat);
+	sio.printf("Loading '%s'\n", filename_flat);
 	if ( read_tiff24or48_to_float(filename_flat,
 				      &img_flat_buf, NULL, &bytes) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename_flat);
@@ -179,14 +185,14 @@ int main( int argc, char *argv[] )
     /* check sky file */
     if ( 0 < filename_sky.length() ) {
 	if ( f_in.open("r", filename_sky.cstr()) < 0 ) {
-	    sio.eprintf("[NOTICE] Not found: %s\n", filename_sky.cstr());
+	    sio.eprintf("[NOTICE] Not found: '%s'\n", filename_sky.cstr());
 	}
 	else {
 	    size_t bytes;
 	    mdarray_double sky_rgb(false);
 	    f_in.close();
 	    sky_rgb.resize_1d(3);
-	    sio.printf("Loading %s\n", filename_sky.cstr());
+	    sio.printf("Loading '%s'\n", filename_sky.cstr());
 	    if ( read_tiff24or48_to_float(filename_sky.cstr(),
 					  &img_sky_buf, NULL, &bytes) < 0 ) {
 		sio.eprintf("[ERROR] cannot load '%s'\n", filename_sky.cstr());
@@ -213,7 +219,7 @@ int main( int argc, char *argv[] )
 	size_t j;
 
 	filename = filenames_in[i];
-	sio.printf("Loading %s\n", filename.cstr());
+	sio.printf("Loading '%s'\n", filename.cstr());
 	if ( read_tiff24or48_to_float(filename.cstr(),
 				      &img_in_buf, &icc_buf, &bytes) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename.cstr());
@@ -222,7 +228,7 @@ int main( int argc, char *argv[] )
 	}
 	if ( 0 < darkfile_list.length() ) {
 	    const char *fn = darkfile_list[i % darkfile_list.length()].cstr();
-	    sio.printf("Loading %s\n", fn);
+	    sio.printf("Loading '%s'\n", fn);
 	    if ( read_tiff24or48_to_float(fn,
 					  &img_dark_buf, NULL, &bytes) < 0 ) {
 		sio.eprintf("[ERROR] cannot load '%s'\n", fn);
@@ -272,9 +278,11 @@ int main( int argc, char *argv[] )
 		if ( ptr[j] < 0 ) ptr[j] = 0.0;
 		else if ( 255.0 < ptr[j] ) ptr[j] = 255.0;
 	    }
-	    sio.printf("Writing %s [8bit/ch] ...\n", filename_out.cstr());
-	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 255.0, icc_buf,
-					   filename_out.cstr()) < 0 ) {
+	    sio.printf("Writing '%s' [8bit/ch] ", filename_out.cstr());
+	    if ( flag_dither == true ) sio.printf("using dither ...\n");
+	    else sio.printf("NOT using dither ...\n");
+	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 255.0, flag_dither, 
+					   icc_buf, filename_out.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
 		goto quit;
 	    }
@@ -284,9 +292,11 @@ int main( int argc, char *argv[] )
 		if ( ptr[j] < 0 ) ptr[j] = 0.0;
 		else if ( 65535.0 < ptr[j] ) ptr[j] = 65535.0;
 	    }
-	    sio.printf("Writing %s [16bit/ch] ...\n", filename_out.cstr());
-	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 65535.0, icc_buf,
-					   filename_out.cstr()) < 0 ) {
+	    sio.printf("Writing '%s' [16bit/ch] ", filename_out.cstr());
+	    if ( flag_dither == true ) sio.printf("using dither ...\n");
+	    else sio.printf("NOT using dither ...\n");
+	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 65535.0, flag_dither, 
+					   icc_buf, filename_out.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
 		goto quit;
 	    }

@@ -147,8 +147,8 @@ int main( int argc, char *argv[] )
 		else if ( 255.0 < ptr[j] ) ptr[j] = 255.0;
 	    }
 	    sio.printf("Writing %s [8bit/ch] ...\n", filename_out.cstr());
-	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 255.0, icc_buf,
-					   filename_out.cstr()) < 0 ) {
+	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 255.0, false, 
+					   icc_buf, filename_out.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
 		goto quit;
 	    }
@@ -159,8 +159,8 @@ int main( int argc, char *argv[] )
 		else if ( 65535.0 < ptr[j] ) ptr[j] = 65535.0;
 	    }
 	    sio.printf("Writing %s [16bit/ch] ...\n", filename_out.cstr());
-	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 65535.0, icc_buf,
-					   filename_out.cstr()) < 0 ) {
+	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 65535.0, false,
+					   icc_buf, filename_out.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
 		goto quit;
 	    }

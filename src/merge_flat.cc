@@ -68,8 +68,8 @@ int main( int argc, char *argv[] )
 	icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
     }
 
-    if ( write_float_to_tiff24or48(img_flat_g_buf, 0.0, 65535.0, icc_buf,
-				   filename_out) < 0 ) {
+    if ( write_float_to_tiff24or48(img_flat_g_buf, 0.0, 65535.0, false, 
+				   icc_buf, filename_out) < 0 ) {
         sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
 	goto quit;
     }
