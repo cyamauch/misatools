@@ -153,7 +153,9 @@ int main( int argc, char *argv[] )
 		if ( ptr[j] < 0 ) ptr[j] = 0.0;
 		else if ( 255.0 < ptr[j] ) ptr[j] = 255.0;
 	    }
-	    sio.printf("Writing %s [8bit/ch] ...\n", filename_out.cstr());
+	    sio.printf("Writing '%s' [8bit/ch] ", filename_out.cstr());
+	    if ( flag_dither == true ) sio.printf("using dither ...\n");
+	    else sio.printf("NOT using dither ...\n");
 	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 255.0, flag_dither, 
 					   icc_buf, filename_out.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
@@ -165,7 +167,9 @@ int main( int argc, char *argv[] )
 		if ( ptr[j] < 0 ) ptr[j] = 0.0;
 		else if ( 65535.0 < ptr[j] ) ptr[j] = 65535.0;
 	    }
-	    sio.printf("Writing %s [16bit/ch] ...\n", filename_out.cstr());
+	    sio.printf("Writing '%s' [16bit/ch] ", filename_out.cstr());
+	    if ( flag_dither == true ) sio.printf("using dither ...\n");
+	    else sio.printf("NOT using dither ...\n");
 	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 65535.0, flag_dither,
 					   icc_buf, filename_out.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
