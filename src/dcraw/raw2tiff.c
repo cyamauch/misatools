@@ -867,10 +867,12 @@ int main( int argc, char *argv[] )
         fprintf(stderr,"$ %s [-f] [-d] [-P file] [-c param] bit_used_R,bit_used_G,bit_used_B rawfile1 ...\n",argv[0]);
 	fprintf(stderr,"\n");
 	fprintf(stderr,"-f ... Output full size images\n");
-	fprintf(stderr,"-d ... Do not interpolate bayer (with -f option)\n");
+	fprintf(stderr,"-d ... Do not demosaic bayer (with -f option)\n");
 	fprintf(stderr,"-P file ... Fix the dead pixels listed in this file\n");
 	fprintf(stderr,"-c [x,y,]width,height ... Crop images. Center when x and y are omitted\n");
 	fprintf(stderr,"bit_used ... 9 to 16.  Set 14 for lossless 14-bit data\n");
+        fprintf(stderr,"[EXAMPLE]\n");
+        fprintf(stderr,"$ %s 13,14,13 DSC_0001.NEF DSC_0002.NEF DSC_0003.NEF\n", argv[0]);
 	goto quit;
     }
 
