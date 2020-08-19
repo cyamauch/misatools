@@ -21,6 +21,7 @@ int main( int argc, char *argv[] )
     mdarray_uchar icc_buf(false);
 
     bool flag_output_8bit = false;
+    bool flag_dither = true;
     float threshold[3] = {0,0,0};	/* for R,G and B each */
 
     int arg_cnt;
@@ -46,6 +47,8 @@ int main( int argc, char *argv[] )
         sio.eprintf("[USAGE]\n");
 	sio.eprintf("$ %s -s threshold img_0.tiff img_1.tiff ...\n", argv[0]);
 	sio.eprintf("$ %s -s threshold_r,threshold_g,threshold_b img_0.tiff img_1.tiff ...\n", argv[0]);
+	sio.eprintf("-s param ... Threshold of wavelet-denoise\n");
+	sio.eprintf("-t ... If set, output truncated real without dither\n");
 	sio.eprintf("\n");
 	sio.eprintf("NOTE: Set large threshold for noisy images\n");
 	sio.eprintf("\n");
@@ -63,6 +66,10 @@ int main( int argc, char *argv[] )
 	argstr = argv[arg_cnt];
 	if ( argstr == "-8" ) {
 	    flag_output_8bit = true;
+	    arg_cnt ++;
+	}
+	else if ( argstr == "-t" ) {
+	    flag_dither = false;
 	    arg_cnt ++;
 	}
 	else if ( argstr == "-s" ) {
@@ -147,7 +154,7 @@ int main( int argc, char *argv[] )
 		else if ( 255.0 < ptr[j] ) ptr[j] = 255.0;
 	    }
 	    sio.printf("Writing %s [8bit/ch] ...\n", filename_out.cstr());
-	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 255.0, false, 
+	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 255.0, flag_dither, 
 					   icc_buf, filename_out.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
 		goto quit;
@@ -159,7 +166,7 @@ int main( int argc, char *argv[] )
 		else if ( 65535.0 < ptr[j] ) ptr[j] = 65535.0;
 	    }
 	    sio.printf("Writing %s [16bit/ch] ...\n", filename_out.cstr());
-	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 65535.0, false,
+	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 65535.0, flag_dither,
 					   icc_buf, filename_out.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
 		goto quit;

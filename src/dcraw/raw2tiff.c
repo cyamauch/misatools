@@ -140,7 +140,7 @@ static int create_tiff_filename( const char *filename_in,
         if ( filename_in[i] == '.' ) dot_idx = i;
     }
     if ( basename[dot_idx] == '.' ) basename[dot_idx] = '\0';
-    snprintf(filename_out_buf, buf_len, "%s.tiff", basename);
+    snprintf(filename_out_buf, buf_len, "%s%s", basename, ".tiff");
 
     return_status = 0;
  quit:
@@ -698,14 +698,14 @@ static int raw_to_tiff( const char *filename_in,
 	    goto quit;
 	}
         snprintf(dcraw_cmd, dcraw_cmd_len,
-		 /* "dcraw -c -D -4 -j -t 0 -P %s %s", */
-		 "dcraw -c -d -4 -j -t 0 -b 0.5 -P %s %s",
+		 "dcraw -c -D -4 -j -t 0 -P %s %s",
+		 /* "dcraw -c -d -4 -j -t 0 -b 0.5 -P %s %s", */
 		 deadpix_file, filename_in);
     }
     else {
 	snprintf(dcraw_cmd, dcraw_cmd_len,
-		 /* "dcraw -c -D -4 -j -t 0 %s", */
-		 "dcraw -c -d -4 -j -t 0 -b 0.5 %s",
+		 "dcraw -c -D -4 -j -t 0 %s",
+		 /* "dcraw -c -d -4 -j -t 0 -b 0.5 %s", */
 		 filename_in);
     }
 

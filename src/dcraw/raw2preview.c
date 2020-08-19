@@ -144,7 +144,7 @@ static int create_preview_filename( const char *filename_in,
         if ( filename_in[i] == '.' ) dot_idx = i;
     }
     if ( basename[dot_idx] == '.' ) basename[dot_idx] = '\0';
-    snprintf(filename_out_buf, buf_len, "%s.preview.tiff", basename);
+    snprintf(filename_out_buf, buf_len, "%s%s", basename, ".preview.tiff");
 
     return_status = 0;
  quit:
