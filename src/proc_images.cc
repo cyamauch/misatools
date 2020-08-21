@@ -266,18 +266,23 @@ int main( int argc, char *argv[] )
 	if ( flag_raw_rgb == false && camera_calibration1[0] == 3 ) {
 	    float mul_0;
 	    size_t len_xy = img_in_buf.x_length() * img_in_buf.y_length();
-	    sio.printf("[INFO] applying daylight multipliers (%g, %g, %g)\n", 
-	    	daylight_multipliers[0], daylight_multipliers[1], daylight_multipliers[2]);
 	    mul_0 = daylight_multipliers[1];
 	    if ( daylight_multipliers[0] < mul_0 ) mul_0 = daylight_multipliers[0];
 	    if ( daylight_multipliers[2] < mul_0 ) mul_0 = daylight_multipliers[2];
-	    for ( j=0 ; j < 3 ; j++ ) {
-		float *p = img_in_buf.array_ptr(0,0,j);
-		float mul = daylight_multipliers[j] / mul_0;
-	        size_t k;
-	        for ( k=0 ; k < len_xy ; k++ ) {
-		    p[k] *= mul;
-	        }
+	    if ( 0.0 < mul_0 ) {
+		sio.printf("[INFO] applying daylight multipliers (%g, %g, %g)\n", 
+		  daylight_multipliers[0],daylight_multipliers[1],daylight_multipliers[2]);
+		for ( j=0 ; j < 3 ; j++ ) {
+		    float *p = img_in_buf.array_ptr(0,0,j);
+		    float mul = daylight_multipliers[j] / mul_0;
+		    size_t k;
+		    for ( k=0 ; k < len_xy ; k++ ) {
+			p[k] *= mul;
+		    }
+		}
+	    }
+	    else {
+		sio.printf("[INFO] daylight multipliers are not found\n");
 	    }
 	}
 
