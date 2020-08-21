@@ -179,7 +179,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     /* load reference ... needs for ICC data */
     sio.printf("Stacking [%s]\n", filenames[ref_file_id].cstr());
     if ( read_tiff24or48_to_float(filenames[ref_file_id].cstr(),
-				  &img_buf, &icc_buf, NULL) < 0 ) {
+				  &img_buf, &icc_buf, NULL, NULL) < 0 ) {
 	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	goto quit;
     }
@@ -221,7 +221,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
         if ( flg_saved[i] == true ) {
 	    sio.printf("Stacking [%s]\n", filenames[i].cstr());
 	    if ( read_tiff24or48_to_float(filenames[i].cstr(),
-					  &img_buf, NULL, NULL) < 0 ) {
+					  &img_buf, NULL, NULL, NULL) < 0 ) {
 		sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	    }
 	    else {
@@ -319,7 +319,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 	    if ( (int)i == ref_file_id || flg_saved[i] == true ) {
 		sio.printf("Stacking with Sigma-Clipping [%s]\n", filenames[i].cstr());
 		if ( read_tiff24or48_to_float(filenames[i].cstr(),
-					      &img_buf, NULL, NULL) < 0 ) {
+					      &img_buf, NULL, NULL, NULL) < 0 ) {
 		    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 		}
 	        else {
@@ -680,7 +680,7 @@ int main( int argc, char *argv[] )
 	    (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
 
     if ( read_tiff24or48_to_float(filenames[ref_file_id].cstr(),
-				  &img_buf, NULL, NULL) < 0 ) {
+				  &img_buf, NULL, NULL, NULL) < 0 ) {
         sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	goto quit;
     }
@@ -792,7 +792,7 @@ int main( int argc, char *argv[] )
 	    img_display.init(false);	/* save memory ... */
 		    
 	    if ( read_tiff24or48_to_float(filenames[f_id].cstr(),
-					  &img_buf, NULL, NULL) < 0 ) {
+					  &img_buf, NULL, NULL, NULL) < 0 ) {
 	        sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 		sel_file_id = -1;
 	    }

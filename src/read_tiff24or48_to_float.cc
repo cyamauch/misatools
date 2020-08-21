@@ -3,15 +3,17 @@
 /* this returns float array (data contents are unsigned 16-bit) */
 /* this returns 1 or 2 (for 8-/16-bit) to *ret_bytes            */
 static int read_tiff24or48_to_float( const char *filename_in,
-    mdarray_float *ret_img_buf, mdarray_uchar *ret_icc_buf, size_t *ret_bytes )
+    mdarray_float *ret_img_buf, mdarray_uchar *ret_icc_buf, size_t *ret_bytes,
+    float camera_calibration1_ret[] )
 {
     stdstreamio sio;
 
     /* TIFF: See http://www.libtiff.org/man/TIFFGetField.3t.html */
     TIFF *tiff_in = NULL;
     uint16 bps, byps, spp, pconfig, photom;
-    uint32 width, height, icc_prof_size = 0;
+    uint32 width, height, icc_prof_size = 0, camera_calibration1_size = 0;
     void *icc_prof_data = NULL;
+    float *camera_calibration1 = NULL;
     tsize_t strip_size;
     size_t strip_max;
 
@@ -71,6 +73,21 @@ static int read_tiff24or48_to_float( const char *filename_in,
 	sio.eprintf("[ERROR] Unsupported PHOTOMETRIC value\n");
 	goto quit;
     }
+
+    if ( TIFFGetField(tiff_in, TIFFTAG_CAMERACALIBRATION1,
+		      &camera_calibration1_size, &camera_calibration1) != 0 ) {
+	if ( camera_calibration1 != NULL ) {
+	    /*
+	    uint32 i;
+	    sio.eprintf("[INFO] camera_calibration1 = ( ");
+            for ( i=0 ; i < camera_calibration1_size ; i++ ) {
+		sio.eprintf("%g ", camera_calibration1[i]);
+            }
+            sio.eprintf(")\n");
+	    */
+	}
+    }
+
     if ( TIFFGetField(tiff_in, TIFFTAG_ICCPROFILE,
 		      &icc_prof_size, &icc_prof_data) != 0 ) {
 	if ( ret_icc_buf != NULL ) {
@@ -183,6 +200,19 @@ static int read_tiff24or48_to_float( const char *filename_in,
     }
 
     if ( ret_bytes != NULL ) *ret_bytes = byps;
+    if ( camera_calibration1_ret != NULL ) {
+	uint32 i;
+	if ( camera_calibration1 == NULL ) camera_calibration1_size = 0;
+        for ( i=0 ; i < 8 ; i++ ) {
+	    if ( i < camera_calibration1_size ) {
+		camera_calibration1_ret[i] = camera_calibration1[i];
+            }
+	    else {
+		if ( i == 0 || i == 7 ) camera_calibration1_ret[i] = 0.0;
+		else camera_calibration1_ret[i] = 1.0;
+	    }
+	}
+    }
 
     ret_status = 0;
  quit:

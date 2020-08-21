@@ -41,11 +41,16 @@ static int check_a_file( const char *filename )
 }
 
 /* Get matrix type using dcraw */
-static int get_matrix_type( const char *filename_in )
+static int get_matrix_type_and_multipliers( const char *filename_in,
+		int *raw_colors_p, float daylight_mul[], float camera_mul[] )
 {
     int return_status = -1;
+    const char *str_pat_raw_colors = "Raw colors: ";
     const char *str_pat_rg_gb = "Filter pattern: RG/GB\n";
     const char *str_pat_gr_bg = "Filter pattern: GR/BG\n";
+    const char *str_pat_daylight_mul = "Daylight multipliers: ";
+    const char *str_pat_camera_mul = "Camera multipliers: ";
+
     char cmd[32 + PATH_MAX];
     char line[256];
     FILE *pp = NULL;
@@ -57,9 +62,29 @@ static int get_matrix_type( const char *filename_in )
     pp = popen(cmd, "r");
     if ( pp == NULL ) goto quit;			/* ERROR */
 
+    *raw_colors_p = 0;
+    daylight_mul[0] = 0.0;
+    daylight_mul[1] = 0.0;
+    daylight_mul[2] = 0.0;
+    camera_mul[0] = 0.0;
+    camera_mul[1] = 0.0;
+    camera_mul[2] = 0.0;
+    camera_mul[3] = 0.0;
+
     while ( fgets(line,256,pp) != NULL ) {
 	if ( strcmp(line,str_pat_rg_gb) == 0 ) matrix_type = Matrix_RG_GB;
-	if ( strcmp(line,str_pat_gr_bg) == 0 ) matrix_type = Matrix_GR_BG;
+	else if ( strcmp(line,str_pat_gr_bg) == 0 ) matrix_type = Matrix_GR_BG;
+	else if ( strncmp(line,str_pat_raw_colors,strlen(str_pat_raw_colors)) == 0 ) {
+	    sscanf(line + strlen(str_pat_raw_colors), "%d", raw_colors_p);
+	}
+	else if ( strncmp(line,str_pat_daylight_mul,strlen(str_pat_daylight_mul)) == 0 ) {
+	    sscanf(line + strlen(str_pat_daylight_mul), "%f %f %f",
+		   daylight_mul + 0, daylight_mul + 1, daylight_mul + 2);
+	}
+	else if ( strncmp(line,str_pat_camera_mul,strlen(str_pat_camera_mul)) == 0 ) {
+	    sscanf(line + strlen(str_pat_camera_mul), "%f %f %f %f",
+		   camera_mul + 0, camera_mul + 1, camera_mul + 2, camera_mul + 3);
+	}
     }
     
     return_status = matrix_type;
@@ -670,14 +695,26 @@ static int raw_to_tiff( const char *filename_in,
     const uint32 shift_for_scale[3] = { 16 - bit_used[0],
 					16 - bit_used[1],
 					16 - bit_used[2] };
+    int raw_colors;
+    float camera_calibration1[8];				/* for TIFF tag */
+    float *daylight_multipliers = camera_calibration1 + 1;	/* [3] */
+    float *camera_multipliers = camera_calibration1 + 1 + 3;	/* [4] */
 
     if ( check_a_file(filename_in) < 0 ) {
         fprintf(stderr,"[ERROR] not found: %s\n",filename_in);
 	goto quit;	/* ERROR */
     }
 
-    bayer_matrix = get_matrix_type(filename_in);
-    
+    bayer_matrix = get_matrix_type_and_multipliers(filename_in,
+			&raw_colors, daylight_multipliers, camera_multipliers);
+    camera_calibration1[0] = raw_colors;
+
+    /*
+    fprintf(stderr,"[INFO] camera_calibration1 = (%g %g %g %g %g %g %g %g)\n",
+	    camera_calibration1[0],camera_calibration1[1],camera_calibration1[2],camera_calibration1[3],
+	    camera_calibration1[4],camera_calibration1[5],camera_calibration1[6],camera_calibration1[7]);
+    */
+
     if ( create_tiff_filename( filename_in, filename_out, PATH_MAX ) < 0 ) {
         fprintf(stderr,"[ERROR] create_tiff_filename() failed\n");
 	goto quit;	/* ERROR */
@@ -789,6 +826,8 @@ static int raw_to_tiff( const char *filename_in,
     TIFFSetField(tiff_out, TIFFTAG_BITSPERSAMPLE, bps);
     TIFFSetField(tiff_out, TIFFTAG_SAMPLESPERPIXEL, spp);
     TIFFSetField(tiff_out, TIFFTAG_ROWSPERSTRIP, (uint32)1);
+
+    TIFFSetField(tiff_out, TIFFTAG_CAMERACALIBRATION1, 8, camera_calibration1);
     
     icc_prof_size = sizeof(Icc_srgb_profile);
     TIFFSetField(tiff_out, TIFFTAG_ICCPROFILE,

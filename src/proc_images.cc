@@ -21,12 +21,16 @@ int main( int argc, char *argv[] )
     mdarray_float img_sky_buf(false);
     mdarray_float img_in_buf(false);
     mdarray_uchar icc_buf(false);
+    float camera_calibration1[8];				/* for TIFF tag */
+    float *daylight_multipliers = camera_calibration1 + 1;	/* [3] */
+    //float *camera_multipliers = camera_calibration1 + 1 + 3;	/* [4] */
     const char *filename_dark = "dark.tiff";
     const char *filename_dark_list = "dark.txt";
     const char *filename_flat = "flat.tiff";
     tstring filename_sky;
     bool flag_output_8bit = false;
     bool flag_dither = true;
+    bool flag_raw_rgb = false;
     double dark_factor = 1.0;
     double flat_factor = 1.0;
     double flat_idx_factor = 1.0;
@@ -45,6 +49,7 @@ int main( int argc, char *argv[] )
 	sio.eprintf("\n");
 	sio.eprintf("-8 ... If set, output 8-bit processed images for 8-bit original images\n");
 	sio.eprintf("-t ... If set, output truncated real without dither\n");
+	sio.eprintf("-r ... If set, output raw RGB without applying daylight multipliers\n");
 	sio.eprintf("-d param ... Set dark factor to param. Default is 1.0.\n");
 	sio.eprintf("-f param ... Set flat factor to param. Default is 1.0.\n");
 	sio.eprintf("-fi param ... Set flat index factor (flat ^ x) to param. Default is 1.0.\n");
@@ -66,6 +71,10 @@ int main( int argc, char *argv[] )
 	}
 	else if ( argstr == "-t" ) {
 	    flag_dither = false;
+	    arg_cnt ++;
+	}
+	else if ( argstr == "-r" ) {
+	    flag_raw_rgb = true;
 	    arg_cnt ++;
 	}
 	else if ( argstr == "-d" ) {
@@ -133,7 +142,7 @@ int main( int argc, char *argv[] )
 	dark_rgb.resize_1d(3);
 	sio.printf("Loading '%s'\n", filename_dark);
 	if ( read_tiff24or48_to_float(filename_dark,
-				      &img_dark_buf, NULL, &bytes) < 0 ) {
+				      &img_dark_buf, NULL, &bytes, NULL) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename_dark);
 	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	    goto quit;
@@ -148,7 +157,7 @@ int main( int argc, char *argv[] )
 	sio.printf("median dark value of r, g, b = %g, %g, %g\n",
 		   dark_rgb[0],dark_rgb[1],dark_rgb[2]);
 	softdark = md_median(dark_rgb);
-	sio.printf("Softdark value = %g (when 16-bit)\n", softdark);
+	//sio.printf("[INFO] softdark value = %g (when 16-bit)\n", softdark);
     }
 
     /* check flat file */
@@ -160,7 +169,7 @@ int main( int argc, char *argv[] )
 	f_in.close();
 	sio.printf("Loading '%s'\n", filename_flat);
 	if ( read_tiff24or48_to_float(filename_flat,
-				      &img_flat_buf, NULL, &bytes) < 0 ) {
+				      &img_flat_buf, NULL, &bytes, NULL) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename_flat);
 	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	    goto quit;
@@ -194,7 +203,7 @@ int main( int argc, char *argv[] )
 	    sky_rgb.resize_1d(3);
 	    sio.printf("Loading '%s'\n", filename_sky.cstr());
 	    if ( read_tiff24or48_to_float(filename_sky.cstr(),
-					  &img_sky_buf, NULL, &bytes) < 0 ) {
+					  &img_sky_buf, NULL, &bytes, NULL) < 0 ) {
 		sio.eprintf("[ERROR] cannot load '%s'\n", filename_sky.cstr());
 		sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 		goto quit;
@@ -208,7 +217,7 @@ int main( int argc, char *argv[] )
 	    sio.printf("median sky value of r, g, b = %g, %g, %g\n",
 		       sky_rgb[0],sky_rgb[1],sky_rgb[2]);
 	    softsky = md_median(sky_rgb);
-	    sio.printf("Softsky value = %g\n", softsky);
+	    //sio.printf("[INFO] softsky value = %g\n", softsky);
 	}
     }
 
@@ -221,7 +230,7 @@ int main( int argc, char *argv[] )
 	filename = filenames_in[i];
 	sio.printf("Loading '%s'\n", filename.cstr());
 	if ( read_tiff24or48_to_float(filename.cstr(),
-				      &img_in_buf, &icc_buf, &bytes) < 0 ) {
+				      &img_in_buf, &icc_buf, &bytes, camera_calibration1) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename.cstr());
 	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	    goto quit;
@@ -230,7 +239,7 @@ int main( int argc, char *argv[] )
 	    const char *fn = darkfile_list[i % darkfile_list.length()].cstr();
 	    sio.printf("Loading '%s'\n", fn);
 	    if ( read_tiff24or48_to_float(fn,
-					  &img_dark_buf, NULL, &bytes) < 0 ) {
+					  &img_dark_buf, NULL, &bytes, NULL) < 0 ) {
 		sio.eprintf("[ERROR] cannot load '%s'\n", fn);
 		sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 		goto quit;
@@ -247,12 +256,35 @@ int main( int argc, char *argv[] )
 	if ( 0 < img_flat_buf.length() ) {
 	    img_in_buf /= img_flat_buf;
 	}
-	img_in_buf += softdark;
 
 	/* Subtract sky */
 	if ( 0 < img_sky_buf.length() ) {
 	    img_in_buf -= img_sky_buf;
-	    img_in_buf += softsky;
+	}
+
+	/* Apply daylight multipliers, if possible */
+	if ( flag_raw_rgb == false && camera_calibration1[0] == 3 ) {
+	    float mul_0;
+	    size_t len_xy = img_in_buf.x_length() * img_in_buf.y_length();
+	    sio.printf("[INFO] applying daylight multipliers (%g, %g, %g)\n", 
+	    	daylight_multipliers[0], daylight_multipliers[1], daylight_multipliers[2]);
+	    mul_0 = daylight_multipliers[1];
+	    if ( daylight_multipliers[0] < mul_0 ) mul_0 = daylight_multipliers[0];
+	    if ( daylight_multipliers[2] < mul_0 ) mul_0 = daylight_multipliers[2];
+	    for ( j=0 ; j < 3 ; j++ ) {
+		float *p = img_in_buf.array_ptr(0,0,j);
+		float mul = daylight_multipliers[j] / mul_0;
+	        size_t k;
+	        for ( k=0 ; k < len_xy ; k++ ) {
+		    p[k] *= mul;
+	        }
+	    }
+	}
+
+	/* Add softdark when Subtract sky */
+	if ( 0 < img_sky_buf.length() ) {
+	    sio.printf("[INFO] softdark value = %g (when 16-bit)\n", softdark);
+	    img_in_buf += softdark;
 	}
 
 	/* create new filename */

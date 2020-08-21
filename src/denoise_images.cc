@@ -115,7 +115,7 @@ int main( int argc, char *argv[] )
 	filename = filenames_in[i];
 	sio.printf("Loading %s\n", filename.cstr());
 	if ( read_tiff24or48_to_float(filename.cstr(),
-				      &img_in_buf, &icc_buf, &bytes) < 0 ) {
+				      &img_in_buf, &icc_buf, &bytes, NULL) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename.cstr());
 	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	    goto quit;

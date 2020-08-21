@@ -10,8 +10,9 @@ static int read_tiff24or48_separate_buffer( const char *filename_in,
     /* TIFF: See http://www.libtiff.org/man/TIFFGetField.3t.html */
     TIFF *tiff_in = NULL;
     uint16 bps, byps, spp, pconfig, photom;
-    uint32 width, height, icc_prof_size = 0;
+    uint32 width, height, icc_prof_size = 0, camera_calibration1_size = 0;
     void *icc_prof_data = NULL;
+    float *camera_calibration1 = NULL;
     tsize_t strip_size;
     size_t strip_max;
 
@@ -71,6 +72,21 @@ static int read_tiff24or48_separate_buffer( const char *filename_in,
 	sio.eprintf("[ERROR] Unsupported PHOTOMETRIC value\n");
 	goto quit;
     }
+
+    if ( TIFFGetField(tiff_in, TIFFTAG_CAMERACALIBRATION1,
+		      &camera_calibration1_size, &camera_calibration1) != 0 ) {
+	if ( camera_calibration1 != NULL ) {
+	    /*
+	    uint32 i;
+	    sio.eprintf("[INFO] camera_calibration1 = ( ");
+            for ( i=0 ; i < camera_calibration1_size ; i++ ) {
+		sio.eprintf("%g ", camera_calibration1[i]);
+            }
+            sio.eprintf(")\n");
+            */
+	}
+    }
+
     if ( TIFFGetField(tiff_in, TIFFTAG_ICCPROFILE,
 		      &icc_prof_size, &icc_prof_data) != 0 ) {
 	if ( ret_icc_buf != NULL ) {
