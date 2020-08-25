@@ -1,5 +1,5 @@
 /*
- * $ s++ determine_sky.cc -leggx -lX11
+ * $ s++ determine_sky.cc -leggx -lX11 -ltiff
  */
 #include <sli/stdstreamio.h>
 #include <sli/pipestreamio.h>

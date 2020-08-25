@@ -1,5 +1,5 @@
 /*
- * $ s++ stack_images.cc -leggx -lX11
+ * $ s++ stack_images.cc -leggx -lX11 -ltiff
  */
 #include <sli/stdstreamio.h>
 #include <sli/pipestreamio.h>

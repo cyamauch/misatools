@@ -1,5 +1,5 @@
 /*
- * $ s++ align_rgb.cc -leggx -lX11
+ * $ s++ align_rgb.cc -leggx -lX11 -ltiff
  */
 #include <sli/stdstreamio.h>
 #include <sli/pipestreamio.h>

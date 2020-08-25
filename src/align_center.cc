@@ -1,5 +1,5 @@
 /*
- * $ s++ align_center.cc
+ * $ s++ align_center.cc -ltiff
  */
 #include <sli/stdstreamio.h>
 #include <sli/tstring.h>
