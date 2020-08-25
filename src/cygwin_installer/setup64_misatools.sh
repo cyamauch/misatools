@@ -29,6 +29,9 @@ if [ ! -f .emacs ]; then
    '(lambda ()
      (setq c-basic-offset 4)
     ) t)
+(setq scroll-step 1)
+(setq scroll-conservatively 4)
+(setq scroll-preserve-screen-position t)
 EOF
 fi
 
