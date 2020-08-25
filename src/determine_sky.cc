@@ -116,7 +116,7 @@ int main( int argc, char *argv[] )
     win_image = gopen(width, height);
     winname(win_image, "RGB image");
     
-    display_image(win_image, image_buf, contrast_rgb, &tmp_buf);
+    display_image(win_image, image_buf, 0, contrast_rgb, &tmp_buf);
 
 
     /* set drawing mode */
@@ -219,7 +219,7 @@ int main( int argc, char *argv[] )
     }
     
     //gclr(win_image);
-    //display_image(win_image, stat_buf, contrast_rgb, &tmp_buf);
+    //display_image(win_image, stat_buf, 0, contrast_rgb, &tmp_buf);
 
     sky_lv[0] = md_median(stat_buf.sectionf("*,*,0"));
     sky_lv[1] = md_median(stat_buf.sectionf("*,*,1"));

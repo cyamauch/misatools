@@ -208,7 +208,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     
     winname(win_image, "Stacking ...");
     if ( flag_preview == true ) {
-        display_image(win_image, img_buf, contrast_rgb, tmp_buf);
+        display_image(win_image, img_buf, 0, contrast_rgb, tmp_buf);
     }
 
     n_plus = 0;
@@ -241,7 +241,8 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 		    img_buf.paste(stacked_buf1_sum);
 		    img_buf *= (1.0/(double)ii);
 		    /* display stacked image */
-		    display_image(win_image, img_buf, contrast_rgb, tmp_buf);
+		    display_image(win_image, img_buf,
+				  0, contrast_rgb, tmp_buf);
 		}
 
 		winname(win_image, "Stacking %zd/%zd", ii, (size_t)(1+n_plus));
@@ -405,7 +406,8 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 			img_buf.paste((*stacked_buf0_sum_ptr));
 			img_buf /= (*count_buf0_ptr);
 			/* display stacked image */
-			display_image(win_image, img_buf, contrast_rgb, tmp_buf);
+			display_image(win_image, img_buf,
+				      0, contrast_rgb, tmp_buf);
 		    }
 
 		    winname(win_image, "Stacking with Sigma-Clipping %zd/%zd", ii, (size_t)(1+n_plus));
@@ -686,7 +688,7 @@ int main( int argc, char *argv[] )
     }
 
     /* display reference image */
-    display_image(win_image, img_buf, contrast_rgb, &tmp_buf);
+    display_image(win_image, img_buf, 0, contrast_rgb, &tmp_buf);
 
     ref_img_buf.resize(img_buf);
     ref_img_buf.paste(img_buf);
@@ -1001,24 +1003,33 @@ int main( int argc, char *argv[] )
 		//res_total = md_total(img_residual);
 		//img_display.swap(img_residual);
 		//img_residual.init(false);
-		display_image(win_image, img_display, contrast_rgb, &tmp_buf);
-		winname(win_image, "Residual offset=(%ld,%ld)",
-			offset_x, offset_y);
+		display_image(win_image, img_display,
+			      0, contrast_rgb, &tmp_buf);
+		winname(win_image, "Residual  offset = ( %ld, %ld )  "
+			"Contrast = ( %d, %d, %d )  ",
+			offset_x, offset_y,
+			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 		//img_display.init(false);
 	    }
 	    else if ( display_type == 1 ) {	/* Reference */
 		img_display.resize(ref_img_buf);
 	        img_display.paste(ref_img_buf);
-		display_image(win_image, img_display, contrast_rgb, &tmp_buf);
-		winname(win_image, "Reference");
+		display_image(win_image, img_display,
+			      0, contrast_rgb, &tmp_buf);
+		winname(win_image, "Reference  "
+			"Contrast = ( %d, %d, %d )  ",
+			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 		//img_display.init(false);
 	    }
 	    else {
 		img_display.resize(img_buf);
 	        img_display.paste(img_buf, offset_x, offset_y, 0);
-		display_image(win_image, img_display, contrast_rgb, &tmp_buf);
-		winname(win_image, "Target offset=(%ld,%ld)",
-			offset_x, offset_y);
+		display_image(win_image, img_display,
+			      0, contrast_rgb, &tmp_buf);
+		winname(win_image, "Target  offset = ( %ld, %ld )  "
+			"Contrast = ( %d, %d, %d )  ",
+			offset_x, offset_y,
+			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 		//img_display.init(false);
 	    }
 	}
