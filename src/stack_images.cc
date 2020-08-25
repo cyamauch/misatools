@@ -748,7 +748,7 @@ int main( int argc, char *argv[] )
 	if ( cmd_id == CMD_EXIT ) {
 	    break;
 	}
-	else if ( cmd_id == CMD_STACK || cmd_id == CMD_STACK_SILENT) {
+	else if ( cmd_id == CMD_STACK || cmd_id == CMD_STACK_SILENT ) {
 	    /* preview on/off */
 	    bool flag_preview = true;
 	    if ( cmd_id == CMD_STACK_SILENT ) flag_preview = false;

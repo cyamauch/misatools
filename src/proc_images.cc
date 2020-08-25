@@ -34,8 +34,9 @@ int main( int argc, char *argv[] )
     double dark_factor = 1.0;
     double flat_factor = 1.0;
     double flat_idx_factor = 1.0;
-    double softdark = 0;
-    double softsky = 0;
+    double softdark = 0.0;
+    double softsky = 0.0;
+    double softbias = 0.0;
     int arg_cnt;
     size_t i;
     
@@ -50,6 +51,7 @@ int main( int argc, char *argv[] )
 	sio.eprintf("-8 ... If set, output 8-bit processed images for 8-bit original images\n");
 	sio.eprintf("-t ... If set, output truncated real without dither\n");
 	sio.eprintf("-r ... If set, output raw RGB without applying daylight multipliers\n");
+	sio.eprintf("-s param ... Set softbias value. Default is 0.0\n");
 	sio.eprintf("-d param ... Set dark factor to param. Default is 1.0.\n");
 	sio.eprintf("-f param ... Set flat factor to param. Default is 1.0.\n");
 	sio.eprintf("-fi param ... Set flat index factor (flat ^ x) to param. Default is 1.0.\n");
@@ -75,6 +77,12 @@ int main( int argc, char *argv[] )
 	}
 	else if ( argstr == "-r" ) {
 	    flag_raw_rgb = true;
+	    arg_cnt ++;
+	}
+	else if ( argstr == "-s" ) {
+	    arg_cnt ++;
+	    argstr = argv[arg_cnt];
+	    softbias = argstr.atof();
 	    arg_cnt ++;
 	}
 	else if ( argstr == "-d" ) {
@@ -286,12 +294,15 @@ int main( int argc, char *argv[] )
 	    }
 	}
 
-	/* Add softdark when Subtract sky */
-	if ( 0 < img_sky_buf.length() ) {
-	    sio.printf("[INFO] softdark value = %g (when 16-bit)\n", softdark);
-	    img_in_buf += softdark;
+	/* Add softbias */
+	if ( softbias != 0.0 ) {
+	    sio.printf("[INFO] softbias = %g (when 16-bit)\n", softbias);
+	    img_in_buf += softbias;
 	}
-
+	else {
+	    sio.printf("[INFO] softbias = %g\n", softbias);
+	}
+	
 	/* create new filename */
 	if ( bytes == 1 ) {
 	    make_output_filename(filename.cstr(), "proc", "8bit",
