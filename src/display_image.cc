@@ -71,8 +71,8 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    }
 	}
 	else {
-	    double *lv_p = NULL;
-	    mdarray_double lv(false, &lv_p);
+	    float *lv_p = NULL;
+	    mdarray_float lv(false, &lv_p);
 	    lv.resize(display_width * 4);
 	    lv = 0.0;
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
@@ -125,8 +125,8 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    }
 	}
 	else {
-	    double *lv_p = NULL;
-	    mdarray_double lv(false, &lv_p);
+	    float *lv_p = NULL;
+	    mdarray_float lv(false, &lv_p);
 	    lv.resize(display_width * 4);
 	    lv = 0.0;
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {

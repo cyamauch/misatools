@@ -719,15 +719,70 @@ int main( int argc, char *argv[] )
 
 	int f_id = -1;
 	int cmd_id = -1;
+	bool flag_file_selector = false;
 	
         /* waiting an event */
         ev_win = eggx_ggetxpress(&ev_type,&ev_btn,&ev_x,&ev_y);
 
-	if ( ev_type == ButtonPress && ev_win == win_command ) {
-	    cmd_id = 1 + ev_y / win_command_col_height;
+	/*
+	 *  Check file selector
+	 */
+	if ( ev_type == ButtonPress && ev_win == win_filesel ) {
+	    flag_file_selector = true;
+	    f_id = ev_y / Fontsize;
+	}
+	else if ( ev_type == KeyPress && ev_btn == 6 /* PageDown */ ) {
+	    flag_file_selector = true;
+	    f_id = sel_file_id + 1;
+	    if ( f_id == ref_file_id ) f_id ++;
+	}
+	else if ( ev_type == KeyPress && ev_btn == 2 /* PageUp */ ) {
+	    flag_file_selector = true;
+	    f_id = sel_file_id - 1;
+	    if ( f_id == ref_file_id ) f_id --;
+	}
+	
+	if ( f_id != ref_file_id &&
+	     0 <= f_id && (size_t)f_id < filenames.length() ) {
+
+	    sio.printf("Open: %s\n", filenames[f_id].cstr());
+	    img_display.init(false);	/* save memory ... */
+		    
+	    if ( read_tiff24or48_to_float(filenames[f_id].cstr(),
+					  &img_buf, NULL, NULL, NULL) < 0 ) {
+	        sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+		sel_file_id = -1;
+	    }
+	    else {
+
+		sel_file_id = f_id;
+		//sio.printf("%ld\n", sel_file_id);
+
+		if ( flg_saved[sel_file_id] == true ) {
+		    if ( read_offset_file(filenames, sel_file_id,
+					  &offset_x, &offset_y) < 0 ) {
+			sio.eprintf("[ERROR] read_offset_file() failed.\n");
+		    }
+		}
+		if ( display_type == 1 ) display_type = 0;
+
+		refresh_image = true;
+		refresh_list = true;
+
+	    }
 	}
 
-	if ( ev_type == KeyPress ) {
+	/*
+	 *  Check command window
+	 */
+	
+	if ( flag_file_selector == true ) {
+	    /* NOP */
+	}
+	else if ( ev_type == ButtonPress && ev_win == win_command ) {
+	    cmd_id = 1 + ev_y / win_command_col_height;
+	}
+	else if ( ev_type == KeyPress ) {
 	    //sio.printf("[%d]\n", ev_btn);
 	    if ( ev_btn == '1' ) cmd_id = CMD_DISPLAY_TARGET;
 	    else if ( ev_btn == '2' ) cmd_id = CMD_DISPLAY_REFERENCE;
@@ -800,6 +855,10 @@ int main( int argc, char *argv[] )
 	    else if ( ev_btn == 27 || ev_btn == 'q' ) cmd_id = CMD_EXIT;
 	}
 
+	/*
+	 *  Handle cmd_id
+	 */
+	
 	if ( cmd_id == CMD_EXIT ) {
 	    break;
 	}
@@ -828,214 +887,166 @@ int main( int argc, char *argv[] )
 	    //sel_file_id = -1;
 	    //refresh_list = true;
 	}
-	else if ( ev_type == ButtonPress && ev_win == win_filesel ) {
-	    f_id = ev_y / Fontsize;
+	else if ( cmd_id == CMD_DISPLAY_RGB ) {
+	    display_ch = 0;
+	    refresh_image = true;
 	}
-	else if ( ev_type == KeyPress && ev_btn == 6 /* PageDown */ ) {
-	    f_id = sel_file_id + 1;
-	    if ( f_id == ref_file_id ) f_id ++;
+	else if ( cmd_id == CMD_DISPLAY_R ) {
+	    display_ch = 1;
+	    refresh_image = true;
 	}
-	else if ( ev_type == KeyPress && ev_btn == 2 /* PageUp */ ) {
-	    f_id = sel_file_id - 1;
-	    if ( f_id == ref_file_id ) f_id --;
+	else if ( cmd_id == CMD_DISPLAY_G ) {
+	    display_ch = 2;
+	    refresh_image = true;
 	}
-	
-	if ( f_id != ref_file_id &&
-	     0 <= f_id && (size_t)f_id < filenames.length() ) {
-
-	    sio.printf("Open: %s\n", filenames[f_id].cstr());
-	    img_display.init(false);	/* save memory ... */
-		    
-	    if ( read_tiff24or48_to_float(filenames[f_id].cstr(),
-					  &img_buf, NULL, NULL, NULL) < 0 ) {
-	        sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
-		sel_file_id = -1;
-	    }
-	    else {
-		if ( cmd_id == CMD_STACK || cmd_id == CMD_STACK_SILENT ) {
-		    /* NOP */
-		}
-		else {
-		    /* OK */
-		    //img_display.resize(img_buf);
-		    //img_residual.resize(img_buf);
-		    sel_file_id = f_id;
-		    //offset_x = 0;
-		    //offset_y = 0;
-		    //flg_saved.dprint();
-		    //sio.printf("%ld\n", sel_file_id);
-		    if ( flg_saved[sel_file_id] == true ) {
-
-			if ( read_offset_file(filenames, sel_file_id,
-					      &offset_x, &offset_y) < 0 ) {
-			    sio.eprintf("[ERROR] read_offset_file() failed.\n");
-			}
-
-		    }
-		    if ( display_type == 1 ) display_type = 0;
-		    refresh_image = true;
-		    refresh_list = true;
-		}
-	    }
+	else if ( cmd_id == CMD_DISPLAY_B ) {
+	    display_ch = 3;
+	    refresh_image = true;
 	}
-
-	else {
-
-	    if ( cmd_id == CMD_DISPLAY_RGB ) {
-		display_ch = 0;
-		refresh_image = true;
-	    }
-	    else if ( cmd_id == CMD_DISPLAY_R ) {
-		display_ch = 1;
-		refresh_image = true;
-	    }
-	    else if ( cmd_id == CMD_DISPLAY_G ) {
-		display_ch = 2;
-		refresh_image = true;
-	    }
-	    else if ( cmd_id == CMD_DISPLAY_B ) {
-		display_ch = 3;
-		refresh_image = true;
-	    }
-	    else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
-		if ( 1 < display_bin ) display_bin --;
-		refresh_image = true;
-	    }
-	    else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
-		if ( display_bin < 10 ) display_bin ++;
-		refresh_image = true;
-	    }
-	    else if ( cmd_id == CMD_CONT_R && ev_btn == 1 ) {
-		contrast_rgb[0] ++;
+	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
+	    if ( 1 < display_bin ) display_bin --;
+	    refresh_image = true;
+	}
+	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
+	    if ( display_bin < 10 ) display_bin ++;
+	    refresh_image = true;
+	}
+	else if ( cmd_id == CMD_CONT_R && ev_btn == 1 ) {
+	    contrast_rgb[0] ++;
+	    save_display_params("display_0.txt", contrast_rgb);
+	    refresh_image = true;
+	}
+	else if ( cmd_id == CMD_CONT_R && ev_btn == 3 ) {
+	    if ( 0 < contrast_rgb[0] ) {
+		contrast_rgb[0] --;
 		save_display_params("display_0.txt", contrast_rgb);
 		refresh_image = true;
 	    }
-	    else if ( cmd_id == CMD_CONT_R && ev_btn == 3 ) {
-		if ( 0 < contrast_rgb[0] ) {
-		    contrast_rgb[0] --;
-		    save_display_params("display_0.txt", contrast_rgb);
-		    refresh_image = true;
-		}
-	    }
-	    else if ( cmd_id == CMD_CONT_G && ev_btn == 1 ) {
-		contrast_rgb[1] ++;
+	}
+	else if ( cmd_id == CMD_CONT_G && ev_btn == 1 ) {
+	    contrast_rgb[1] ++;
+	    save_display_params("display_0.txt", contrast_rgb);
+	    refresh_image = true;
+	}
+	else if ( cmd_id == CMD_CONT_G && ev_btn == 3 ) {
+	    if ( 0 < contrast_rgb[1] ) {
+		contrast_rgb[1] --;
 		save_display_params("display_0.txt", contrast_rgb);
 		refresh_image = true;
 	    }
-	    else if ( cmd_id == CMD_CONT_G && ev_btn == 3 ) {
-		if ( 0 < contrast_rgb[1] ) {
-		    contrast_rgb[1] --;
-		    save_display_params("display_0.txt", contrast_rgb);
-		    refresh_image = true;
-		}
-	    }
-	    else if ( cmd_id == CMD_CONT_B && ev_btn == 1 ) {
-		contrast_rgb[2] ++;
+	}
+	else if ( cmd_id == CMD_CONT_B && ev_btn == 1 ) {
+	    contrast_rgb[2] ++;
+	    save_display_params("display_0.txt", contrast_rgb);
+	    refresh_image = true;
+	}
+	else if ( cmd_id == CMD_CONT_B && ev_btn == 3 ) {
+	    if ( 0 < contrast_rgb[2] ) {
+		contrast_rgb[2] --;
 		save_display_params("display_0.txt", contrast_rgb);
 		refresh_image = true;
 	    }
-	    else if ( cmd_id == CMD_CONT_B && ev_btn == 3 ) {
-		if ( 0 < contrast_rgb[2] ) {
-		    contrast_rgb[2] --;
-		    save_display_params("display_0.txt", contrast_rgb);
-		    refresh_image = true;
-		}
-	    }
-	    else if ( cmd_id == CMD_SIGCLIP_CNT_PM && ev_btn == 1 ) {
-		count_sigma_clip ++;
-		save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
-		refresh_winname = true;
-	    }
-	    else if ( cmd_id == CMD_SIGCLIP_CNT_PM && ev_btn == 3 ) {
-		if ( 0 < count_sigma_clip ) count_sigma_clip --;
-		save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
-		refresh_winname = true;
-	    }
-	    else if ( cmd_id == CMD_SIGCLIP_PM && ev_btn == 1 ) {
-		sigma_rgb[0] ++;
-		sigma_rgb[1] ++;
-		sigma_rgb[2] ++;
-		save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
-		refresh_winname = true;
-	    }
-	    else if ( cmd_id == CMD_SIGCLIP_PM && ev_btn == 3 ) {
-		if ( 0 < sigma_rgb[0] ) sigma_rgb[0] --;
-		if ( 0 < sigma_rgb[1] ) sigma_rgb[1] --;
-		if ( 0 < sigma_rgb[2] ) sigma_rgb[2] --;
-		save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
-		refresh_winname = true;
-	    }
-	    else if ( cmd_id == CMD_SIGCLIP_SKYLV ) {
-		if ( skylv_sigma_clip == true ) skylv_sigma_clip = false;
-		else skylv_sigma_clip = true;
-		save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
-		refresh_winname = true;
-	    }
-	    else if ( cmd_id == CMD_SIGCLIP_COMET ) {
-		if ( comet_sigma_clip == true ) comet_sigma_clip = false;
-		else comet_sigma_clip = true;
-		save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
-		refresh_winname = true;
-	    }
-	    else if ( cmd_id == CMD_DITHER ) {
-		if ( flag_dither == true ) flag_dither = false;
-		else flag_dither = true;
-		refresh_winname = true;
-	    }
+	}
+	else if ( cmd_id == CMD_SIGCLIP_CNT_PM && ev_btn == 1 ) {
+	    count_sigma_clip ++;
+	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
+	    refresh_winname = true;
+	}
+	else if ( cmd_id == CMD_SIGCLIP_CNT_PM && ev_btn == 3 ) {
+	    if ( 0 < count_sigma_clip ) count_sigma_clip --;
+	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
+	    refresh_winname = true;
+	}
+	else if ( cmd_id == CMD_SIGCLIP_PM && ev_btn == 1 ) {
+	    sigma_rgb[0] ++;
+	    sigma_rgb[1] ++;
+	    sigma_rgb[2] ++;
+	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
+	    refresh_winname = true;
+	}
+	else if ( cmd_id == CMD_SIGCLIP_PM && ev_btn == 3 ) {
+	    if ( 0 < sigma_rgb[0] ) sigma_rgb[0] --;
+	    if ( 0 < sigma_rgb[1] ) sigma_rgb[1] --;
+	    if ( 0 < sigma_rgb[2] ) sigma_rgb[2] --;
+	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
+	    refresh_winname = true;
+	}
+	else if ( cmd_id == CMD_SIGCLIP_SKYLV ) {
+	    if ( skylv_sigma_clip == true ) skylv_sigma_clip = false;
+	    else skylv_sigma_clip = true;
+	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
+	    refresh_winname = true;
+	}
+	else if ( cmd_id == CMD_SIGCLIP_COMET ) {
+	    if ( comet_sigma_clip == true ) comet_sigma_clip = false;
+	    else comet_sigma_clip = true;
+	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
+	    refresh_winname = true;
+	}
+	else if ( cmd_id == CMD_DITHER ) {
+	    if ( flag_dither == true ) flag_dither = false;
+	    else flag_dither = true;
+	    refresh_winname = true;
+	}
 
-	    if ( 0 <= sel_file_id ) {
+	/*
+	 * Only when *SELECTED*
+	 */
+
+	if ( 0 <= sel_file_id ) {
 	  
-		if ( CMD_DISPLAY_TARGET <= cmd_id &&
-		     cmd_id <= CMD_DISPLAY_RESIDUAL8 ) {
-		    display_type = cmd_id - CMD_DISPLAY_TARGET;
+	    if ( CMD_DISPLAY_TARGET <= cmd_id &&
+		 cmd_id <= CMD_DISPLAY_RESIDUAL8 ) {
+		display_type = cmd_id - CMD_DISPLAY_TARGET;
+		refresh_image = true;
+	    }
+	    else if ( cmd_id == CMD_SAVE ) {
+		save_offset = true;
+		refresh_list = true;
+	    }
+	    else if ( cmd_id == CMD_DELETE ) {
+		delete_offset = true;
+		refresh_list = true;
+	    }
+	    else if ( cmd_id == CMD_CLR_OFF ) {
+		offset_x = 0;
+		offset_y = 0;
+		refresh_image = true;
+	    }
+	    else if ( ev_type == ButtonPress ) {
+		if ( ev_win == win_image && ev_btn == 3 /* right btn */ ) {
+		    offset_x = ev_x - (img_buf.x_length() / 2);
+		    offset_y = ev_y - (img_buf.y_length() / 2);
 		    refresh_image = true;
 		}
-		else if ( cmd_id == CMD_SAVE ) {
-		    save_offset = true;
-		    refresh_list = true;
-		}
-		else if ( cmd_id == CMD_DELETE ) {
-		    delete_offset = true;
-		    refresh_list = true;
-		}
-		else if ( cmd_id == CMD_CLR_OFF ) {
-		    offset_x = 0;
-		    offset_y = 0;
+	    }
+	    else if ( ev_type == KeyPress ) {
+		//sio.printf("key = %d\n", ev_btn);
+		if ( ev_btn == 28 ) {		/* Right key */
+		    offset_x ++;
 		    refresh_image = true;
 		}
-		else if ( ev_type == ButtonPress ) {
-		    if ( ev_win == win_image && ev_btn == 3 /* right btn */ ) {
-			offset_x = ev_x - (img_buf.x_length() / 2);
-			offset_y = ev_y - (img_buf.y_length() / 2);
-			refresh_image = true;
-		    }
+		else if ( ev_btn == 29 ) {	/* Left key */
+		    offset_x --;
+		    refresh_image = true;
 		}
-		else if ( ev_type == KeyPress ) {
-		    //sio.printf("key = %d\n", ev_btn);
-		    if ( ev_btn == 28 ) {		/* Right key */
-			offset_x ++;
-			refresh_image = true;
-		    }
-		    else if ( ev_btn == 29 ) {	/* Left key */
-			offset_x --;
-			refresh_image = true;
-		    }
-		    else if ( ev_btn == 30 ) {	/* Up key */
-			offset_y --;
-			refresh_image = true;
-		    }
-		    else if ( ev_btn == 31 ) {	/* Down key */
-			offset_y ++;
-			refresh_image = true;
-		    }
-		    else if ( ev_btn == ' ' ) {
-			if ( display_type == 0 ) display_type = 1;
-			else display_type = 0;
-			refresh_image = true;
-		    }
+		else if ( ev_btn == 30 ) {	/* Up key */
+		    offset_y --;
+		    refresh_image = true;
+		}
+		else if ( ev_btn == 31 ) {	/* Down key */
+		    offset_y ++;
+		    refresh_image = true;
+		}
+		else if ( ev_btn == ' ' ) {
+		    if ( display_type == 0 ) display_type = 1;
+		    else display_type = 0;
+		    refresh_image = true;
 		}
 	    }
 	}
+
+	/* Handle offset files */
 
 	if ( delete_offset == true || save_offset == true ) {
 	  
