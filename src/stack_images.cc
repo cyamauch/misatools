@@ -137,8 +137,9 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 			      int ref_file_id, const mdarray_bool &flg_saved,
 			      int count_sigma_clip, const int sigma_rgb[], 
 			      bool skylv_sigma_clip, bool comet_sigma_clip, 
-			      bool flag_dither,
-			      bool flag_preview, const int contrast_rgb[],
+			      bool flag_dither, bool flag_preview,
+			      int display_bin, int display_ch, 
+			      const int contrast_rgb[],
 			      int win_image, mdarray_uchar *tmp_buf )
 {
     stdstreamio sio;
@@ -208,7 +209,8 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     
     winname(win_image, "Stacking ...");
     if ( flag_preview == true ) {
-        display_image(win_image, img_buf, 0, contrast_rgb, tmp_buf);
+        display_image(win_image, img_buf,
+		      display_bin, display_ch, contrast_rgb, tmp_buf);
     }
 
     n_plus = 0;
@@ -242,7 +244,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 		    img_buf *= (1.0/(double)ii);
 		    /* display stacked image */
 		    display_image(win_image, img_buf,
-				  0, contrast_rgb, tmp_buf);
+			       display_bin, display_ch, contrast_rgb, tmp_buf);
 		}
 
 		winname(win_image, "Stacking %zd/%zd", ii, (size_t)(1+n_plus));
@@ -407,10 +409,10 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 			img_buf /= (*count_buf0_ptr);
 			/* display stacked image */
 			display_image(win_image, img_buf,
-				      0, contrast_rgb, tmp_buf);
+			       display_bin, display_ch, contrast_rgb, tmp_buf);
 		    }
 
-		    winname(win_image, "Stacking with Sigma-Clipping %zd/%zd", ii, (size_t)(1+n_plus));
+		    winname(win_image, "Stacking with sigma-clipping %zd/%zd", ii, (size_t)(1+n_plus));
 
 		    ii ++;
 		}
@@ -435,7 +437,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     img_buf.init(false);
 
     /* display */
-    winname(win_image, "Done Stacking %zd frames", (size_t)(1+n_plus));
+    winname(win_image, "Done stacking %zd frames", (size_t)(1+n_plus));
     appended_str.printf("+%zdframes_stacked", n_plus);
     make_output_filename(filenames[ref_file_id].cstr(), appended_str.cstr(),
 			 "16bit", &out_filename);
@@ -475,32 +477,32 @@ const command_list Cmd_list[] = {
         {CMD_DISPLAY_RESIDUAL4, "Display Residual x4      [5]"},
 #define CMD_DISPLAY_RESIDUAL8 6
         {CMD_DISPLAY_RESIDUAL8, "Display Residual x8      [6]"},
-#define CMD_CONT_PLUS_R 7
-        {CMD_CONT_PLUS_R,       "Red Contrast +           [r]"},
-#define CMD_CONT_MINUS_R 8
-        {CMD_CONT_MINUS_R,      "Red Contrast -           [R]"},
-#define CMD_CONT_PLUS_G 9
-        {CMD_CONT_PLUS_G,       "Green Contrast +         [g]"},
-#define CMD_CONT_MINUS_G 10
-        {CMD_CONT_MINUS_G,      "Green Contrast -         [G]"},
-#define CMD_CONT_PLUS_B 11
-        {CMD_CONT_PLUS_B,       "Blue Contrast +          [b]"},
-#define CMD_CONT_MINUS_B 12
-        {CMD_CONT_MINUS_B,      "Blue Contrast -          [B]"},
-#define CMD_SAVE 13
+#define CMD_DISPLAY_RGB 7
+        {CMD_DISPLAY_RGB,       "Display RGB              [c]"},
+#define CMD_DISPLAY_R 8
+        {CMD_DISPLAY_R,         "Display Red              [c]"},
+#define CMD_DISPLAY_G 9
+        {CMD_DISPLAY_G,         "Display Green            [c]"},
+#define CMD_DISPLAY_B 10
+        {CMD_DISPLAY_B,         "Display Blue             [c]"},
+#define CMD_ZOOM 11
+        {CMD_ZOOM,              "Zoom +/-                 [+][-]"},
+#define CMD_CONT_R 12
+        {CMD_CONT_R,            "Red Contrast +/-         [r][R]"},
+#define CMD_CONT_G 13
+        {CMD_CONT_G,            "Green Contrast +/-       [g][G]"},
+#define CMD_CONT_B 14
+        {CMD_CONT_B,            "Blue Contrast +/-        [b][B]"},
+#define CMD_SAVE 15
         {CMD_SAVE,              "Save Offset Info         [Enter]"},
-#define CMD_DELETE 14
+#define CMD_DELETE 16
         {CMD_DELETE,            "Delete Offset Info       [Del]"},
-#define CMD_CLR_OFF 15
+#define CMD_CLR_OFF 17
         {CMD_CLR_OFF,           "Clear Currnt Offset      [0]"},
-#define CMD_SIGCLIP_CNT_PLUS 16
-        {CMD_SIGCLIP_CNT_PLUS,  "Count Sigma-Clip +       [C]"},
-#define CMD_SIGCLIP_CNT_MINUS 17
-        {CMD_SIGCLIP_CNT_MINUS, "Count Sigma-Clip -       [c]"},
-#define CMD_SIGCLIP_PLUS 18
-        {CMD_SIGCLIP_PLUS,      "Val of Sigma-Clip +      [v]"},
-#define CMD_SIGCLIP_MINUS 19
-        {CMD_SIGCLIP_MINUS,     "Val of Sigma-Clip -      [V]"},
+#define CMD_SIGCLIP_CNT_PM 18
+        {CMD_SIGCLIP_CNT_PM,    "Count Sigma-Clip +/-     [c][C]"},
+#define CMD_SIGCLIP_PM 19
+        {CMD_SIGCLIP_PM,        "Val of Sigma-Clip +/-    [v][V]"},
 #define CMD_SIGCLIP_SKYLV 20
         {CMD_SIGCLIP_SKYLV,     "Sky-lv Sigma-Clip on/off [s]"},
 #define CMD_SIGCLIP_COMET 21
@@ -519,8 +521,6 @@ const size_t N_cmd_list = sizeof(Cmd_list) / sizeof(Cmd_list[0]);
 
 int main( int argc, char *argv[] )
 {
-    int contrast_rgb[3] = {8, 8, 8};
-
     stdstreamio sio, f_in;
     pipestreamio p_in;
     tstring refframe, filename_frames;
@@ -538,9 +538,11 @@ int main( int argc, char *argv[] )
 
     //mdarray_float img_residual(false);	/* buffer for residual image */
     mdarray_float img_display(false);	/* buffer for displaying image */
+
     int display_type = 1;		/* flag to display image type */
-    long offset_x = 0;
-    long offset_y = 0;
+    int display_ch = 0;			/* 0=RGB 1=R 2=G 3=B */
+    int display_bin = 1;		/* binning factor for display */
+    int contrast_rgb[3] = {8, 8, 8};	/* contrast for display */
 
     int count_sigma_clip = 0;
     bool skylv_sigma_clip = true;
@@ -548,6 +550,11 @@ int main( int argc, char *argv[] )
     int sigma_rgb[3] = {20, 20, 20};
 
     bool flag_dither = true;
+
+    const char *names_ch[] = {"RGB", "Red", "Green", "Blue"};
+    
+    long offset_x = 0;
+    long offset_y = 0;
 
     size_t i;
     int arg_cnt;
@@ -674,9 +681,9 @@ int main( int argc, char *argv[] )
 
     win_image = gopen(600,400);
     winname(win_image, "Imave Viewer  "
-	    "Contrast = ( %d, %d, %d )  "
-	    "Sigma-Clipping: [count=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
-	    "Dither=%d",
+	    "contrast = ( %d, %d, %d )  "
+	    "sigma-clipping: [count=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
+	    "dither=%d",
 	    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
 	    count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 	    (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
@@ -688,7 +695,8 @@ int main( int argc, char *argv[] )
     }
 
     /* display reference image */
-    display_image(win_image, img_buf, 0, contrast_rgb, &tmp_buf);
+    display_image(win_image, img_buf,
+		  display_bin, display_ch, contrast_rgb, &tmp_buf);
 
     ref_img_buf.resize(img_buf);
     ref_img_buf.paste(img_buf);
@@ -727,16 +735,61 @@ int main( int argc, char *argv[] )
 	    else if ( ev_btn == '4' ) cmd_id = CMD_DISPLAY_RESIDUAL2;
 	    else if ( ev_btn == '5' ) cmd_id = CMD_DISPLAY_RESIDUAL4;
 	    else if ( ev_btn == '6' ) cmd_id = CMD_DISPLAY_RESIDUAL8;
-	    else if ( ev_btn == 'r' ) cmd_id = CMD_CONT_PLUS_R;
-	    else if ( ev_btn == 'R' ) cmd_id = CMD_CONT_MINUS_R;
-	    else if ( ev_btn == 'g' ) cmd_id = CMD_CONT_PLUS_G;
-	    else if ( ev_btn == 'G' ) cmd_id = CMD_CONT_MINUS_G;
-	    else if ( ev_btn == 'b' ) cmd_id = CMD_CONT_PLUS_B;
-	    else if ( ev_btn == 'B' ) cmd_id = CMD_CONT_MINUS_B;
-	    else if ( ev_btn == 'c' ) cmd_id = CMD_SIGCLIP_CNT_PLUS;
-	    else if ( ev_btn == 'C' ) cmd_id = CMD_SIGCLIP_CNT_MINUS;
-	    else if ( ev_btn == 'v' ) cmd_id = CMD_SIGCLIP_PLUS;
-	    else if ( ev_btn == 'V' ) cmd_id = CMD_SIGCLIP_MINUS;
+	    else if ( ev_btn == 'c' ) {
+	        /* rotate RGB/R/G/B */
+	        if ( display_ch == 0 ) cmd_id = CMD_DISPLAY_R;
+		else if ( display_ch == 1 ) cmd_id = CMD_DISPLAY_G;
+		else if ( display_ch == 2 ) cmd_id = CMD_DISPLAY_B;
+		else cmd_id = CMD_DISPLAY_RGB;
+	    }
+	    else if ( ev_btn == '+' ) {
+		cmd_id = CMD_ZOOM;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == '-' ) {
+		cmd_id = CMD_ZOOM;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == 'r' ) {
+		cmd_id = CMD_CONT_R;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'R' ) {
+		cmd_id = CMD_CONT_R;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == 'g' ) {
+		cmd_id = CMD_CONT_G;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'G' ) {
+		cmd_id = CMD_CONT_G;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == 'b' ) {
+		cmd_id = CMD_CONT_B;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'B' ) {
+		cmd_id = CMD_CONT_B;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == 'c' ) {
+		cmd_id = CMD_SIGCLIP_CNT_PM;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'C' ) {
+		cmd_id = CMD_SIGCLIP_CNT_PM;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == 'v' ) {
+		cmd_id = CMD_SIGCLIP_PM;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'V' ) {
+		cmd_id = CMD_SIGCLIP_PM;
+		ev_btn = 3;
+	    }
 	    else if ( ev_btn == 's' ) cmd_id = CMD_SIGCLIP_SKYLV;
 	    else if ( ev_btn == 'm' ) cmd_id = CMD_SIGCLIP_COMET;
 	    else if ( ev_btn == 'd' ) cmd_id = CMD_DITHER;
@@ -760,8 +813,8 @@ int main( int argc, char *argv[] )
 	    if ( do_stack_and_save( filenames, ref_file_id, flg_saved,
 				    count_sigma_clip, sigma_rgb, 
 				    skylv_sigma_clip, comet_sigma_clip, 
-				    flag_dither,
-				    flag_preview, contrast_rgb,
+				    flag_dither, flag_preview,
+				    display_bin, display_ch, contrast_rgb,
 				    win_image, &tmp_buf ) < 0 ) {
 	        sio.printf("[ERROR] do_stack_and_save() failed\n");
 	    }
@@ -828,60 +881,84 @@ int main( int argc, char *argv[] )
 
 	else {
 
-	    if ( cmd_id == CMD_CONT_PLUS_R ) {
+	    if ( cmd_id == CMD_DISPLAY_RGB ) {
+		display_ch = 0;
+		refresh_image = true;
+	    }
+	    else if ( cmd_id == CMD_DISPLAY_R ) {
+		display_ch = 1;
+		refresh_image = true;
+	    }
+	    else if ( cmd_id == CMD_DISPLAY_G ) {
+		display_ch = 2;
+		refresh_image = true;
+	    }
+	    else if ( cmd_id == CMD_DISPLAY_B ) {
+		display_ch = 3;
+		refresh_image = true;
+	    }
+	    else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
+		if ( 1 < display_bin ) display_bin --;
+		refresh_image = true;
+	    }
+	    else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
+		if ( display_bin < 10 ) display_bin ++;
+		refresh_image = true;
+	    }
+	    else if ( cmd_id == CMD_CONT_R && ev_btn == 1 ) {
 		contrast_rgb[0] ++;
 		save_display_params("display_0.txt", contrast_rgb);
 		refresh_image = true;
 	    }
-	    else if ( cmd_id == CMD_CONT_MINUS_R ) {
+	    else if ( cmd_id == CMD_CONT_R && ev_btn == 3 ) {
 		if ( 0 < contrast_rgb[0] ) {
 		    contrast_rgb[0] --;
 		    save_display_params("display_0.txt", contrast_rgb);
 		    refresh_image = true;
 		}
 	    }
-	    else if ( cmd_id == CMD_CONT_PLUS_G ) {
+	    else if ( cmd_id == CMD_CONT_G && ev_btn == 1 ) {
 		contrast_rgb[1] ++;
 		save_display_params("display_0.txt", contrast_rgb);
 		refresh_image = true;
 	    }
-	    else if ( cmd_id == CMD_CONT_MINUS_G ) {
+	    else if ( cmd_id == CMD_CONT_G && ev_btn == 3 ) {
 		if ( 0 < contrast_rgb[1] ) {
 		    contrast_rgb[1] --;
 		    save_display_params("display_0.txt", contrast_rgb);
 		    refresh_image = true;
 		}
 	    }
-	    else if ( cmd_id == CMD_CONT_PLUS_B ) {
+	    else if ( cmd_id == CMD_CONT_B && ev_btn == 1 ) {
 		contrast_rgb[2] ++;
 		save_display_params("display_0.txt", contrast_rgb);
 		refresh_image = true;
 	    }
-	    else if ( cmd_id == CMD_CONT_MINUS_B ) {
+	    else if ( cmd_id == CMD_CONT_B && ev_btn == 3 ) {
 		if ( 0 < contrast_rgb[2] ) {
 		    contrast_rgb[2] --;
 		    save_display_params("display_0.txt", contrast_rgb);
 		    refresh_image = true;
 		}
 	    }
-	    else if ( cmd_id == CMD_SIGCLIP_CNT_PLUS ) {
+	    else if ( cmd_id == CMD_SIGCLIP_CNT_PM && ev_btn == 1 ) {
 		count_sigma_clip ++;
 		save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
 		refresh_winname = true;
 	    }
-	    else if ( cmd_id == CMD_SIGCLIP_CNT_MINUS ) {
+	    else if ( cmd_id == CMD_SIGCLIP_CNT_PM && ev_btn == 3 ) {
 		if ( 0 < count_sigma_clip ) count_sigma_clip --;
 		save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
 		refresh_winname = true;
 	    }
-	    else if ( cmd_id == CMD_SIGCLIP_PLUS ) {
+	    else if ( cmd_id == CMD_SIGCLIP_PM && ev_btn == 1 ) {
 		sigma_rgb[0] ++;
 		sigma_rgb[1] ++;
 		sigma_rgb[2] ++;
 		save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
 		refresh_winname = true;
 	    }
-	    else if ( cmd_id == CMD_SIGCLIP_MINUS ) {
+	    else if ( cmd_id == CMD_SIGCLIP_PM && ev_btn == 3 ) {
 		if ( 0 < sigma_rgb[0] ) sigma_rgb[0] --;
 		if ( 0 < sigma_rgb[1] ) sigma_rgb[1] --;
 		if ( 0 < sigma_rgb[2] ) sigma_rgb[2] --;
@@ -1004,41 +1081,45 @@ int main( int argc, char *argv[] )
 		//img_display.swap(img_residual);
 		//img_residual.init(false);
 		display_image(win_image, img_display,
-			      0, contrast_rgb, &tmp_buf);
+			      display_bin, display_ch, contrast_rgb, &tmp_buf);
 		winname(win_image, "Residual  offset = ( %ld, %ld )  "
-			"Contrast = ( %d, %d, %d )  ",
-			offset_x, offset_y,
-			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
+		       "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  ",
+		       offset_x, offset_y,
+		       names_ch[display_ch], display_bin,
+		       contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 		//img_display.init(false);
 	    }
 	    else if ( display_type == 1 ) {	/* Reference */
 		img_display.resize(ref_img_buf);
 	        img_display.paste(ref_img_buf);
 		display_image(win_image, img_display,
-			      0, contrast_rgb, &tmp_buf);
+			      display_bin, display_ch, contrast_rgb, &tmp_buf);
 		winname(win_image, "Reference  "
-			"Contrast = ( %d, %d, %d )  ",
-			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
+		       "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  ",
+		       names_ch[display_ch], display_bin,
+		       contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 		//img_display.init(false);
 	    }
 	    else {
 		img_display.resize(img_buf);
 	        img_display.paste(img_buf, offset_x, offset_y, 0);
 		display_image(win_image, img_display,
-			      0, contrast_rgb, &tmp_buf);
+			      display_bin, display_ch, contrast_rgb, &tmp_buf);
 		winname(win_image, "Target  offset = ( %ld, %ld )  "
-			"Contrast = ( %d, %d, %d )  ",
-			offset_x, offset_y,
-			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
+		      "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  ",
+		      offset_x, offset_y,
+		      names_ch[display_ch], display_bin,
+		      contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 		//img_display.init(false);
 	    }
 	}
 
 	if ( refresh_winname == true ) {
-	    winname(win_image, "Sigma-Clipping: [count=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
-	    	    "Dither=%d",
-		    count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
-		    (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
+	    winname(win_image, "Sigma-Clipping: "
+	        "[count=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
+	    	"Dither=%d",
+		count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
+		(int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
 	}
 
 	if ( refresh_list == true ) {
