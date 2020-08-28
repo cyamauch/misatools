@@ -6,8 +6,9 @@ static int display_image( int win_image, const mdarray &img_buf,
 {
     stdstreamio sio;
     unsigned char *tmp_buf_ptr;
-    size_t i, j, k;
+    size_t i, j, k, l;
     int src_ch[3];
+    double ct[3];
     size_t display_width, display_height;
     size_t bin = binning;
     bool needs_resize_win = false;
@@ -37,6 +38,11 @@ static int display_image( int win_image, const mdarray &img_buf,
 	src_ch[0] = 0;	src_ch[1] = 1;  src_ch[2] = 2;  
     }
 
+    /* set contrast parameters */
+    for ( i=0 ; i < 3 ; i++ ) {
+	ct[i] = pow(2, contrast_rgb[src_ch[i]]/Contrast_scale);
+    }
+    
     /* check size of temporary array buffer */
     if ( tmp_buf->x_length() != display_width * 4 ||
 	 tmp_buf->y_length() != display_height ) {
@@ -48,20 +54,19 @@ static int display_image( int win_image, const mdarray &img_buf,
 
     if ( img_buf.size_type() == UCHAR_ZT ) {
 	const unsigned char *img_buf_ptr[3];
-	size_t off4 = 0;
 	size_t off1 = 0;
+	size_t off4 = 0;
 	img_buf_ptr[0] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[0]);
 	img_buf_ptr[1] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[1]);
 	img_buf_ptr[2] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[2]);
 	if ( bin < 2 ) {
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
-		double v, ct;
+		double v;
 		size_t ii;
 		for ( ii=0 ; ii < 3 ; ii++ ) {
 		    const unsigned char *img_buf_ptr_rgb = img_buf_ptr[ii];
-		    ct = pow(2, contrast_rgb[src_ch[ii]]/Contrast_scale);
 		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++, k+=4 ) {
-			v = img_buf_ptr_rgb[off1 + j] * ct + 0.5;
+			v = img_buf_ptr_rgb[off1 + j] * ct[ii] + 0.5;
 			if ( 255.0 < v ) v = 255.0;
 			tmp_buf_ptr[off4 + k] = (unsigned char)v;
 		    }
@@ -73,25 +78,37 @@ static int display_image( int win_image, const mdarray &img_buf,
 	else {
 	    float *lv_p = NULL;
 	    mdarray_float lv(false, &lv_p);
-	    lv.resize(display_width * 4);
+	    size_t ii;
+	    lv.resize(display_width * 3);
 	    lv = 0.0;
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
-		double v, ct;
-		size_t ii;
 		for ( ii=0 ; ii < 3 ; ii++ ) {
 		    const unsigned char *img_buf_ptr_rgb = img_buf_ptr[ii];
-		    ct = pow(2, contrast_rgb[src_ch[ii]]/Contrast_scale);
-		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++ ) {
-			lv_p[k] += img_buf_ptr_rgb[off1 + j] * ct;
-			if ( (j+1) % bin == 0 ) k += 4;
+		    for ( j=0, k=ii ; j < img_buf.x_length() ; j++ ) {
+			lv_p[k] += img_buf_ptr_rgb[off1 + j];
+			if ( (j+1) % bin == 0 ) k += 3;
 		    }
 		}
 		if ( (i+1) % bin == 0 || (i+1) == img_buf.y_length() ) {
-		    for ( j=0 ; j < display_width * 4 ; j++ ) {
-			v = ( lv_p[j] / (double)(bin * bin) ) + 0.5;
-			lv_p[j] = 0.0;
+		    const double ftr = 1.0 / (double)(bin * bin);
+		    double v;
+		    for ( j=0, k=0, l=0 ; j < display_width ; j++ ) {
+			l++;
+			v = lv_p[k] * ftr * ct[0] + 0.5;
+			lv_p[k] = 0.0;
 			if ( 255.0 < v ) v = 255.0;
-			tmp_buf_ptr[off4 + j] = (unsigned char)v;
+			tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			k++;  l++;
+			v = lv_p[k] * ftr * ct[1] + 0.5;
+			lv_p[k] = 0.0;
+			if ( 255.0 < v ) v = 255.0;
+			tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			k++;  l++;
+			v = lv_p[k] * ftr * ct[2] + 0.5;
+			lv_p[k] = 0.0;
+			if ( 255.0 < v ) v = 255.0;
+			tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			k++;  l++;
 		    }
 		    off4 += display_width * 4;
 		}
@@ -101,21 +118,21 @@ static int display_image( int win_image, const mdarray &img_buf,
     }
     else if ( img_buf.size_type() == FLOAT_ZT ) {
 	const float *img_buf_ptr[3];
-	size_t off4 = 0;
 	size_t off1 = 0;
+	size_t off4 = 0;
 	img_buf_ptr[0] = (const float *)img_buf.data_ptr(0,0,src_ch[0]);
 	img_buf_ptr[1] = (const float *)img_buf.data_ptr(0,0,src_ch[1]);
 	img_buf_ptr[2] = (const float *)img_buf.data_ptr(0,0,src_ch[2]);
 	if ( bin < 2 ) {
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
-		double v, ct;
+		const double ftr = 1.0 / 256.0;
+		double v;
 		size_t ii;
 		for ( ii=0 ; ii < 3 ; ii++ ) {
 		    const float *img_buf_ptr_rgb = img_buf_ptr[ii];
-		    ct = pow(2, contrast_rgb[src_ch[ii]]/Contrast_scale);
 		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++, k+=4 ) {
 			/* assume unsigned 16-bit data */
-			v = (img_buf_ptr_rgb[off1 + j] / 256) * ct + 0.5;
+			v = img_buf_ptr_rgb[off1 + j] * ftr * ct[ii] + 0.5;
 			if ( 255.0 < v ) v = 255.0;
 			tmp_buf_ptr[off4 + k] = (unsigned char)v;
 		    }
@@ -127,25 +144,37 @@ static int display_image( int win_image, const mdarray &img_buf,
 	else {
 	    float *lv_p = NULL;
 	    mdarray_float lv(false, &lv_p);
-	    lv.resize(display_width * 4);
+	    size_t ii;
+	    lv.resize(display_width * 3);
 	    lv = 0.0;
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
-		double v, ct;
-		size_t ii;
 		for ( ii=0 ; ii < 3 ; ii++ ) {
 		    const float *img_buf_ptr_rgb = img_buf_ptr[ii];
-		    ct = pow(2, contrast_rgb[src_ch[ii]]/Contrast_scale);
-		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++ ) {
-			lv_p[k] += (img_buf_ptr_rgb[off1 + j] / 256) * ct;
-			if ( (j+1) % bin == 0 ) k += 4;
+		    for ( j=0, k=ii ; j < img_buf.x_length() ; j++ ) {
+			lv_p[k] += img_buf_ptr_rgb[off1 + j];
+			if ( (j+1) % bin == 0 ) k += 3;
 		    }
 		}
 		if ( (i+1) % bin == 0 || (i+1) == img_buf.y_length() ) {
-		    for ( j=0 ; j < display_width * 4 ; j++ ) {
-			v = ( lv_p[j] / (double)(bin * bin) ) + 0.5;
-			lv_p[j] = 0.0;
+		    const double ftr = 1.0 / (double)(256 * bin * bin);
+		    double v;
+		    for ( j=0, k=0, l=0 ; j < display_width ; j++ ) {
+			l++;
+			v = lv_p[k] * ftr * ct[0] + 0.5;
+			lv_p[k] = 0.0;
 			if ( 255.0 < v ) v = 255.0;
-			tmp_buf_ptr[off4 + j] = (unsigned char)v;
+			tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			k++;  l++;
+			v = lv_p[k] * ftr * ct[1] + 0.5;
+			lv_p[k] = 0.0;
+			if ( 255.0 < v ) v = 255.0;
+			tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			k++;  l++;
+			v = lv_p[k] * ftr * ct[2] + 0.5;
+			lv_p[k] = 0.0;
+			if ( 255.0 < v ) v = 255.0;
+			tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			k++;  l++;
 		    }
 		    off4 += display_width * 4;
 		}
