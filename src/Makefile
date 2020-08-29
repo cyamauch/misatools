@@ -7,7 +7,7 @@ BINDIR = $(PREFIX)/bin
 
 ########
 
-OBJS = max_memory make_dark make_flat merge_flat proc_images align_center stack_images align_rgb determine_sky make_sky denoise_images
+OBJS = max_memory make_dark make_flat merge_flat proc_images align_center stack_images align_rgb determine_sky pseudo_sky make_sky denoise_images
 
 all:: $(OBJS)
 
@@ -42,6 +42,9 @@ align_rgb: align_rgb.cc read_tiff24or48_separate_buffer.cc write_float_to_tiff24
 
 determine_sky: determine_sky.cc display_image.cc read_tiff24or48.cc write_tiff24or48.cc
 	$(CMD) determine_sky.cc -leggx -lX11 -ltiff
+
+pseudo_sky:	pseudo_sky.cc read_tiff24or48_to_float.cc write_float_to_tiff48.cc display_image.cc
+	$(CMD) pseudo_sky.cc -leggx -lX11 -ltiff
 
 make_sky: make_sky.cc read_tiff24or48.cc write_tiff24or48.cc
 	$(CMD) make_sky.cc -ltiff
