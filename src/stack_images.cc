@@ -172,7 +172,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 	count_sigma_clip = 0;
     }
 
-    sio.printf("Sigma-Clipping: [count=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
+    sio.printf("Sigma-Clipping: [N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
     	       "Dither=%d\n",
 	       count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 	       (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
@@ -279,7 +279,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 
 	if ( cnt + 1 == count_sigma_clip ) final_loop = true;
 
-	sio.printf("*** Sigma-Clipping loop-count = %d / %d ***\n", cnt + 1, count_sigma_clip);
+	sio.printf("*** Sigma-Clipping count of iterations = %d / %d ***\n", cnt + 1, count_sigma_clip);
 
 	/* swap buffer pointer */
 	if ( (cnt % 2) == 0 ) {
@@ -438,6 +438,9 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 
     /* display */
     winname(win_image, "Done stacking %zd frames", (size_t)(1+n_plus));
+
+    /* save */
+#if 1
     appended_str.printf("+%zdframes_stacked", n_plus);
     make_output_filename(filenames[ref_file_id].cstr(), appended_str.cstr(),
 			 "16bit", &out_filename);
@@ -452,6 +455,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 	sio.eprintf("[ERROR] write_float_to_tiff48() failed.\n");
 	goto quit;
     }
+#endif
     
     ret_status = 0;
  quit:
@@ -500,7 +504,7 @@ const command_list Cmd_list[] = {
 #define CMD_CLR_OFF 17
         {CMD_CLR_OFF,           "Clear Currnt Offset      [0]"},
 #define CMD_SIGCLIP_CNT_PM 18
-        {CMD_SIGCLIP_CNT_PM,    "Count Sigma-Clip +/-     [c][C]"},
+        {CMD_SIGCLIP_CNT_PM,    "N iterations Sig-Clip +/- [i][I]"},
 #define CMD_SIGCLIP_PM 19
         {CMD_SIGCLIP_PM,        "Val of Sigma-Clip +/-    [v][V]"},
 #define CMD_SIGCLIP_SKYLV 20
@@ -532,7 +536,7 @@ int main( int argc, char *argv[] )
     int win_command, win_filesel, win_image;
     int win_command_col_height;
     
-    mdarray_float ref_img_buf(false); /* buffer for reference image */
+    mdarray_float ref_img_buf(false);	/* buffer for reference image */
     mdarray_float img_buf(false);	/* buffer for target */
     mdarray_uchar tmp_buf(false);	/* tmp buffer for displaying */
 
@@ -682,24 +686,21 @@ int main( int argc, char *argv[] )
     win_image = gopen(600,400);
     winname(win_image, "Imave Viewer  "
 	    "contrast = ( %d, %d, %d )  "
-	    "sigma-clipping: [count=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
+	    "sigma-clipping: [N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
 	    "dither=%d",
 	    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
 	    count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 	    (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
 
     if ( read_tiff24or48_to_float(filenames[ref_file_id].cstr(),
-				  &img_buf, NULL, NULL, NULL) < 0 ) {
+				  &ref_img_buf, NULL, NULL, NULL) < 0 ) {
         sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	goto quit;
     }
 
     /* display reference image */
-    display_image(win_image, img_buf,
+    display_image(win_image, ref_img_buf,
 		  display_bin, display_ch, contrast_rgb, &tmp_buf);
-
-    ref_img_buf.resize(img_buf);
-    ref_img_buf.paste(img_buf);
 
     
     /*
@@ -712,7 +713,7 @@ int main( int argc, char *argv[] )
 	double ev_x, ev_y;
 
         bool refresh_list = false;
-        bool refresh_image = false;
+        int refresh_image = 0;		/* 1:display only  2:both */
         bool refresh_winname = false;
 	bool save_offset = false;
 	bool delete_offset = false;
@@ -766,7 +767,7 @@ int main( int argc, char *argv[] )
 		}
 		if ( display_type == 1 ) display_type = 0;
 
-		refresh_image = true;
+		refresh_image = 2;
 		refresh_list = true;
 
 	    }
@@ -829,11 +830,11 @@ int main( int argc, char *argv[] )
 		cmd_id = CMD_CONT_B;
 		ev_btn = 3;
 	    }
-	    else if ( ev_btn == 'c' ) {
+	    else if ( ev_btn == 'i' ) {
 		cmd_id = CMD_SIGCLIP_CNT_PM;
 		ev_btn = 1;
 	    }
-	    else if ( ev_btn == 'C' ) {
+	    else if ( ev_btn == 'I' ) {
 		cmd_id = CMD_SIGCLIP_CNT_PM;
 		ev_btn = 3;
 	    }
@@ -878,73 +879,72 @@ int main( int argc, char *argv[] )
 	        sio.printf("[ERROR] do_stack_and_save() failed\n");
 	    }
 	    if ( 0 <= sel_file_id ) {
-		f_id = sel_file_id;	/* to reload */
+		/* reload */
+		if ( read_tiff24or48_to_float(filenames[sel_file_id].cstr(),
+					  &img_buf, NULL, NULL, NULL) < 0 ) {
+		    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+		    sel_file_id = -1;
+		}
 	    }
-	    else {
-		img_buf.resize(ref_img_buf);
-		img_buf.paste(ref_img_buf);
-	    }
-	    //sel_file_id = -1;
-	    //refresh_list = true;
 	}
 	else if ( cmd_id == CMD_DISPLAY_RGB ) {
 	    display_ch = 0;
-	    refresh_image = true;
+	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_DISPLAY_R ) {
 	    display_ch = 1;
-	    refresh_image = true;
+	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_DISPLAY_G ) {
 	    display_ch = 2;
-	    refresh_image = true;
+	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_DISPLAY_B ) {
 	    display_ch = 3;
-	    refresh_image = true;
+	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
 	    if ( 1 < display_bin ) display_bin --;
-	    refresh_image = true;
+	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
 	    if ( display_bin < 10 ) display_bin ++;
-	    refresh_image = true;
+	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_CONT_R && ev_btn == 1 ) {
 	    contrast_rgb[0] ++;
 	    save_display_params("display_0.txt", contrast_rgb);
-	    refresh_image = true;
+	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_CONT_R && ev_btn == 3 ) {
 	    if ( 0 < contrast_rgb[0] ) {
 		contrast_rgb[0] --;
 		save_display_params("display_0.txt", contrast_rgb);
-		refresh_image = true;
+		refresh_image = 1;
 	    }
 	}
 	else if ( cmd_id == CMD_CONT_G && ev_btn == 1 ) {
 	    contrast_rgb[1] ++;
 	    save_display_params("display_0.txt", contrast_rgb);
-	    refresh_image = true;
+	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_CONT_G && ev_btn == 3 ) {
 	    if ( 0 < contrast_rgb[1] ) {
 		contrast_rgb[1] --;
 		save_display_params("display_0.txt", contrast_rgb);
-		refresh_image = true;
+		refresh_image = 1;
 	    }
 	}
 	else if ( cmd_id == CMD_CONT_B && ev_btn == 1 ) {
 	    contrast_rgb[2] ++;
 	    save_display_params("display_0.txt", contrast_rgb);
-	    refresh_image = true;
+	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_CONT_B && ev_btn == 3 ) {
 	    if ( 0 < contrast_rgb[2] ) {
 		contrast_rgb[2] --;
 		save_display_params("display_0.txt", contrast_rgb);
-		refresh_image = true;
+		refresh_image = 1;
 	    }
 	}
 	else if ( cmd_id == CMD_SIGCLIP_CNT_PM && ev_btn == 1 ) {
@@ -998,7 +998,7 @@ int main( int argc, char *argv[] )
 	    if ( CMD_DISPLAY_TARGET <= cmd_id &&
 		 cmd_id <= CMD_DISPLAY_RESIDUAL8 ) {
 		display_type = cmd_id - CMD_DISPLAY_TARGET;
-		refresh_image = true;
+		refresh_image = 2;
 	    }
 	    else if ( cmd_id == CMD_SAVE ) {
 		save_offset = true;
@@ -1011,37 +1011,37 @@ int main( int argc, char *argv[] )
 	    else if ( cmd_id == CMD_CLR_OFF ) {
 		offset_x = 0;
 		offset_y = 0;
-		refresh_image = true;
+		refresh_image = 2;
 	    }
 	    else if ( ev_type == ButtonPress ) {
 		if ( ev_win == win_image && ev_btn == 3 /* right btn */ ) {
 		    offset_x = ev_x - (img_buf.x_length() / 2);
 		    offset_y = ev_y - (img_buf.y_length() / 2);
-		    refresh_image = true;
+		    refresh_image = 2;
 		}
 	    }
 	    else if ( ev_type == KeyPress ) {
 		//sio.printf("key = %d\n", ev_btn);
 		if ( ev_btn == 28 ) {		/* Right key */
 		    offset_x ++;
-		    refresh_image = true;
+		    refresh_image = 2;
 		}
 		else if ( ev_btn == 29 ) {	/* Left key */
 		    offset_x --;
-		    refresh_image = true;
+		    refresh_image = 2;
 		}
 		else if ( ev_btn == 30 ) {	/* Up key */
 		    offset_y --;
-		    refresh_image = true;
+		    refresh_image = 2;
 		}
 		else if ( ev_btn == 31 ) {	/* Down key */
 		    offset_y ++;
-		    refresh_image = true;
+		    refresh_image = 2;
 		}
 		else if ( ev_btn == ' ' ) {
 		    if ( display_type == 0 ) display_type = 1;
 		    else display_type = 0;
-		    refresh_image = true;
+		    refresh_image = 2;
 		}
 	    }
 	}
@@ -1078,19 +1078,21 @@ int main( int argc, char *argv[] )
 
 	/* Update window */
 	    
-	if ( refresh_image == true ) {
+	if ( refresh_image != 0 ) {
 	    if ( 2 <= display_type ) {	/* Residual */
-	        //double res_total;
-		img_display.resize(ref_img_buf);
-		img_display.paste(ref_img_buf);
-		img_display.subtract(img_buf, offset_x, offset_y, 0);
-		img_display.abs();
-		if ( display_type == 3 ) img_display *= 2.0;
-		else if ( display_type == 4 ) img_display *= 4.0;
-		else if ( display_type == 5 ) img_display *= 8.0;
-		//res_total = md_total(img_residual);
-		//img_display.swap(img_residual);
-		//img_residual.init(false);
+		if ( 1 < refresh_image || img_display.length() == 0 ) {
+		    //double res_total;
+		    img_display.resize(ref_img_buf);
+		    img_display.paste(ref_img_buf);
+		    img_display.subtract(img_buf, offset_x, offset_y, 0);
+		    img_display.abs();
+		    if ( display_type == 3 ) img_display *= 2.0;
+		    else if ( display_type == 4 ) img_display *= 4.0;
+		    else if ( display_type == 5 ) img_display *= 8.0;
+		    //res_total = md_total(img_residual);
+		    //img_display.swap(img_residual);
+		    //img_residual.init(false);
+		}
 		display_image(win_image, img_display,
 			      display_bin, display_ch, contrast_rgb, &tmp_buf);
 		winname(win_image, "Residual  offset = ( %ld, %ld )  "
@@ -1101,9 +1103,7 @@ int main( int argc, char *argv[] )
 		//img_display.init(false);
 	    }
 	    else if ( display_type == 1 ) {	/* Reference */
-		img_display.resize(ref_img_buf);
-	        img_display.paste(ref_img_buf);
-		display_image(win_image, img_display,
+		display_image(win_image, ref_img_buf,
 			      display_bin, display_ch, contrast_rgb, &tmp_buf);
 		winname(win_image, "Reference  "
 		       "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  ",
@@ -1112,8 +1112,11 @@ int main( int argc, char *argv[] )
 		//img_display.init(false);
 	    }
 	    else {
-		img_display.resize(img_buf);
-	        img_display.paste(img_buf, offset_x, offset_y, 0);
+		if ( 1 < refresh_image || img_display.length() == 0 ) {
+		    img_display.resize(ref_img_buf);
+		    img_display.clean();
+		    img_display.paste(img_buf, offset_x, offset_y, 0);
+		}
 		display_image(win_image, img_display,
 			      display_bin, display_ch, contrast_rgb, &tmp_buf);
 		winname(win_image, "Target  offset = ( %ld, %ld )  "
@@ -1127,7 +1130,7 @@ int main( int argc, char *argv[] )
 
 	if ( refresh_winname == true ) {
 	    winname(win_image, "Sigma-Clipping: "
-	        "[count=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
+	        "[N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
 	    	"Dither=%d",
 		count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 		(int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
