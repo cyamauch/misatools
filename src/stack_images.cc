@@ -709,6 +709,13 @@ int main( int argc, char *argv[] )
     display_image(win_image, ref_img_buf,
 		  display_bin, display_ch, contrast_rgb, &tmp_buf);
 
+    sio.printf("Initial Parameters:  "
+	    "contrast = ( %d, %d, %d )  "
+	    "sigma-clipping: [N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
+	    "dither=%d\n",
+	    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
+	    count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
+	    (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
     
     /*
      * MAIN EVENT LOOP
@@ -886,7 +893,7 @@ int main( int argc, char *argv[] )
 				    flag_dither, flag_preview,
 				    display_bin, display_ch, contrast_rgb,
 				    win_image, &tmp_buf ) < 0 ) {
-	        sio.printf("[ERROR] do_stack_and_save() failed\n");
+	        sio.eprintf("[ERROR] do_stack_and_save() failed\n");
 	    }
 	    if ( 0 <= sel_file_id ) {
 		/* reload */
