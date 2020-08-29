@@ -40,7 +40,7 @@ static int display_file_list( int win_filesel,
 			      const tarray_tstring &filenames,
 			      const mdarray_bool &flg_saved,
 			      int ref_file_id,
-			      int sel_file_id )
+			      int sel_file_id, bool flag_loading )
 {
     size_t i;
 
@@ -60,6 +60,13 @@ static int display_file_list( int win_filesel,
 	}
 	else if ( 0 <= sel_file_id && i == (size_t)sel_file_id ) {
 	    newcolor(win_filesel, "green");
+	    if ( flag_loading == true ) {
+		fillrect(win_filesel,
+			 (Fontsize/2)*2, (int)(Fontsize*i)-1,
+			 (Fontsize/2) * (filenames[i].length() + 6),
+			 Fontsize+1);
+		newcolor(win_filesel, "black");
+	    }
 	    changed_color = true;
 	}
 
@@ -679,7 +686,7 @@ int main( int argc, char *argv[] )
     gclr(win_filesel);
     winname(win_filesel, "File Selector");
     
-    display_file_list(win_filesel, filenames, flg_saved, ref_file_id, -1);
+    display_file_list(win_filesel, filenames, flg_saved, ref_file_id, -1, false);
 
     /* image viewer */
 
@@ -746,6 +753,9 @@ int main( int argc, char *argv[] )
 	if ( f_id != ref_file_id &&
 	     0 <= f_id && (size_t)f_id < filenames.length() ) {
 
+	    display_file_list(win_filesel, filenames, flg_saved,
+			      ref_file_id, f_id, true);
+	    
 	    sio.printf("Open: %s\n", filenames[f_id].cstr());
 	    img_display.init(false);	/* save memory ... */
 		    
@@ -1139,7 +1149,7 @@ int main( int argc, char *argv[] )
 	if ( refresh_list == true ) {
 
 	    display_file_list(win_filesel, filenames, flg_saved,
-			      ref_file_id, sel_file_id);
+			      ref_file_id, sel_file_id, false);
 
 	}
 
