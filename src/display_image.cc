@@ -68,6 +68,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++, k+=4 ) {
 			v = img_buf_ptr_rgb[off1 + j] * ct[ii] + 0.5;
 			if ( 255.0 < v ) v = 255.0;
+			else if ( v < 0 ) v = 255.0;
 			tmp_buf_ptr[off4 + k] = (unsigned char)v;
 		    }
 		}
@@ -97,16 +98,19 @@ static int display_image( int win_image, const mdarray &img_buf,
 			v = lv_p[k] * ftr * ct[0] + 0.5;
 			lv_p[k] = 0.0;
 			if ( 255.0 < v ) v = 255.0;
+			else if ( v < 0 ) v = 255.0;
 			tmp_buf_ptr[off4 + l] = (unsigned char)v;
 			k++;  l++;
 			v = lv_p[k] * ftr * ct[1] + 0.5;
 			lv_p[k] = 0.0;
 			if ( 255.0 < v ) v = 255.0;
+			else if ( v < 0 ) v = 255.0;
 			tmp_buf_ptr[off4 + l] = (unsigned char)v;
 			k++;  l++;
 			v = lv_p[k] * ftr * ct[2] + 0.5;
 			lv_p[k] = 0.0;
 			if ( 255.0 < v ) v = 255.0;
+			else if ( v < 0 ) v = 255.0;
 			tmp_buf_ptr[off4 + l] = (unsigned char)v;
 			k++;  l++;
 		    }
@@ -134,6 +138,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 			/* assume unsigned 16-bit data */
 			v = img_buf_ptr_rgb[off1 + j] * ftr * ct[ii] + 0.5;
 			if ( 255.0 < v ) v = 255.0;
+			else if ( v < 0 ) v = 255.0;
 			tmp_buf_ptr[off4 + k] = (unsigned char)v;
 		    }
 		}
@@ -163,16 +168,19 @@ static int display_image( int win_image, const mdarray &img_buf,
 			v = lv_p[k] * ftr * ct[0] + 0.5;
 			lv_p[k] = 0.0;
 			if ( 255.0 < v ) v = 255.0;
+			else if ( v < 0 ) v = 255.0;
 			tmp_buf_ptr[off4 + l] = (unsigned char)v;
 			k++;  l++;
 			v = lv_p[k] * ftr * ct[1] + 0.5;
 			lv_p[k] = 0.0;
 			if ( 255.0 < v ) v = 255.0;
+			else if ( v < 0 ) v = 255.0;
 			tmp_buf_ptr[off4 + l] = (unsigned char)v;
 			k++;  l++;
 			v = lv_p[k] * ftr * ct[2] + 0.5;
 			lv_p[k] = 0.0;
 			if ( 255.0 < v ) v = 255.0;
+			else if ( v < 0 ) v = 255.0;
 			tmp_buf_ptr[off4 + l] = (unsigned char)v;
 			k++;  l++;
 		    }

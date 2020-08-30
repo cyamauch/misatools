@@ -6,6 +6,7 @@
 #include <sli/tstring.h>
 #include <sli/tarray_tstring.h>
 #include <sli/mdarray.h>
+#include <sli/mdarray_math.h>
 #include <sli/mdarray_statistics.h>
 #include <eggx.h>
 #include <unistd.h>
@@ -31,6 +32,9 @@ const int Font_y_off = 3;
 const int Font_margin = 2;
 static int Fontsize = 14;
 #include "set_fontsize.c"
+
+const int Max_skypoint_box_size = 255;
+static int Skypoint_box_size = 25;
 
 typedef struct _sky_point {
     long x;
@@ -87,13 +91,12 @@ static long search_sky_point( const mdarray_float &target_img_buf,
 }
 
 
-#define SZ_BLOCK 15
-/* fix (x,y) of point at near edge of an image [15x15] */
-static int fix_points_15x15( const mdarray_float &target_img_buf,
+/* fix (x,y) of point at near edge of an image [box] */
+static int fix_points_box( const mdarray_float &target_img_buf,
 				 long point_x, long point_y,
 				 long *actual_x_ret, long *actual_y_ret )
 {
-    const long offset = SZ_BLOCK / 2;
+    const long offset = Skypoint_box_size / 2;
     const long x_len = target_img_buf.x_length();
     const long y_len = target_img_buf.y_length();
     
@@ -111,11 +114,11 @@ static int fix_points_15x15( const mdarray_float &target_img_buf,
 }
 
 /* search a sky point in sky_point_list around (ev_x, ev_y) */
-static long search_sky_point_15x15( const mdarray_float &target_img_buf,
+static long search_sky_point_box( const mdarray_float &target_img_buf,
 			      const mdarray &sky_point_list,
 			      long ev_x, long ev_y )
 {
-    const long offset = SZ_BLOCK / 2;
+    const long offset = Skypoint_box_size / 2;
     const sky_point *p_list = (const sky_point *)(sky_point_list.data_ptr_cs());
     size_t i;
     double distance = 65536;
@@ -125,7 +128,7 @@ static long search_sky_point_15x15( const mdarray_float &target_img_buf,
     for ( i=0 ; i < sky_point_list.length() ; i++ ) {
 	long point_x = p_list[i].x;
 	long point_y = p_list[i].y;
-	fix_points_15x15( target_img_buf, point_x, point_y,
+	fix_points_box( target_img_buf, point_x, point_y,
 			  &point_x, &point_y );
 	if ( point_x - offset <= ev_x && ev_x <= point_x + offset &&
 	     point_y - offset <= ev_y && ev_y <= point_y + offset ) {
@@ -142,29 +145,29 @@ static long search_sky_point_15x15( const mdarray_float &target_img_buf,
     return return_idx;
 }
 
-/* get median at a point [15x15] */
-static int get_15x15_median( const mdarray_float &target_img_buf,
+/* get median at a point [box] */
+static int get_box_median( const mdarray_float &target_img_buf,
 			   long point_x, long point_y,
 			   double median_rgb[] )
 {
-    const long offset = SZ_BLOCK / 2;
+    const long offset = Skypoint_box_size / 2;
     mdarray_float sample(false);
     int return_status = -1;
 
-    sample.resize_2d(SZ_BLOCK, SZ_BLOCK);
+    sample.resize_2d(Skypoint_box_size, Skypoint_box_size);
 
-    fix_points_15x15( target_img_buf, point_x, point_y,
+    fix_points_box( target_img_buf, point_x, point_y,
 		    &point_x, &point_y );
     
     /* R */
     target_img_buf.copy(&sample,
-	       point_x - offset, SZ_BLOCK,  point_y - offset, SZ_BLOCK,  0, 1);
+	       point_x - offset, Skypoint_box_size,  point_y - offset, Skypoint_box_size,  0, 1);
     if ( median_rgb != NULL ) median_rgb[0] = md_median(sample);
     //sample.dprint();
 
     /* G */
     target_img_buf.copy(&sample,
-	       point_x - offset, SZ_BLOCK,  point_y - offset, SZ_BLOCK,  1, 1);
+	       point_x - offset, Skypoint_box_size,  point_y - offset, Skypoint_box_size,  1, 1);
     if ( median_rgb != NULL ) median_rgb[1] = md_median(sample);
     //sample.dprint();
 
@@ -173,7 +176,7 @@ static int get_15x15_median( const mdarray_float &target_img_buf,
     //		offset - point_x, offset - point_y, -2);
     //sample.dprint();
     target_img_buf.copy(&sample,
-	       point_x - offset, SZ_BLOCK,  point_y - offset, SZ_BLOCK,  2, 1);
+	       point_x - offset, Skypoint_box_size,  point_y - offset, Skypoint_box_size,  2, 1);
     //sample.dprint();
     if ( median_rgb != NULL ) median_rgb[2] = md_median(sample);
     
@@ -236,7 +239,7 @@ static int append_sky_point( const mdarray_float &img,
     size_t len = sky_point_list_p->length();
     double median_rgb[3];
 
-    get_15x15_median(img, x, y, median_rgb);
+    get_box_median(img, x, y, median_rgb);
     
     sky_point_list_p->resize(len + 1);
     p = (sky_point *)sky_point_list_p->data_ptr();
@@ -297,7 +300,7 @@ static int draw_sky_points( int win_image,
 			    const mdarray_float &target_img_buf,
 			    const mdarray &sky_point_list, long selected )
 {
-    const long offset = SZ_BLOCK / 2;
+    const long offset = Skypoint_box_size / 2;
     const sky_point *p_list = (const sky_point *)(sky_point_list.data_ptr_cs());
     stdstreamio sio;
     size_t i;
@@ -309,7 +312,7 @@ static int draw_sky_points( int win_image,
 	long point_x = p_list[i].x;
 	long point_y = p_list[i].y;
 	//sio.printf("x,y = %ld,%ld\n",p_list[i].x,p_list[i].y);
-	fix_points_15x15( target_img_buf, point_x, point_y,
+	fix_points_box( target_img_buf, point_x, point_y,
 			  &point_x, &point_y );
 	if ( (long)i == selected ) {
 	    newcolor(win_image, "red");
@@ -339,7 +342,6 @@ static int draw_sky_points( int win_image,
     return 0;
 }
 
-#undef SZ_BLOCK
 
 static int construct_sky_image( const mdarray &sky_point_list,
 				mdarray_float *sky_img_buf_p )
@@ -453,23 +455,29 @@ const command_list Cmd_list[] = {
         {CMD_CONT_G,            "Green Contrast +/-       [g][G]"},
 #define CMD_CONT_B 14
         {CMD_CONT_B,            "Blue Contrast +/-        [b][B]"},
-#define CMD_DEL_POINT 15
-        {CMD_DEL_POINT,         "Delete a point           [Del]"},
-#define CMD_DEL_POINTS_V 16
+#define CMD_DISPLAY_RES_TYPE 15
+        {CMD_DISPLAY_RES_TYPE,  "Display residual type    [t]"},
+#define CMD_DISPLAY_POINTS 16
+        {CMD_DISPLAY_POINTS,    "Display points on/off    [ ]"},
+#define CMD_POINTSZ_PM 17
+        {CMD_POINTSZ_PM,        "Box size of points +/-   [p][P]"},
+#define CMD_DEL_POINT 18
+        {CMD_DEL_POINT,         "Delete a point          [x][Del]"},
+#define CMD_DEL_POINTS_V 19
         {CMD_DEL_POINTS_V,      "Delete all points on a line [X]"},
-#define CMD_SKYLV_PM 17
+#define CMD_SKYLV_PM 20
         {CMD_SKYLV_PM,          "Sky-level +/- at a point [s][S]"},
-#define CMD_SKYLV_INCDECL_PM 18
+#define CMD_SKYLV_INCDECL_PM 21
         {CMD_SKYLV_INCDECL_PM,  "Sky-level inc/decl +/-   [i][I]"},
-#define CMD_SAVE_PARAMS 19
+#define CMD_SAVE_PARAMS 22
         {CMD_SAVE_PARAMS,       "Save Pseudo-Sky Params   [Enter]"},
-#define CMD_DITHER 20
+#define CMD_DITHER 23
         {CMD_DITHER,            "Dither on/off for saving [d]"},
-#define CMD_SAVE_SKY 21
+#define CMD_SAVE_SKY 24
         {CMD_SAVE_SKY,          "Save Pseudo-Sky image"},
-#define CMD_SAVE_IMAGE 22
+#define CMD_SAVE_IMAGE 25
         {CMD_SAVE_IMAGE,        "Save Pseudo-Sky-Subtracted image"},
-#define CMD_EXIT 23
+#define CMD_EXIT 26
         {CMD_EXIT,              "Exit                     [q]"}
 };
 
@@ -489,20 +497,25 @@ int main( int argc, char *argv[] )
     mdarray_uchar tmp_buf(false);		/* tmp buffer for displaying */
 
     mdarray_float img_display(false);	/* buffer for displaying image */
+    double img_display_min_v = 0.0;
 
     sky_point *sky_point_ptr;
     mdarray sky_point_list(sizeof(sky_point),false, /* pts to constract sky */
 			   (void *)(&sky_point_ptr));
 
-    int display_type = 0;		/* flag to display image type */
+    int display_type = 0;		/* flag for display image type */
+    int display_res_type = 0;		/* flag for residual */
     int display_ch = 0;			/* 0=RGB 1=R 2=G 3=B */
     int display_bin = 1;		/* binning factor for display */
     int contrast_rgb[3] = {8, 8, 8};	/* contrast for display */
-    int skylv_incdecl = 8;	/* pow(2,skylv_incdecl) */
+    bool flag_display_points = true;
+    int skylv_incdecl = 7;	/* pow(2,skylv_incdecl) */
 
     bool flag_dither = true;
 
     const char *names_ch[] = {"RGB", "Red", "Green", "Blue"};
+    const char *names_res_type[] = {"Subtract(abs)", "Subtract(simple)",
+				    "Bias", "Minus area(x16)"};
 
     long selected_point_idx = -1;
     
@@ -578,12 +591,13 @@ int main( int argc, char *argv[] )
 
     sort_sky_point_list(&sky_point_list);
     
+    /*
     for ( i=0 ; i < sky_point_list.length() ; i++ ) {
 	sio.eprintf("[DEBUG] x=%ld y=%ld R=%g G=%g B=%g\n",
 	  sky_point_ptr[i].x, sky_point_ptr[i].y,
 	  sky_point_ptr[i].red, sky_point_ptr[i].green, sky_point_ptr[i].blue);
     }
-    
+    */
     
     /* display reference image */
     display_image(win_image, target_img_buf,
@@ -671,6 +685,16 @@ int main( int argc, char *argv[] )
 	    }
 	    else if ( ev_btn == 'B' ) {
 		cmd_id = CMD_CONT_B;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == 't' ) cmd_id = CMD_DISPLAY_RES_TYPE;
+	    else if ( ev_btn == ' ' ) cmd_id = CMD_DISPLAY_POINTS;
+	    else if ( ev_btn == 'p' ) {
+		cmd_id = CMD_POINTSZ_PM;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'P' ) {
+		cmd_id = CMD_POINTSZ_PM;
 		ev_btn = 3;
 	    }
 	    else if ( ev_btn == 127 ) cmd_id = CMD_DEL_POINT;
@@ -771,6 +795,35 @@ int main( int argc, char *argv[] )
 		refresh_image = 1;
 	    }
 	}
+	else if ( cmd_id == CMD_DISPLAY_RES_TYPE ) {
+	    if ( 3 <= display_res_type ) display_res_type = 0;
+	    else display_res_type ++;
+	    refresh_image = 2;
+	}
+	else if ( cmd_id == CMD_DISPLAY_POINTS ) {
+	    if ( flag_display_points == false ) {
+		flag_display_points = true;
+		refresh_graphics = true;
+	    }
+	    else {
+		flag_display_points = false;
+		refresh_image = 1;
+	    }
+	}
+	else if ( cmd_id == CMD_POINTSZ_PM && ev_btn == 1 ) {
+	    if ( Skypoint_box_size < Max_skypoint_box_size ) {
+		Skypoint_box_size += 2;
+		refresh_image = 1;
+		refresh_winname = true;
+	    }
+	}
+	else if ( cmd_id == CMD_POINTSZ_PM && ev_btn == 3 ) {
+	    if ( 3 < Skypoint_box_size ) {
+		Skypoint_box_size -= 2;
+		refresh_image = 1;
+		refresh_winname = true;
+	    }
+	}
 	else if ( cmd_id == CMD_DEL_POINT ) {
 	    if ( 0 <= selected_point_idx ) {
 		if ( delete_sky_point(&sky_point_list,
@@ -778,6 +831,7 @@ int main( int argc, char *argv[] )
 		    selected_point_idx = -1;
 		    refresh_sky = true;
 		    refresh_image = 2;
+		    flag_display_points = true;
 		}
 	    }
 	}
@@ -788,6 +842,7 @@ int main( int argc, char *argv[] )
 		    selected_point_idx = -1;
 		    refresh_sky = true;
 		    refresh_image = 2;
+		    flag_display_points = true;
 		}
 	    }
 	}
@@ -832,10 +887,10 @@ int main( int argc, char *argv[] )
 		double median_rgb[3];
 		long point_idx;
 
-		point_idx = search_sky_point_15x15(
+		point_idx = search_sky_point_box(
 					target_img_buf, sky_point_list,
 					ev_x, ev_y );
-		sio.eprintf("point_idx = %ld\n", point_idx);
+		//sio.eprintf("point_idx = %ld\n", point_idx);
 
 		if ( 0 <= point_idx ) {
 		    /* found */
@@ -856,13 +911,14 @@ int main( int argc, char *argv[] )
 		    else {
 			selected_point_idx = point_idx;
 			refresh_graphics = true;
+			flag_display_points = true;
 		    }
 		}
 		else {
 		    /* not found ... register new points */
 		    long p_idx;
 		    /* search nearest existing vertical line */
-		    p_idx = search_sky_point_15x15(
+		    p_idx = search_sky_point_box(
 					target_img_buf, sky_point_list,
 					ev_x, 0 );
 		    if ( 0 <= p_idx ) {			/* found existing */
@@ -889,11 +945,12 @@ int main( int argc, char *argv[] )
 					  ev_x, ev_y);
 		    refresh_sky = true;
 		    refresh_image = 2;
+		    flag_display_points = true;
 		}
 #if 0		
-		fix_points_15x15(target_img_buf, ev_x, ev_y,
+		fix_points_box(target_img_buf, ev_x, ev_y,
 			       &actual_x, &actual_y);
-		get_15x15_median(target_img_buf, actual_x, actual_y, median_rgb);
+		get_box_median(target_img_buf, actual_x, actual_y, median_rgb);
 	        //offset_x = ev_x - (img_buf.x_length() / 2);
 		sio.eprintf("ev_x, ev_y = %g, %g   ac_x, ac_y = %ld, %ld\n",
 			    ev_x, ev_y, actual_x, actual_y);
@@ -918,41 +975,47 @@ int main( int argc, char *argv[] )
 	    else if ( ev_btn == 31 ) {		/* Down key */
 	        refresh_image = 2;
 	    }
-	    /* toggle target/sky images */
-	    else if ( ev_btn == ' ' ) {
-	        if ( display_type == 0 ) display_type = 1;
-		else display_type = 0;
-		refresh_image = 2;
-	    }
 	}
 
 	/* Update window */
 	
-	if ( refresh_winname == true ) {
-	    winname(win_image, "sky-level_inc/decl=%g  dither=%d",
-		    pow(2,skylv_incdecl), (int)flag_dither);
-	}
-
 	if ( refresh_sky == true ) {
 	    construct_sky_image(sky_point_list, &sky_img_buf);
 	}
 	
 	if ( refresh_image != 0 ) {
 	    if ( 2 <= display_type ) {		/* Residual */
+		tstring str_min_v = "";
 		if ( 1 < refresh_image ) {
 		    img_display.resize(target_img_buf);
 		    img_display.paste(target_img_buf);
 		    img_display.subtract(sky_img_buf);
-		    img_display.abs();
+		    if ( display_res_type == 0 ) {	/* abs */
+			img_display.abs();
+		    }
+		    else if ( display_res_type == 2 ) {	/* bias */
+			img_display_min_v = md_min(img_display);
+			if ( img_display_min_v < 0.0 ){
+			    img_display -= img_display_min_v;
+			}
+			str_min_v.printf("min_v = %g  ", img_display_min_v);
+		    }
+		    else if ( display_res_type == 3 ) {	/* minus-only */
+			img_display -= fabs(img_display);
+			img_display *= (-8);
+		    }
 		    if ( display_type == 3 ) img_display *= 2.0;
 		    else if ( display_type == 4 ) img_display *= 4.0;
 		    else if ( display_type == 5 ) img_display *= 8.0;
 		}
 		display_image(win_image, img_display,
 			      display_bin, display_ch, contrast_rgb, &tmp_buf);
-		winname(win_image, "Residual  channel = %s  zoom = 1/%d  "
+		winname(win_image, "Residual [%s]  %s"
+			"channel = %s  zoom = 1/%d  "
 			"contrast = ( %d, %d, %d )  ",
-			names_ch[display_ch], display_bin, 
+			names_res_type[display_res_type], str_min_v.cstr(),
+			names_ch[display_ch],
+			display_bin, 
 			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    }
 	    else if ( display_type == 1 ) {	/* Sky */
@@ -974,11 +1037,18 @@ int main( int argc, char *argv[] )
 	    refresh_graphics = true;
 	}
 
-	if ( refresh_graphics == true ) {
+	if ( flag_display_points == true && refresh_graphics == true ) {
 	    /* drawing sky points */
 	    draw_sky_points( win_image, target_img_buf, sky_point_list,
 			     selected_point_idx );
 	}
+
+	if ( refresh_winname == true ) {
+	    winname(win_image,
+		    "sky-level_box = %d  sky-level_inc/decl = %g  dither = %d",
+		    Skypoint_box_size, pow(2,skylv_incdecl), (int)flag_dither);
+	}
+
 
     }
     
