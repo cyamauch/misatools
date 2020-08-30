@@ -448,6 +448,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 
     /* save */
 #if 1
+    sio.printf("[INFO] scale will be changed\n");
     appended_str.printf("+%zdframes_stacked", n_plus);
     make_output_filename(filenames[ref_file_id].cstr(), appended_str.cstr(),
 			 "16bit", &out_filename);
@@ -477,55 +478,57 @@ typedef struct _command_list {
 
 const command_list Cmd_list[] = {
 #define CMD_DISPLAY_TARGET 1
-        {CMD_DISPLAY_TARGET,    "Display Target           [1]"},
+        {CMD_DISPLAY_TARGET,    "Display Target            [1]"},
 #define CMD_DISPLAY_REFERENCE 2
-        {CMD_DISPLAY_REFERENCE, "Display Reference        [2]"},
+        {CMD_DISPLAY_REFERENCE, "Display Reference         [2]"},
 #define CMD_DISPLAY_RESIDUAL1 3
-        {CMD_DISPLAY_RESIDUAL1, "Display Residual x1      [3]"},
+        {CMD_DISPLAY_RESIDUAL1, "Display Residual x1       [3]"},
 #define CMD_DISPLAY_RESIDUAL2 4
-        {CMD_DISPLAY_RESIDUAL2, "Display Residual x2      [4]"},
+        {CMD_DISPLAY_RESIDUAL2, "Display Residual x2       [4]"},
 #define CMD_DISPLAY_RESIDUAL4 5
-        {CMD_DISPLAY_RESIDUAL4, "Display Residual x4      [5]"},
+        {CMD_DISPLAY_RESIDUAL4, "Display Residual x4       [5]"},
 #define CMD_DISPLAY_RESIDUAL8 6
-        {CMD_DISPLAY_RESIDUAL8, "Display Residual x8      [6]"},
+        {CMD_DISPLAY_RESIDUAL8, "Display Residual x8       [6]"},
 #define CMD_DISPLAY_RGB 7
-        {CMD_DISPLAY_RGB,       "Display RGB              [c]"},
+        {CMD_DISPLAY_RGB,       "Display RGB               [c]"},
 #define CMD_DISPLAY_R 8
-        {CMD_DISPLAY_R,         "Display Red              [c]"},
+        {CMD_DISPLAY_R,         "Display Red               [c]"},
 #define CMD_DISPLAY_G 9
-        {CMD_DISPLAY_G,         "Display Green            [c]"},
+        {CMD_DISPLAY_G,         "Display Green             [c]"},
 #define CMD_DISPLAY_B 10
-        {CMD_DISPLAY_B,         "Display Blue             [c]"},
+        {CMD_DISPLAY_B,         "Display Blue              [c]"},
 #define CMD_ZOOM 11
-        {CMD_ZOOM,              "Zoom +/-                 [+][-]"},
-#define CMD_CONT_R 12
-        {CMD_CONT_R,            "Red Contrast +/-         [r][R]"},
-#define CMD_CONT_G 13
-        {CMD_CONT_G,            "Green Contrast +/-       [g][G]"},
-#define CMD_CONT_B 14
-        {CMD_CONT_B,            "Blue Contrast +/-        [b][B]"},
-#define CMD_SAVE 15
-        {CMD_SAVE,              "Save Offset Info         [Enter]"},
-#define CMD_DELETE 16
-        {CMD_DELETE,            "Delete Offset Info       [Del]"},
-#define CMD_CLR_OFF 17
-        {CMD_CLR_OFF,           "Clear Currnt Offset      [0]"},
-#define CMD_SIGCLIP_CNT_PM 18
+        {CMD_ZOOM,              "Zoom +/-                  [+][-]"},
+#define CMD_CONT_RGB 12
+        {CMD_CONT_RGB,          "RGB Contrast +/-          [<][>]"},
+#define CMD_CONT_R 13
+        {CMD_CONT_R,            "Red Contrast +/-          [r][R]"},
+#define CMD_CONT_G 14
+        {CMD_CONT_G,            "Green Contrast +/-        [g][G]"},
+#define CMD_CONT_B 15
+        {CMD_CONT_B,            "Blue Contrast +/-         [b][B]"},
+#define CMD_SAVE 16
+        {CMD_SAVE,              "Save Offset Info          [Enter]"},
+#define CMD_DELETE 17
+        {CMD_DELETE,            "Delete Offset Info        [Del]"},
+#define CMD_CLR_OFF 18
+        {CMD_CLR_OFF,           "Clear Currnt Offset       [0]"},
+#define CMD_SIGCLIP_CNT_PM 19
         {CMD_SIGCLIP_CNT_PM,    "N iterations Sig-Clip +/- [i][I]"},
-#define CMD_SIGCLIP_PM 19
-        {CMD_SIGCLIP_PM,        "Val of Sigma-Clip +/-    [v][V]"},
-#define CMD_SIGCLIP_SKYLV 20
-        {CMD_SIGCLIP_SKYLV,     "Sky-lv Sigma-Clip on/off [s]"},
-#define CMD_SIGCLIP_COMET 21
-        {CMD_SIGCLIP_COMET,     "Comet Sigma-Clip on/off  [m]"},
-#define CMD_DITHER 22
-        {CMD_DITHER,            "Dither on/off for saving [d]"},
-#define CMD_STACK 23
+#define CMD_SIGCLIP_PM 20
+        {CMD_SIGCLIP_PM,        "Val of Sigma-Clip +/-     [v][V]"},
+#define CMD_SIGCLIP_SKYLV 21
+        {CMD_SIGCLIP_SKYLV,     "Sky-lv Sigma-Clip on/off  [s]"},
+#define CMD_SIGCLIP_COMET 22
+        {CMD_SIGCLIP_COMET,     "Comet Sigma-Clip on/off   [m]"},
+#define CMD_DITHER 23
+        {CMD_DITHER,            "Dither on/off for saving  [d]"},
+#define CMD_STACK 24
         {CMD_STACK,             "Start Stacking"},
-#define CMD_STACK_SILENT 24
+#define CMD_STACK_SILENT 25
         {CMD_STACK_SILENT,      "Start Stacking without preview"},
-#define CMD_EXIT 25
-        {CMD_EXIT,              "Exit                     [q]"}
+#define CMD_EXIT 26
+        {CMD_EXIT,              "Exit                      [q]"}
 };
 
 const size_t N_cmd_list = sizeof(Cmd_list) / sizeof(Cmd_list[0]);
@@ -655,7 +658,7 @@ int main( int argc, char *argv[] )
     /* command window */
 
     {
-	const int w_width = 32 * (Fontsize/2) + Font_margin * 2;
+	const int w_width = 33 * (Fontsize/2) + Font_margin * 2;
 	const int c_height = (Fontsize + Font_margin * 2);
 	win_command = gopen(w_width, c_height * (N_cmd_list));
 	gsetbgcolor(win_command,"#606060");
@@ -823,6 +826,14 @@ int main( int argc, char *argv[] )
 		cmd_id = CMD_ZOOM;
 		ev_btn = 3;
 	    }
+	    else if ( ev_btn == '>' ) {
+		cmd_id = CMD_CONT_RGB;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == '<' ) {
+		cmd_id = CMD_CONT_RGB;
+		ev_btn = 3;
+	    }
 	    else if ( ev_btn == 'r' ) {
 		cmd_id = CMD_CONT_R;
 		ev_btn = 1;
@@ -932,6 +943,29 @@ int main( int argc, char *argv[] )
 	    contrast_rgb[0] ++;
 	    save_display_params("display_0.txt", contrast_rgb);
 	    refresh_image = 1;
+	}
+	else if ( cmd_id == CMD_CONT_RGB && ev_btn == 1 ) {
+	    contrast_rgb[0] ++;
+	    contrast_rgb[1] ++;
+	    contrast_rgb[2] ++;
+	    save_display_params("display_0.txt", contrast_rgb);
+	    refresh_image = 1;
+	}
+	else if ( cmd_id == CMD_CONT_RGB && ev_btn == 3 ) {
+	    bool changed = false;
+	    if ( 0 < contrast_rgb[0] ) {
+	        contrast_rgb[0] --;  changed = true;
+	    }
+	    if ( 0 < contrast_rgb[1] ) {
+	        contrast_rgb[1] --;  changed = true;
+	    }
+	    if ( 0 < contrast_rgb[2] ) {
+	        contrast_rgb[2] --;  changed = true;
+	    }
+	    if ( changed == true ) {
+		save_display_params("display_0.txt", contrast_rgb);
+		refresh_image = 1;
+	    }
 	}
 	else if ( cmd_id == CMD_CONT_R && ev_btn == 3 ) {
 	    if ( 0 < contrast_rgb[0] ) {
