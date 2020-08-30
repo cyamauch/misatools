@@ -34,7 +34,7 @@ static int Fontsize = 14;
 #include "set_fontsize.c"
 
 const int Max_skypoint_box_size = 255;
-static int Skypoint_box_size = 25;
+static int Skypoint_box_size = 31;
 
 typedef struct _sky_point {
     long x;
@@ -420,7 +420,25 @@ static int construct_sky_image( const mdarray &sky_point_list,
     return return_status;
 }
 
-			   
+static int get_params_filename( const char *target_filename,
+				tstring *ret_filename )
+{
+    size_t i, ix = 0;
+    for ( i=0 ; target_filename[i] != '\0' ; i++ ) {
+	if ( target_filename[i] == '.' ) ix = i;
+    }
+    if ( ix != 0 ) {
+	ret_filename->assign(target_filename,ix);
+	ret_filename->append(".pseudo-sky.txt");
+    }
+    else {
+	ret_filename->printf("%s.pseudo-sky.txt",target_filename);
+    }
+    return 0;
+}
+
+
+
 typedef struct _command_list {
     int id;
     const char *menu_string;
@@ -428,57 +446,59 @@ typedef struct _command_list {
 
 const command_list Cmd_list[] = {
 #define CMD_DISPLAY_TARGET 1
-        {CMD_DISPLAY_TARGET,    "Display Target           [1]"},
+        {CMD_DISPLAY_TARGET,    "Display Target            [1]"},
 #define CMD_DISPLAY_SKY 2
-        {CMD_DISPLAY_SKY,       "Display Pseudo Sky       [2]"},
+        {CMD_DISPLAY_SKY,       "Display Pseudo Sky        [2]"},
 #define CMD_DISPLAY_RESIDUAL1 3
-        {CMD_DISPLAY_RESIDUAL1, "Display Residual x1      [3]"},
+        {CMD_DISPLAY_RESIDUAL1, "Display Residual x1       [3]"},
 #define CMD_DISPLAY_RESIDUAL2 4
-        {CMD_DISPLAY_RESIDUAL2, "Display Residual x2      [4]"},
+        {CMD_DISPLAY_RESIDUAL2, "Display Residual x2       [4]"},
 #define CMD_DISPLAY_RESIDUAL4 5
-        {CMD_DISPLAY_RESIDUAL4, "Display Residual x4      [5]"},
+        {CMD_DISPLAY_RESIDUAL4, "Display Residual x4       [5]"},
 #define CMD_DISPLAY_RESIDUAL8 6
-        {CMD_DISPLAY_RESIDUAL8, "Display Residual x8      [6]"},
+        {CMD_DISPLAY_RESIDUAL8, "Display Residual x8       [6]"},
 #define CMD_DISPLAY_RGB 7
-        {CMD_DISPLAY_RGB,       "Display RGB              [c]"},
+        {CMD_DISPLAY_RGB,       "Display RGB               [c]"},
 #define CMD_DISPLAY_R 8
-        {CMD_DISPLAY_R,         "Display Red              [c]"},
+        {CMD_DISPLAY_R,         "Display Red               [c]"},
 #define CMD_DISPLAY_G 9
-        {CMD_DISPLAY_G,         "Display Green            [c]"},
+        {CMD_DISPLAY_G,         "Display Green             [c]"},
 #define CMD_DISPLAY_B 10
-        {CMD_DISPLAY_B,         "Display Blue             [c]"},
+        {CMD_DISPLAY_B,         "Display Blue              [c]"},
 #define CMD_ZOOM 11
-        {CMD_ZOOM,              "Zoom +/-                 [+][-]"},
-#define CMD_CONT_R 12
-        {CMD_CONT_R,            "Red Contrast +/-         [r][R]"},
-#define CMD_CONT_G 13
-        {CMD_CONT_G,            "Green Contrast +/-       [g][G]"},
-#define CMD_CONT_B 14
-        {CMD_CONT_B,            "Blue Contrast +/-        [b][B]"},
-#define CMD_DISPLAY_RES_TYPE 15
-        {CMD_DISPLAY_RES_TYPE,  "Display residual type    [t]"},
-#define CMD_DISPLAY_POINTS 16
-        {CMD_DISPLAY_POINTS,    "Display points on/off    [ ]"},
-#define CMD_POINTSZ_PM 17
-        {CMD_POINTSZ_PM,        "Box size of points +/-   [p][P]"},
-#define CMD_DEL_POINT 18
+        {CMD_ZOOM,              "Zoom +/-                  [+][-]"},
+#define CMD_CONT_RGB 12
+        {CMD_CONT_RGB,          "RGB Contrast +/-          [<][>]"},
+#define CMD_CONT_R 13
+        {CMD_CONT_R,            "Red Contrast +/-          [r][R]"},
+#define CMD_CONT_G 14
+        {CMD_CONT_G,            "Green Contrast +/-        [g][G]"},
+#define CMD_CONT_B 15
+        {CMD_CONT_B,            "Blue Contrast +/-         [b][B]"},
+#define CMD_DISPLAY_RES_TYPE 16
+        {CMD_DISPLAY_RES_TYPE,  "Type of residual          [t]"},
+#define CMD_DISPLAY_POINTS 17
+        {CMD_DISPLAY_POINTS,    "Display points on/off     [ ]"},
+#define CMD_POINTSZ_PM 18
+        {CMD_POINTSZ_PM,        "Box size of points +/-    [p][P]"},
+#define CMD_DEL_POINT 19
         {CMD_DEL_POINT,         "Delete a point          [x][Del]"},
-#define CMD_DEL_POINTS_V 19
-        {CMD_DEL_POINTS_V,      "Delete all points on a line [X]"},
-#define CMD_SKYLV_PM 20
-        {CMD_SKYLV_PM,          "Sky-level +/- at a point [s][S]"},
-#define CMD_SKYLV_INCDECL_PM 21
-        {CMD_SKYLV_INCDECL_PM,  "Sky-level inc/decl +/-   [i][I]"},
-#define CMD_SAVE_PARAMS 22
-        {CMD_SAVE_PARAMS,       "Save Pseudo-Sky Params   [Enter]"},
-#define CMD_DITHER 23
-        {CMD_DITHER,            "Dither on/off for saving [d]"},
-#define CMD_SAVE_SKY 24
+#define CMD_DEL_POINTS_V 20
+        {CMD_DEL_POINTS_V,      "Delete all points on a line  [X]"},
+#define CMD_SKYLV_PM 21
+        {CMD_SKYLV_PM,          "Sky-level +/- at a point  [s][S]"},
+#define CMD_SKYLV_INCDECL_PM 22
+        {CMD_SKYLV_INCDECL_PM,  "Sky-level inc/decl +/-    [i][I]"},
+#define CMD_SAVE_PARAMS 23
+        {CMD_SAVE_PARAMS,       "Save Pseudo-Sky Params    [Enter]"},
+#define CMD_DITHER 24
+        {CMD_DITHER,            "Dither on/off for saving  [d]"},
+#define CMD_SAVE_SKY 25
         {CMD_SAVE_SKY,          "Save Pseudo-Sky image"},
-#define CMD_SAVE_IMAGE 25
+#define CMD_SAVE_IMAGE 26
         {CMD_SAVE_IMAGE,        "Save Pseudo-Sky-Subtracted image"},
-#define CMD_EXIT 26
-        {CMD_EXIT,              "Exit                     [q]"}
+#define CMD_EXIT 27
+        {CMD_EXIT,              "Exit                      [q]"}
 };
 
 const size_t N_cmd_list = sizeof(Cmd_list) / sizeof(Cmd_list[0]);
@@ -487,17 +507,16 @@ int main( int argc, char *argv[] )
 {
     stdstreamio sio, f_in;
     tstring target_filename;
-
+    
     int win_command, win_image;
     int win_command_col_height;
 
     mdarray_float target_img_buf(false);	/* buffer for target image */
     mdarray_float sky_img_buf(false);		/* buffer for pseudo sky */
-    mdarray_float result_img_buf(false);	/* buffer for result image */
     mdarray_uchar tmp_buf(false);		/* tmp buffer for displaying */
+    mdarray_uchar icc_buf(false);
 
     mdarray_float img_display(false);	/* buffer for displaying image */
-    double img_display_min_v = 0.0;
 
     sky_point *sky_point_ptr;
     mdarray sky_point_list(sizeof(sky_point),false, /* pts to constract sky */
@@ -545,7 +564,7 @@ int main( int argc, char *argv[] )
     /* command window */
 
     {
-	const int w_width = 32 * (Fontsize/2) + Font_margin * 2;
+	const int w_width = 33 * (Fontsize/2) + Font_margin * 2;
 	const int c_height = (Fontsize + Font_margin * 2);
 	win_command = gopen(w_width, c_height * (N_cmd_list));
 	gsetbgcolor(win_command,"#606060");
@@ -573,21 +592,67 @@ int main( int argc, char *argv[] )
     win_image = gopen(600,400);
 
     if ( read_tiff24or48_to_float(target_filename.cstr(),
-				  &target_img_buf, NULL, NULL, NULL) < 0 ) {
+				  &target_img_buf, &icc_buf, NULL, NULL) < 0 ) {
         sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	goto quit;
     }
+    
+    if ( icc_buf.length() == 0 ) {
+	icc_buf.resize_1d(sizeof(Icc_srgb_profile));
+	icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
+    }
 
-    /* determine sky point of 4-corner */
-    append_sky_point( target_img_buf, 0, 0,
-		      2, &sky_point_list );
-    append_sky_point( target_img_buf, target_img_buf.x_length() - 1, 0,
-		      2, &sky_point_list );
-    append_sky_point( target_img_buf, 0, target_img_buf.y_length() - 1,
-		      2, &sky_point_list );
-    append_sky_point( target_img_buf,
-		target_img_buf.x_length() - 1, target_img_buf.y_length() - 1,
-		2, &sky_point_list );
+    /* set size of box on sky point */
+    Skypoint_box_size =
+	(target_img_buf.x_length() + target_img_buf.y_length()) / 170;
+    if ( Skypoint_box_size % 2 == 0 ) Skypoint_box_size ++;
+    if ( Skypoint_box_size < 3 ) Skypoint_box_size = 3;
+
+    sio.printf("[INFO] image width = %ld  height = %ld\n",
+	       (long)(target_img_buf.x_length()),
+	       (long)(target_img_buf.y_length()));
+    sio.printf("[INFO] Skypoint_box_size = %d\n",Skypoint_box_size);
+
+    {
+	tarray_tstring arr;
+	tstring in_filename, line;
+	size_t i;
+	get_params_filename(target_filename.cstr(),
+			    &in_filename);
+	if ( f_in.open("r", in_filename.cstr()) < 0 ) {
+
+	    /* default: determine sky point of 4-corner */
+	    append_sky_point( target_img_buf, 0, 0,
+			      2, &sky_point_list );
+	    append_sky_point( target_img_buf, target_img_buf.x_length() - 1, 0,
+			      2, &sky_point_list );
+	    append_sky_point( target_img_buf, 0, target_img_buf.y_length() - 1,
+			      2, &sky_point_list );
+	    append_sky_point( target_img_buf,
+	      target_img_buf.x_length() - 1, target_img_buf.y_length() - 1,
+	      2, &sky_point_list );
+
+	}
+	else {
+	    i=0;
+	    while ( (line=f_in.getline()) != NULL ) {
+		arr.split( line.cstr(), " ", false);
+		if ( arr.length() == 6 ) {
+		    sky_point_list.resizeby(+1);
+		    sky_point_ptr[i].x = arr[0].atol();
+		    sky_point_ptr[i].y = arr[1].atol();
+		    sky_point_ptr[i].red = arr[2].atof();
+		    sky_point_ptr[i].green = arr[3].atof();
+		    sky_point_ptr[i].blue = arr[4].atof();
+		    sky_point_ptr[i].sticky = arr[5].atoi();
+		    i++;
+		}
+	    }
+	    f_in.close();
+	    sio.printf("Loaded: [%s]\n", in_filename.cstr());
+	}
+    }
+    
 
     sort_sky_point_list(&sky_point_list);
     
@@ -608,7 +673,6 @@ int main( int argc, char *argv[] )
 
     /* allocate buffer */
     sky_img_buf.resize(target_img_buf);
-    result_img_buf.resize(target_img_buf);
 
     /* make pseudo sky image */
     construct_sky_image(sky_point_list, &sky_img_buf);
@@ -661,6 +725,14 @@ int main( int argc, char *argv[] )
 	    }
 	    else if ( ev_btn == '-' ) {
 		cmd_id = CMD_ZOOM;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == '>' ) {
+		cmd_id = CMD_CONT_RGB;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == '<' ) {
+		cmd_id = CMD_CONT_RGB;
 		ev_btn = 3;
 	    }
 	    else if ( ev_btn == 'r' ) {
@@ -726,8 +798,46 @@ int main( int argc, char *argv[] )
 	    break;
 	}
 	else if ( cmd_id == CMD_SAVE_SKY ) {
+	    tstring out_filename;
+	    make_output_filename(target_filename.cstr(), "pseudo-sky",
+			 "16bit", &out_filename);
+	    sio.printf("Writing '%s' ", out_filename.cstr());
+	    if ( flag_dither == true ) sio.printf("using dither ...\n");
+	    else sio.printf("NOT using dither ...\n");
+	    /* */
+	    if ( write_float_to_tiff48(sky_img_buf, 0.0, 65535.0,
+				       flag_dither, 
+				       icc_buf, out_filename.cstr()) < 0 ) {
+		sio.eprintf("[ERROR] write_float_to_tiff48() failed.\n");
+	    }
 	}
 	else if ( cmd_id == CMD_SAVE_IMAGE ) {
+	    mdarray_float result_img_buf(false);
+	    tstring out_filename;
+	    double min_v;
+	    result_img_buf.resize(target_img_buf);
+	    result_img_buf.paste(target_img_buf);
+	    result_img_buf.subtract(sky_img_buf);
+	    min_v = md_min(result_img_buf);
+	    if ( min_v < 0.0 ){
+		result_img_buf -= min_v;
+		sio.printf("[INFO] abs(min_v = %g) will be used as softbias\n",
+			   min_v);
+	    }
+	    /* */
+	    sio.printf("[INFO] scale will be changed\n");
+	    make_output_filename(target_filename.cstr(),
+				 "pseudo-sky_subtracted",
+				 "16bit", &out_filename);
+	    sio.printf("Writing '%s' ", out_filename.cstr());
+	    if ( flag_dither == true ) sio.printf("using dither ...\n");
+	    else sio.printf("NOT using dither ...\n");
+	    /* */
+	    if ( write_float_to_tiff48(result_img_buf, 0.0, 0.0,
+				       flag_dither, 
+				       icc_buf, out_filename.cstr()) < 0 ) {
+		sio.eprintf("[ERROR] write_float_to_tiff48() failed.\n");
+	    }
 	}
 
 	else if ( CMD_DISPLAY_TARGET <= cmd_id &&
@@ -758,6 +868,29 @@ int main( int argc, char *argv[] )
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
 	    if ( display_bin < 10 ) display_bin ++;
 	    refresh_image = 1;
+	}
+	else if ( cmd_id == CMD_CONT_RGB && ev_btn == 1 ) {
+	    contrast_rgb[0] ++;
+	    contrast_rgb[1] ++;
+	    contrast_rgb[2] ++;
+	    save_display_params("display_0.txt", contrast_rgb);
+	    refresh_image = 1;
+	}
+	else if ( cmd_id == CMD_CONT_RGB && ev_btn == 3 ) {
+	    bool changed = false;
+	    if ( 0 < contrast_rgb[0] ) {
+	        contrast_rgb[0] --;  changed = true;
+	    }
+	    if ( 0 < contrast_rgb[1] ) {
+	        contrast_rgb[1] --;  changed = true;
+	    }
+	    if ( 0 < contrast_rgb[2] ) {
+	        contrast_rgb[2] --;  changed = true;
+	    }
+	    if ( changed == true ) {
+		save_display_params("display_0.txt", contrast_rgb);
+		refresh_image = 1;
+	    }
 	}
 	else if ( cmd_id == CMD_CONT_R && ev_btn == 1 ) {
 	    contrast_rgb[0] ++;
@@ -873,6 +1006,28 @@ int main( int argc, char *argv[] )
 	    refresh_winname = true;
 	}
 	else if ( cmd_id == CMD_SAVE_PARAMS ) {
+	    stdstreamio f_out;
+	    tstring out_filename;
+	    size_t i;
+	    get_params_filename(target_filename.cstr(),
+				&out_filename);
+	    if ( f_out.open("w", out_filename.cstr()) < 0 ) {
+		sio.eprintf("[ERROR] Cannot write params to '%s'.\n",
+			    out_filename.cstr());
+	    }
+	    else {
+		for ( i=0 ; i < sky_point_list.length() ; i++ ) {
+		    f_out.printf("%ld %ld %g %g %g %d\n",
+				 sky_point_ptr[i].x,
+				 sky_point_ptr[i].y,
+				 sky_point_ptr[i].red,
+				 sky_point_ptr[i].green,
+				 sky_point_ptr[i].blue,
+				 sky_point_ptr[i].sticky);
+		}
+		f_out.close();
+		sio.printf("Saved: [%s]\n", out_filename.cstr());
+	    }
 	}
 	else if ( cmd_id == CMD_DITHER ) {
 	    if ( flag_dither == true ) flag_dither = false;
@@ -883,8 +1038,10 @@ int main( int argc, char *argv[] )
 	else if ( ev_type == ButtonPress ) {
 	    if ( ev_win == win_image &&
 		 ( ev_btn == 1 || ev_btn == 3 ) /* left|right btn */ ) {
+#if 0
 		long actual_x = 0, actual_y = 0;
 		double median_rgb[3];
+#endif
 		long point_idx;
 
 		point_idx = search_sky_point_box(
@@ -985,6 +1142,7 @@ int main( int argc, char *argv[] )
 	
 	if ( refresh_image != 0 ) {
 	    if ( 2 <= display_type ) {		/* Residual */
+		double min_v;
 		tstring str_min_v = "";
 		if ( 1 < refresh_image ) {
 		    img_display.resize(target_img_buf);
@@ -994,11 +1152,11 @@ int main( int argc, char *argv[] )
 			img_display.abs();
 		    }
 		    else if ( display_res_type == 2 ) {	/* bias */
-			img_display_min_v = md_min(img_display);
-			if ( img_display_min_v < 0.0 ){
-			    img_display -= img_display_min_v;
+			min_v = md_min(img_display);
+			if ( min_v < 0.0 ){
+			    img_display -= min_v;
 			}
-			str_min_v.printf("min_v = %g  ", img_display_min_v);
+			str_min_v.printf("min_v = %g  ", min_v);
 		    }
 		    else if ( display_res_type == 3 ) {	/* minus-only */
 			img_display -= fabs(img_display);
