@@ -188,7 +188,7 @@ static int get_box_median( const mdarray_float &target_img_buf,
 static int delete_sky_point( mdarray *sky_point_list_p,
 			     long point_idx, bool v_all )
 {
-    stdstreamio sio;
+    //stdstreamio sio;
 
     sky_point *p;
 
@@ -232,29 +232,40 @@ static int delete_sky_point( mdarray *sky_point_list_p,
 }
 
 static int append_sky_point( const mdarray_float &img,
+			     const mdarray_float &sky, bool use_img,
 			     long x, long y, int sticky,
 			     mdarray *sky_point_list_p )
 {
     sky_point *p;
     size_t len = sky_point_list_p->length();
-    double median_rgb[3];
+    double val_rgb[3];
 
-    get_box_median(img, x, y, median_rgb);
+    if ( use_img == true ) {
+	get_box_median(img, x, y, val_rgb);
+    }
+    else if ( 0 < sky.length() && sky.length() == img.length() ) {
+	val_rgb[0] = sky.dvalue(x,y,0);
+	val_rgb[1] = sky.dvalue(x,y,1);
+	val_rgb[2] = sky.dvalue(x,y,2);
+    }
+    else {
+	get_box_median(img, x, y, val_rgb);
+    }
     
     sky_point_list_p->resize(len + 1);
     p = (sky_point *)sky_point_list_p->data_ptr();
 
     p[len].x = x;
     p[len].y = y;
-    p[len].red   = median_rgb[0];
-    p[len].green = median_rgb[1];
-    p[len].blue  = median_rgb[2];
+    p[len].red   = val_rgb[0];
+    p[len].green = val_rgb[1];
+    p[len].blue  = val_rgb[2];
     p[len].sticky = sticky;
 
     return 0;
 }
 
-static int update_sky_point_val( int rgb_ch,
+static int update_sky_point_val_pm( int rgb_ch,
 				 long point_idx, int skylv_incdecl, bool plus,
 				 mdarray *sky_point_list_p )
 {
@@ -286,6 +297,38 @@ static int update_sky_point_val( int rgb_ch,
 	else if ( rgb_ch == 3 ) {
 	    p_list[point_idx].blue += pm;
 	    if ( p_list[point_idx].blue < 0.0 ) p_list[point_idx].blue = 0.0;
+	}
+
+	return 0;
+    }
+    else {
+	return -1;
+    }
+
+}
+
+static int update_sky_point_val( int rgb_ch,
+				 long point_idx, double val[],
+				 mdarray *sky_point_list_p )
+{
+    sky_point *p_list = (sky_point *)(sky_point_list_p->data_ptr());
+    long len = sky_point_list_p->length();
+
+    if ( 0 <= point_idx && point_idx < len ) {
+    
+	if ( rgb_ch == 0 ) {
+	    p_list[point_idx].red = val[0];
+	    p_list[point_idx].green = val[1];
+	    p_list[point_idx].blue = val[2];
+	}
+	else if ( rgb_ch == 1 ) {
+	    p_list[point_idx].red = val[0];
+	}
+	else if ( rgb_ch == 2 ) {
+	    p_list[point_idx].green = val[1];
+	}
+	else if ( rgb_ch == 3 ) {
+	    p_list[point_idx].blue = val[2];
 	}
 
 	return 0;
@@ -342,77 +385,263 @@ static int draw_sky_points( int win_image,
     return 0;
 }
 
+/* Least-squares method (quadratic):  a + b*x + c*x^2 */
+void minsq_quadratic( int n, double x[], double y[],
+		      double *a, double *b, double *c )
+{
+    int i ;
+    double sx=0, sy=0, sxx=0, sxy=0 ;
+    double sxxy=0, sxxx=0, sxxxx=0, k ;
+
+    for ( i=0 ; i < n ; i++ ) {
+	sx += x[i] ;
+	sy += y[i] ;
+	sxx += x[i]*x[i] ;
+	sxy += x[i]*y[i] ;
+	sxxy += x[i]*x[i]*y[i] ;
+	sxxx += pow(x[i],3) ;
+	sxxxx += pow(x[i],4) ;
+    }
+
+    k = (n*sxx-sx*sx)/(sx*sxx-n*sxxx) ;
+    (*c) = n*sxy-sx*sy+n*k*sxxy-k*sy*sxx ;
+    (*c) /= (k*n*sxxxx-k*sxx*sxx+n*sxxx-sxx*sx) ;
+    (*b) = n*sxxy-(*c)*(n*sxxxx-sxx*sxx)-sxx*sy ;
+    (*b) /= (n*sxxx-sxx*sx) ;
+    (*a) = (sy-(*b)*sx-(*c)*sxx)/n ;
+
+    return ;
+}
+
+static int draw_vertical_linear( const sky_point *p_list,
+				 size_t idx_begin, size_t n_section_v,
+				 mdarray_float *sky_img_buf_p )
+{
+    long img_width = sky_img_buf_p->x_length();
+    size_t ii, i = idx_begin;
+    
+    for ( ii=0 ; ii < n_section_v ; ii++ ) {
+	double p_list_rgb[3];
+	double p_list_rgb_1[3];
+	long y_df, j, jj;
+	size_t ch;
+	p_list_rgb[0] = p_list[i].red;
+	p_list_rgb[1] = p_list[i].green;
+	p_list_rgb[2] = p_list[i].blue;
+	p_list_rgb_1[0] = p_list[i+1].red;
+	p_list_rgb_1[1] = p_list[i+1].green;
+	p_list_rgb_1[2] = p_list[i+1].blue;
+	/* */
+	y_df = p_list[i+1].y - p_list[i].y;
+	for ( ch=0 ; ch < 3 ; ch++ ) {	/* r,g,b */
+	    float *img_ptr_rgb = sky_img_buf_p->array_ptr(0,0,ch);
+	    double d;
+	    d = (p_list_rgb_1[ch] - p_list_rgb[ch]) / y_df;
+	    for ( j=p_list[i].y, jj=0 ; j < p_list[i+1].y + 1 ; j++, jj++ ) {
+		img_ptr_rgb[ p_list[i].x + img_width * j ]
+		    = p_list_rgb[ch] + d * jj;
+	    }
+	}
+	i++;
+    }
+
+    return 0;
+}
+
+static int draw_vertical_quadratic( const sky_point *p_list,
+				    size_t idx_begin, size_t n_section_v,
+				    mdarray_float *sky_img_buf_p )
+{
+    long img_width = sky_img_buf_p->x_length();
+    size_t ii, i = idx_begin;
+    
+    for ( ii=0 ; ii + 1 < n_section_v ; ii++ ) {
+	double p_list_rgb[3][3];
+	long j, last = 0;
+	size_t ch;
+	if ( ii + 2 == n_section_v ) last = 1;
+	p_list_rgb[0][0] = p_list[i].red;
+	p_list_rgb[0][1] = p_list[i+1].red;
+	p_list_rgb[0][2] = p_list[i+2].red;
+	p_list_rgb[1][0] = p_list[i].green;
+	p_list_rgb[1][1] = p_list[i+1].green;
+	p_list_rgb[1][2] = p_list[i+2].green;
+	p_list_rgb[2][0] = p_list[i].blue;
+	p_list_rgb[2][1] = p_list[i+1].blue;
+	p_list_rgb[2][2] = p_list[i+2].blue;
+	/* */
+	for ( ch=0 ; ch < 3 ; ch++ ) {	/* r,g,b */
+	    float *img_ptr_rgb = sky_img_buf_p->array_ptr(0,0,ch);
+	    double x[3] = { (double)(p_list[i].y),
+		(double)(p_list[i+1].y), (double)(p_list[i+2].y) };
+	    double a=0, b=0, c=0;
+	    minsq_quadratic(3, x, p_list_rgb[ch], &a, &b, &c);
+	    if ( ii == 0 ) {
+		for ( j=p_list[i].y ; j < p_list[i+1].y ; j++ ) {
+		    img_ptr_rgb[ p_list[i].x + img_width * j ] = 0.0;
+		}
+	    }
+	    for ( j=p_list[i].y ; j < p_list[i+1].y ; j++ ) {
+		img_ptr_rgb[ p_list[i].x + img_width * j ]
+		    += a + b * j + c * j * j;
+	    }
+	    if ( ii != 0 ) {			    /* average */
+		for ( j=p_list[i].y ; j < p_list[i+1].y ; j++ ) {
+		    img_ptr_rgb[ p_list[i].x + img_width * j ] *= 0.5;
+		}
+	    }
+	    for ( j=p_list[i+1].y ; j < p_list[i+2].y + last ; j++ ) {
+		img_ptr_rgb[ p_list[i].x + img_width * j ]
+		    = a + b * j + c * j * j;
+	    }
+	}
+	i++;
+    }
+
+    return 0;
+}
+
+static int draw_horizontal_linear( const sky_point *p_list,
+				   size_t list_len,
+				   mdarray_float *sky_img_buf_p )
+{
+    long img_width = sky_img_buf_p->x_length();
+    long img_height = sky_img_buf_p->y_length();
+    size_t ch, i;
+    
+    for ( ch=0 ; ch < 3 ; ch++ ) {	/* r,g,b */
+	float *img_ptr_rgb = sky_img_buf_p->array_ptr(0,0,ch);
+	for ( i=0 ; i + 1 < list_len ; i++ ) {
+	    if ( p_list[i].x != p_list[i+1].x ) {
+		long x0 = p_list[i].x;
+		long x1 = p_list[i+1].x;
+		long x_df = x1 - x0;
+		long j, k, kk;
+		for ( j=0 ; j < img_height ; j++ ) {
+		    double d, v0, v1;
+		    v0 = img_ptr_rgb[ x0 + img_width * j ];
+		    v1 = img_ptr_rgb[ x1 + img_width * j ];
+		    d = (v1 - v0) / x_df;
+		    for ( k=x0, kk=0 ; k < x1 + 1 ; k++, kk++ ) {
+			img_ptr_rgb[ k + img_width * j ] = v0 + d * kk;
+		    }
+		}
+	    }
+	}
+    }
+
+    return 0;
+}
+
+static int draw_horizontal_quadratic( const sky_point *p_list,
+				      size_t list_len, size_t n_section_h,
+				      mdarray_float *sky_img_buf_p )
+{
+    long img_width = sky_img_buf_p->x_length();
+    long img_height = sky_img_buf_p->y_length();
+    long x[n_section_h + 1];
+    size_t ch, i, j;
+    //stdstreamio sio;
+    
+    j = 0;
+    x[j] = p_list[0].x;
+    //sio.printf("[DEBUG] x[] = %ld\n", x[j]);
+    j++;
+    for ( i=0 ; i + 1 < list_len ; i++ ) {
+	if ( p_list[i].x != p_list[i+1].x ) {
+	    if ( j < n_section_h + 1 ) {
+		x[j] = p_list[i+1].x;
+		//sio.printf("[DEBUG] x[] = %ld\n", x[j]);
+		j++;
+	    }
+	}
+    }
+
+    for ( ch=0 ; ch < 3 ; ch++ ) {	/* r,g,b */
+	float *img_ptr_rgb = sky_img_buf_p->array_ptr(0,0,ch);
+	for ( i=0 ; i + 1 < n_section_h ; i++ ) {
+	    long j, k;
+	    double a=0, b=0, c=0;
+	    double x0[3] = {(double)x[i+0], (double)x[i+1], (double)x[i+2]};
+	    double v[3];
+	    long last = 0;
+	    if ( i + 2 == n_section_h ) last = 1;
+	    for ( j=0 ; j < img_height ; j++ ) {
+		v[0] = img_ptr_rgb[ x[i+0] + img_width * j ];
+		v[1] = img_ptr_rgb[ x[i+1] + img_width * j ];
+		v[2] = img_ptr_rgb[ x[i+2] + img_width * j ];
+		minsq_quadratic(3, x0, v, &a, &b, &c);
+		if ( i == 0 ) {
+		    for ( k=x[i+0] ; k < x[i+1] ; k++ ) {
+			img_ptr_rgb[ k + img_width * j ] = 0.0;
+		    }
+		}
+		for ( k=x[i+0] ; k < x[i+1] ; k++ ) {
+		    img_ptr_rgb[ k + img_width * j ] += a + b * k + c * k * k;
+		}
+		if ( i != 0 ) {				/* average */
+		    for ( k=x[i+0] ; k < x[i+1] ; k++ ) {
+			img_ptr_rgb[ k + img_width * j ] *= 0.5;
+		    }
+		}
+		for ( k=x[i+1] ; k < x[i+2] + last ; k++ ) {
+		    img_ptr_rgb[ k + img_width * j ] = a + b * k + c * k * k;
+		}
+	    }
+	}
+    }
+
+    return 0;
+}
+
 
 static int construct_sky_image( const mdarray &sky_point_list,
 				mdarray_float *sky_img_buf_p )
 {
     const sky_point *p_list = (const sky_point *)(sky_point_list.data_ptr_cs());
     size_t list_len = sky_point_list.length();
-    long img_width = sky_img_buf_p->x_length();
-    long img_height = sky_img_buf_p->y_length();
-    float *img_ptr_red = sky_img_buf_p->array_ptr(0,0,0);
-    float *img_ptr_green = sky_img_buf_p->array_ptr(0,0,1);
-    float *img_ptr_blue = sky_img_buf_p->array_ptr(0,0,2);
-    size_t i;
+    size_t n_section_h, i;
+    //stdstreamio sio;
 
     int return_status = -1;
     
     if ( list_len < 2 ) goto quit;
 
-    for ( i=1 ; i < list_len ; i++ ) {
-	if ( p_list[i-1].x == p_list[i].x ) {
-	    double d;
-	    long y_df, j, jj;
-	    /* drawing vertical */
-	    y_df = p_list[i].y - p_list[i-1].y;
-	    d = (p_list[i].red - p_list[i-1].red) / y_df;
-	    for ( j=p_list[i-1].y, jj=0 ; j < p_list[i].y + 1 ; j++, jj++ ) {
-		img_ptr_red[ p_list[i].x + img_width * j ]
-		    = p_list[i-1].red + d * jj;
+    /* vertical */
+    for ( i=0 ; i + 1 < list_len ; i++ ) {
+	size_t n_section_v, ii;
+	/* */
+	n_section_v = 0;
+	if ( i == 0 || p_list[i].x != p_list[i-1].x ) {
+	    for ( ii=i ; ii+1 < list_len ; ii++ ) {
+		if ( p_list[ii].x == p_list[ii+1].x ) n_section_v ++;
+		else break;
 	    }
-	    d = (p_list[i].green - p_list[i-1].green) / y_df;
-	    for ( j=p_list[i-1].y, jj=0 ; j < p_list[i].y + 1 ; j++, jj++ ) {
-		img_ptr_green[ p_list[i].x + img_width * j ]
-		    = p_list[i-1].green + d * jj;
-	    }
-	    d = (p_list[i].blue - p_list[i-1].blue) / y_df;
-	    for ( j=p_list[i-1].y, jj=0 ; j < p_list[i].y + 1 ; j++, jj++ ) {
-		img_ptr_blue[ p_list[i].x + img_width * j ]
-		    = p_list[i-1].blue + d * jj;
+	    //sio.printf("[DEBUG] n_section_v = %ld\n", (long)n_section_v);
+	    /* */
+	    if ( n_section_v == 1 ) {
+		draw_vertical_linear(p_list, i, n_section_v, sky_img_buf_p);
+	    } else {
+		draw_vertical_quadratic(p_list, i, n_section_v, sky_img_buf_p);
 	    }
 	}
     }
 
-    for ( i=1 ; i < list_len ; i++ ) {
-	if ( p_list[i-1].x != p_list[i].x ) {
-	    long x0 = p_list[i-1].x;
-	    long x1 = p_list[i].x;
-	    long x_df = x1 - x0;
-	    long j, k, kk;
-	    for ( j=0 ; j < img_height ; j++ ) {
-		double d, v0, v1;
-		v0 = img_ptr_red[ x0 + img_width * j ];
-		v1 = img_ptr_red[ x1 + img_width * j ];
-		d = (v1 - v0) / x_df;
-		for ( k=x0, kk=0 ; k < x1 + 1 ; k++, kk++ ) {
-		    img_ptr_red[ k + img_width * j ] = v0 + d * kk;
-		}
-		/* */
-		v0 = img_ptr_green[ x0 + img_width * j ];
-		v1 = img_ptr_green[ x1 + img_width * j ];
-		d = (v1 - v0) / x_df;
-		for ( k=x0, kk=0 ; k < x1 + 1 ; k++, kk++ ) {
-		    img_ptr_green[ k + img_width * j ] = v0 + d * kk;
-		}
-		/* */
-		v0 = img_ptr_blue[ x0 + img_width * j ];
-		v1 = img_ptr_blue[ x1 + img_width * j ];
-		d = (v1 - v0) / x_df;
-		for ( k=x0, kk=0 ; k < x1 + 1 ; k++, kk++ ) {
-		    img_ptr_blue[ k + img_width * j ] = v0 + d * kk;
-		}
-	    }
+    /* horizontal */
+    n_section_h = 0;
+    for ( i=0 ; i + 1 < list_len ; i++ ) {
+	if ( p_list[i].x != p_list[i+1].x ) {
+	    n_section_h ++;
 	}
+    }
+    //sio.printf("[DEBUG] n_section_h = %ld\n", (long)n_section_h);
+
+    if ( n_section_h == 1 ) {
+	draw_horizontal_linear( p_list, list_len, sky_img_buf_p );
+    }
+    else {
+	draw_horizontal_quadratic( p_list, list_len, n_section_h,
+				   sky_img_buf_p );
     }
     
     return_status = 0;
@@ -622,13 +851,16 @@ int main( int argc, char *argv[] )
 	if ( f_in.open("r", in_filename.cstr()) < 0 ) {
 
 	    /* default: determine sky point of 4-corner */
-	    append_sky_point( target_img_buf, 0, 0,
+	    append_sky_point( target_img_buf, sky_img_buf, true,
+			      0, 0,
 			      2, &sky_point_list );
-	    append_sky_point( target_img_buf, target_img_buf.x_length() - 1, 0,
+	    append_sky_point( target_img_buf, sky_img_buf, true,
+			      target_img_buf.x_length() - 1, 0,
 			      2, &sky_point_list );
-	    append_sky_point( target_img_buf, 0, target_img_buf.y_length() - 1,
+	    append_sky_point( target_img_buf, sky_img_buf, true,
+			      0, target_img_buf.y_length() - 1,
 			      2, &sky_point_list );
-	    append_sky_point( target_img_buf,
+	    append_sky_point( target_img_buf, sky_img_buf, true,
 	      target_img_buf.x_length() - 1, target_img_buf.y_length() - 1,
 	      2, &sky_point_list );
 
@@ -806,8 +1038,7 @@ int main( int argc, char *argv[] )
 	    else sio.printf("NOT using dither ...\n");
 	    /* */
 	    if ( write_float_to_tiff48(sky_img_buf, 0.0, 65535.0,
-				       flag_dither, 
-				       icc_buf, out_filename.cstr()) < 0 ) {
+		       flag_dither, icc_buf, NULL, out_filename.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff48() failed.\n");
 	    }
 	}
@@ -834,8 +1065,7 @@ int main( int argc, char *argv[] )
 	    else sio.printf("NOT using dither ...\n");
 	    /* */
 	    if ( write_float_to_tiff48(result_img_buf, 0.0, 0.0,
-				       flag_dither, 
-				       icc_buf, out_filename.cstr()) < 0 ) {
+		       flag_dither, icc_buf, NULL, out_filename.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff48() failed.\n");
 	    }
 	}
@@ -981,18 +1211,18 @@ int main( int argc, char *argv[] )
 	}
 	else if ( cmd_id == CMD_SKYLV_PM && ev_btn == 1 ) {
 	    if ( 0 <= selected_point_idx ) {
-		update_sky_point_val(display_ch,
-				     selected_point_idx, skylv_incdecl,
-				     true, &sky_point_list);
+		update_sky_point_val_pm(display_ch,
+					selected_point_idx, skylv_incdecl,
+					true, &sky_point_list);
 		refresh_sky = true;
 		refresh_image = 2;
 	    }
 	}
 	else if ( cmd_id == CMD_SKYLV_PM && ev_btn == 3 ) {
 	    if ( 0 <= selected_point_idx ) {
-		update_sky_point_val(display_ch,
-				     selected_point_idx, skylv_incdecl,
-				     false, &sky_point_list);
+		update_sky_point_val_pm(display_ch,
+					selected_point_idx, skylv_incdecl,
+					false, &sky_point_list);
 		refresh_sky = true;
 		refresh_image = 2;
 	    }
@@ -1037,7 +1267,7 @@ int main( int argc, char *argv[] )
 
 	else if ( ev_type == ButtonPress ) {
 	    if ( ev_win == win_image &&
-		 ( ev_btn == 1 || ev_btn == 3 ) /* left|right btn */ ) {
+		 ( 1 <= ev_btn && ev_btn <= 3 ) /* left|center|right */ ) {
 #if 0
 		long actual_x = 0, actual_y = 0;
 		double median_rgb[3];
@@ -1053,14 +1283,25 @@ int main( int argc, char *argv[] )
 		    /* found */
 		    if ( point_idx == selected_point_idx ) {
 			if ( ev_btn == 1 ) {
-			    update_sky_point_val(display_ch,
-						 point_idx, skylv_incdecl,
-						 true, &sky_point_list);
+			    update_sky_point_val_pm(display_ch,
+						    point_idx, skylv_incdecl,
+						    true, &sky_point_list);
 			}
-			else {
+			else if ( ev_btn == 3 ) {	/* right btn */
+			    update_sky_point_val_pm(display_ch,
+						    point_idx, skylv_incdecl,
+						    false, &sky_point_list);
+			}
+			else if ( ev_btn == 2 ) {	/* center btn */
+			    /* get median */
+			    double median_rgb[3];
+			    get_box_median(target_img_buf,
+					   sky_point_ptr[point_idx].x,
+					   sky_point_ptr[point_idx].y,
+					   median_rgb);
 			    update_sky_point_val(display_ch,
-						 point_idx, skylv_incdecl,
-						 false, &sky_point_list);
+						 point_idx, median_rgb,
+						 &sky_point_list);
 			}
 			refresh_sky = true;
 			refresh_image = 2;
@@ -1074,6 +1315,10 @@ int main( int argc, char *argv[] )
 		else {
 		    /* not found ... register new points */
 		    long p_idx;
+		    bool flag_use_img = false;
+		    if ( ev_btn == 3 || ev_btn == 2 ) {
+			flag_use_img = true;	/* right btn || center btn */
+		    }
 		    /* search nearest existing vertical line */
 		    p_idx = search_sky_point_box(
 					target_img_buf, sky_point_list,
@@ -1082,16 +1327,21 @@ int main( int argc, char *argv[] )
 			/* overwrite ev_x */
 			ev_x = sky_point_ptr[p_idx].x;
 			/* register */
-			append_sky_point( target_img_buf, ev_x, ev_y,
+			append_sky_point( target_img_buf, sky_img_buf,
+					  flag_use_img, 
+					  ev_x, ev_y,
 					  0, &sky_point_list );
 		    }
 		    else {				/* not found existing */
 			/* register */
-			append_sky_point( target_img_buf, ev_x, 0,
+			append_sky_point( target_img_buf, sky_img_buf, false,
+					  ev_x, 0,
 					  1, &sky_point_list );
-			append_sky_point( target_img_buf, ev_x, ev_y,
+			append_sky_point( target_img_buf, sky_img_buf,
+					  flag_use_img, 
+					  ev_x, ev_y,
 					  0, &sky_point_list );
-			append_sky_point( target_img_buf,
+			append_sky_point( target_img_buf, sky_img_buf, false,
 					  ev_x, target_img_buf.y_length() - 1,
 					  1, &sky_point_list );
 		    }

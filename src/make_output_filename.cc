@@ -19,7 +19,7 @@ static int make_output_filename( const char *_filename_in,
 	filename_out->appendf(".%s.tiff",appended_str);
     }
     else {
-	filename_out->appendf(".%s.%s.tiff",bit_str,appended_str);
+	filename_out->appendf(".%s.%s.tiff",appended_str,bit_str);
     }
 
     return 0;

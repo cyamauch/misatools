@@ -3,14 +3,14 @@
 /* this returns float array (data contents are unsigned 16-bit) */
 /* this returns 1 or 2 (for 8-/16-bit) to *ret_bytes            */
 static int read_tiff24or48_to_float( const char *filename_in,
-    mdarray_float *ret_img_buf, mdarray_uchar *ret_icc_buf, size_t *ret_bytes,
+    mdarray_float *ret_img_buf, mdarray_uchar *ret_icc_buf, int *ret_bytes,
     float camera_calibration1_ret[] )
 {
     stdstreamio sio;
 
     /* TIFF: See http://www.libtiff.org/man/TIFFGetField.3t.html */
     TIFF *tiff_in = NULL;
-    uint16 bps, byps, spp, pconfig, photom;
+    uint16 bps, byps, spp, pconfig, photom, format;
     uint32 width, height, icc_prof_size = 0, camera_calibration1_size = 0;
     void *icc_prof_data = NULL;
     float *camera_calibration1 = NULL;
@@ -27,14 +27,34 @@ static int read_tiff24or48_to_float( const char *filename_in,
 	goto quit;
     }
 
+    if ( TIFFGetField(tiff_in, TIFFTAG_SAMPLEFORMAT, &format) == 0 ) {
+	format = SAMPLEFORMAT_UINT;
+    }
+
     if ( TIFFGetField(tiff_in, TIFFTAG_BITSPERSAMPLE, &bps) == 0 ) {
 	sio.eprintf("[ERROR] TIFFGetField() failed [bps]\n");
 	goto quit;
     }
-    if ( bps != 8 && bps != 16 ) {
-	sio.eprintf("[ERROR] unsupported BITSPERSAMPLE: %d\n",(int)bps);
+
+    if ( format == SAMPLEFORMAT_IEEEFP ) {
+	if ( bps != 32 ) {
+	    sio.eprintf("[ERROR] unsupported SAMPLEFORMAT: %d\n",(int)format);
+	    sio.eprintf("[ERROR] unsupported BITSPERSAMPLE: %d\n",(int)bps);
+	    goto quit;
+	}
+    }
+    else if ( format == SAMPLEFORMAT_UINT ) {
+	if ( bps != 8 && bps != 16 ) {
+	    sio.eprintf("[ERROR] unsupported SAMPLEFORMAT: %d\n",(int)format);
+	    sio.eprintf("[ERROR] unsupported BITSPERSAMPLE: %d\n",(int)bps);
+	    goto quit;
+	}
+    }
+    else {
+	sio.eprintf("[ERROR] unsupported SAMPLEFORMAT: %d\n",(int)format);
 	goto quit;
     }
+
     byps = (bps + 7) / 8;
 
     if ( TIFFGetField(tiff_in, TIFFTAG_SAMPLESPERPIXEL, &spp) == 0 ) {
@@ -96,7 +116,7 @@ static int read_tiff24or48_to_float( const char *filename_in,
 	}
     }
 
-    if ( byps == 1 ) {        /* 8-bit mode */
+    if ( format == SAMPLEFORMAT_UINT && byps == 1 ) {        /* 8-bit mode */
 
         mdarray_uchar strip_buf(false);
 	unsigned char *strip_buf_ptr = NULL;
@@ -149,7 +169,7 @@ static int read_tiff24or48_to_float( const char *filename_in,
 	}
 
     }
-    else {        /* 16-bit mode */
+    else if ( format == SAMPLEFORMAT_UINT && byps == 2 ) {        /* 16-bit mode */
 
         mdarray_uchar strip_buf(false);
 	uint16_t *strip_buf_ptr = NULL;
@@ -198,18 +218,70 @@ static int read_tiff24or48_to_float( const char *filename_in,
 	}
 
     }
+    else {	/* 32-bit float */
 
-    if ( ret_bytes != NULL ) *ret_bytes = byps;
+        mdarray_uchar strip_buf(false);
+	float *strip_buf_ptr = NULL;
+	float *ret_r_img_ptr = NULL;
+	float *ret_g_img_ptr = NULL;
+	float *ret_b_img_ptr = NULL;
+	size_t pix_offset, i;
+
+	strip_buf.resize_1d(strip_size);
+	/* get line buf ptr */
+	strip_buf_ptr = (float *)strip_buf.data_ptr();
+
+	if ( ret_img_buf != NULL ) {
+	    ret_img_buf->init(false);
+	    ret_img_buf->resize_3d(width,height,3);
+	    /* get array ptr of each ch */
+	    ret_r_img_ptr = ret_img_buf->array_ptr(0,0,0);
+	    ret_g_img_ptr = ret_img_buf->array_ptr(0,0,1);
+	    ret_b_img_ptr = ret_img_buf->array_ptr(0,0,2);
+	}
+
+	pix_offset = 0;
+	for ( i=0 ; i < strip_max ; i++ ) {
+	    size_t len_pix, j, jj;
+	    ssize_t s_len = TIFFReadEncodedStrip(tiff_in, i,
+						 (void *)strip_buf_ptr,
+						 strip_size);
+	    if ( s_len < 0 ) {
+		sio.eprintf("[ERROR] TIFFReadEncodedStrip() failed\n");
+		goto quit;
+	    }
+	    len_pix = s_len / (byps * spp);
+
+	    if ( ret_img_buf != NULL ) {
+		for ( j=0, jj=0 ; j < len_pix ; j++, jj+=3 ) {
+		    ret_r_img_ptr[pix_offset+j] = strip_buf_ptr[jj];
+		}
+		for ( j=0, jj=1 ; j < len_pix ; j++, jj+=3 ) {
+		    ret_g_img_ptr[pix_offset+j] = strip_buf_ptr[jj];
+		}
+		for ( j=0, jj=2 ; j < len_pix ; j++, jj+=3 ) {
+		    ret_b_img_ptr[pix_offset+j] = strip_buf_ptr[jj];
+		}
+	    }
+	    pix_offset += len_pix;
+	}
+
+    }
+    
+    if ( ret_bytes != NULL ) {
+	*ret_bytes = byps;
+	if ( format == SAMPLEFORMAT_IEEEFP ) *ret_bytes *= -1;
+    }
     if ( camera_calibration1_ret != NULL ) {
 	uint32 i;
 	if ( camera_calibration1 == NULL ) camera_calibration1_size = 0;
-        for ( i=0 ; i < 8 ; i++ ) {
+        for ( i=0 ; i < 12 ; i++ ) {
 	    if ( i < camera_calibration1_size ) {
 		camera_calibration1_ret[i] = camera_calibration1[i];
             }
 	    else {
-		if ( i == 0 || i == 7 ) camera_calibration1_ret[i] = 0.0;
-		else camera_calibration1_ret[i] = 1.0;
+		if ( 5 <= i && i <= 10 ) camera_calibration1_ret[i] = 1.0;
+		else camera_calibration1_ret[i] = 0.0;
 	    }
 	}
     }

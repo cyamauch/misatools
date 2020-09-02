@@ -41,15 +41,20 @@ static int check_a_file( const char *filename )
 }
 
 /* Get matrix type using dcraw */
-static int get_matrix_type_and_multipliers( const char *filename_in,
-		int *raw_colors_p, float daylight_mul[], float camera_mul[] )
+static int get_matrix_type_and_info( const char *filename_in,
+		float basic_info5[], float daylight_mul[], float camera_mul[] )
 {
     int return_status = -1;
-    const char *str_pat_raw_colors = "Raw colors: ";
-    const char *str_pat_rg_gb = "Filter pattern: RG/GB\n";
-    const char *str_pat_gr_bg = "Filter pattern: GR/BG\n";
-    const char *str_pat_daylight_mul = "Daylight multipliers: ";
-    const char *str_pat_camera_mul = "Camera multipliers: ";
+    const char *str_iso_speed = "ISO speed: ";
+    const char *str_shutter = "Shutter: ";
+    const char *str_shutter_1 = "Shutter: 1/";
+    const char *str_aperture = "Aperture: ";
+    const char *str_focal_length = "Focal length: ";
+    const char *str_raw_colors = "Raw colors: ";
+    const char *str_fpat_rg_gb = "Filter pattern: RG/GB\n";
+    const char *str_fpat_gr_bg = "Filter pattern: GR/BG\n";
+    const char *str_daylight_mul = "Daylight multipliers: ";
+    const char *str_camera_mul = "Camera multipliers: ";
 
     char cmd[32 + PATH_MAX];
     char line[256];
@@ -62,7 +67,11 @@ static int get_matrix_type_and_multipliers( const char *filename_in,
     pp = popen(cmd, "r");
     if ( pp == NULL ) goto quit;			/* ERROR */
 
-    *raw_colors_p = 0;
+    basic_info5[0] = 0.0;	/* ISO */
+    basic_info5[1] = 0.0;	/* Shutter */
+    basic_info5[2] = 0.0;	/* F */
+    basic_info5[3] = 0.0;	/* f */
+    basic_info5[4] = 0.0;	/* raw_colors */
     daylight_mul[0] = 0.0;
     daylight_mul[1] = 0.0;
     daylight_mul[2] = 0.0;
@@ -72,17 +81,38 @@ static int get_matrix_type_and_multipliers( const char *filename_in,
     camera_mul[3] = 0.0;
 
     while ( fgets(line,256,pp) != NULL ) {
-	if ( strcmp(line,str_pat_rg_gb) == 0 ) matrix_type = Matrix_RG_GB;
-	else if ( strcmp(line,str_pat_gr_bg) == 0 ) matrix_type = Matrix_GR_BG;
-	else if ( strncmp(line,str_pat_raw_colors,strlen(str_pat_raw_colors)) == 0 ) {
-	    sscanf(line + strlen(str_pat_raw_colors), "%d", raw_colors_p);
+	if ( strcmp(line,str_fpat_rg_gb) == 0 ) matrix_type = Matrix_RG_GB;
+	else if ( strcmp(line,str_fpat_gr_bg) == 0 ) matrix_type = Matrix_GR_BG;
+	else if ( strncmp(line,str_iso_speed,strlen(str_iso_speed)) == 0 ) {
+	    sscanf(line + strlen(str_iso_speed), "%f", basic_info5+0);
 	}
-	else if ( strncmp(line,str_pat_daylight_mul,strlen(str_pat_daylight_mul)) == 0 ) {
-	    sscanf(line + strlen(str_pat_daylight_mul), "%f %f %f",
+	else if ( strncmp(line,str_shutter_1,strlen(str_shutter_1)) == 0 ) {
+	    sscanf(line + strlen(str_shutter_1), "%f", basic_info5+1);
+	    if ( basic_info5[1] != 0.0 ) {
+		basic_info5[1] = 1.0 / basic_info5[1];
+	    }
+	}
+	else if ( strncmp(line,str_shutter,strlen(str_shutter)) == 0 ) {
+	    sscanf(line + strlen(str_shutter), "%f", basic_info5+1);
+	}
+	else if ( strncmp(line,str_aperture,strlen(str_aperture)) == 0 ) {
+	    const char *p1 = line + strlen(str_aperture);
+	    if ( (p1[0] == 'f' || p1[0] == 'F') && p1[1] == '/' ) {
+		sscanf(p1 + 2, "%f", basic_info5+2);
+	    }
+	}
+	else if ( strncmp(line,str_focal_length,strlen(str_focal_length)) == 0 ) {
+	    sscanf(line + strlen(str_focal_length), "%f", basic_info5+3);
+	}
+	else if ( strncmp(line,str_raw_colors,strlen(str_raw_colors)) == 0 ) {
+	    sscanf(line + strlen(str_raw_colors), "%f", basic_info5+4);
+	}
+	else if ( strncmp(line,str_daylight_mul,strlen(str_daylight_mul)) == 0 ) {
+	    sscanf(line + strlen(str_daylight_mul), "%f %f %f",
 		   daylight_mul + 0, daylight_mul + 1, daylight_mul + 2);
 	}
-	else if ( strncmp(line,str_pat_camera_mul,strlen(str_pat_camera_mul)) == 0 ) {
-	    sscanf(line + strlen(str_pat_camera_mul), "%f %f %f %f",
+	else if ( strncmp(line,str_camera_mul,strlen(str_camera_mul)) == 0 ) {
+	    sscanf(line + strlen(str_camera_mul), "%f %f %f %f",
 		   camera_mul + 0, camera_mul + 1, camera_mul + 2, camera_mul + 3);
 	}
     }
@@ -695,25 +725,19 @@ static int raw_to_tiff( const char *filename_in,
     const uint32 shift_for_scale[3] = { 16 - bit_used[0],
 					16 - bit_used[1],
 					16 - bit_used[2] };
-    int raw_colors;
-    float camera_calibration1[8];				/* for TIFF tag */
-    float *daylight_multipliers = camera_calibration1 + 1;	/* [3] */
-    float *camera_multipliers = camera_calibration1 + 1 + 3;	/* [4] */
+    float camera_calibration1[12];				/* for TIFF tag */
+    float *camera_basic_info = camera_calibration1 + 0;		/* [5] */
+    float *daylight_multipliers = camera_calibration1 + 5;	/* [3] */
+    float *camera_multipliers = camera_calibration1   + 5 + 3;	/* [4] */
 
     if ( check_a_file(filename_in) < 0 ) {
         fprintf(stderr,"[ERROR] not found: %s\n",filename_in);
 	goto quit;	/* ERROR */
     }
 
-    bayer_matrix = get_matrix_type_and_multipliers(filename_in,
-			&raw_colors, daylight_multipliers, camera_multipliers);
-    camera_calibration1[0] = raw_colors;
-
-    /*
-    fprintf(stderr,"[INFO] camera_calibration1 = (%g %g %g %g %g %g %g %g)\n",
-	    camera_calibration1[0],camera_calibration1[1],camera_calibration1[2],camera_calibration1[3],
-	    camera_calibration1[4],camera_calibration1[5],camera_calibration1[6],camera_calibration1[7]);
-    */
+    bayer_matrix = get_matrix_type_and_info(
+		   filename_in, camera_basic_info,
+		   daylight_multipliers, camera_multipliers);
 
     if ( create_tiff_filename( filename_in, filename_out, PATH_MAX ) < 0 ) {
         fprintf(stderr,"[ERROR] create_tiff_filename() failed\n");
@@ -750,6 +774,11 @@ static int raw_to_tiff( const char *filename_in,
     //	   crop_prms[0],crop_prms[1],crop_prms[2],crop_prms[3]);
     //printf("%s\n", dcraw_cmd);
     printf("Converting: %s => %s\n", filename_in, filename_out);
+
+    fprintf(stderr,"[INFO] camera_calibration1 = (%g %g %g %g %g %g %g %g %g %g %g %g)\n",
+      camera_calibration1[0],camera_calibration1[1],camera_calibration1[2],camera_calibration1[3],
+      camera_calibration1[4],camera_calibration1[5],camera_calibration1[6],camera_calibration1[7],
+      camera_calibration1[8],camera_calibration1[9],camera_calibration1[10],camera_calibration1[11]);
 
     /* Start reading PGM */
     
@@ -827,7 +856,7 @@ static int raw_to_tiff( const char *filename_in,
     TIFFSetField(tiff_out, TIFFTAG_SAMPLESPERPIXEL, spp);
     TIFFSetField(tiff_out, TIFFTAG_ROWSPERSTRIP, (uint32)1);
 
-    TIFFSetField(tiff_out, TIFFTAG_CAMERACALIBRATION1, 8, camera_calibration1);
+    TIFFSetField(tiff_out, TIFFTAG_CAMERACALIBRATION1, 12, camera_calibration1);
     
     icc_prof_size = sizeof(Icc_srgb_profile);
     TIFFSetField(tiff_out, TIFFTAG_ICCPROFILE,

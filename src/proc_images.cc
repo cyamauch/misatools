@@ -7,6 +7,7 @@ using namespace sli;
 
 #include "read_tiff24or48_to_float.h"
 #include "write_float_to_tiff24or48.h"
+#include "write_float_to_tiff.h"
 #include "make_output_filename.cc"
 #include "icc_srgb_profile.c"
 
@@ -21,14 +22,17 @@ int main( int argc, char *argv[] )
     mdarray_float img_sky_buf(false);
     mdarray_float img_in_buf(false);
     mdarray_uchar icc_buf(false);
-    float camera_calibration1[8];				/* for TIFF tag */
-    float *daylight_multipliers = camera_calibration1 + 1;	/* [3] */
-    //float *camera_multipliers = camera_calibration1 + 1 + 3;	/* [4] */
+    float camera_calibration1[12];			/* for TIFF tag */
+    float *raw_colors_p = camera_calibration1 + 4;		/* [1] */
+    float *daylight_multipliers = camera_calibration1 + 5;	/* [3] */
+    //float *camera_multipliers = camera_calibration1 + 5 + 3;	/* [4] */
     const char *filename_dark = "dark.tiff";
     const char *filename_dark_list = "dark.txt";
-    const char *filename_flat = "flat.tiff";
+    const char *filename_flat[] = {"flat.float.tiff", "flat.tiff"};
     tstring filename_sky;
+    int flag_use_flat = -1;
     bool flag_output_8bit = false;
+    bool flag_output_16bit = false;
     bool flag_dither = true;
     bool flag_raw_rgb = false;
     double dark_factor = 1.0;
@@ -46,9 +50,10 @@ int main( int argc, char *argv[] )
 	sio.eprintf("Process target frames\n");
 	sio.eprintf("\n");
         sio.eprintf("[USAGE]\n");
-	sio.eprintf("$ %s [-8] [-t] [-d param] [-f param] [-fi param] [-s sky.tiff] img_0.tiff img_1.tiff ...\n", argv[0]);
+	sio.eprintf("$ %s [-8] [-16] [-t] [-d param] [-f param] [-fi param] [-s sky.tiff] img_0.tiff img_1.tiff ...\n", argv[0]);
 	sio.eprintf("\n");
 	sio.eprintf("-8 ... If set, output 8-bit processed images for 8-bit original images\n");
+	sio.eprintf("-16 .. If set, output 16-bit processed images\n");
 	sio.eprintf("-t ... If set, output truncated real without dither\n");
 	sio.eprintf("-r ... If set, output raw RGB without applying daylight multipliers\n");
 	sio.eprintf("-s param ... Set softbias value. Default is 0.0\n");
@@ -56,7 +61,8 @@ int main( int argc, char *argv[] )
 	sio.eprintf("-f param ... Set flat factor to param. Default is 1.0.\n");
 	sio.eprintf("-fi param ... Set flat index factor (flat ^ x) to param. Default is 1.0.\n");
 	sio.eprintf("NOTE: %s is used when it exists\n",filename_dark);
-	sio.eprintf("NOTE: %s is used when it exists\n",filename_flat);
+	sio.eprintf("NOTE: %s or %s is used when it exists\n",
+		    filename_flat[0],filename_flat[1]);
 	goto quit;
     }
 
@@ -69,6 +75,10 @@ int main( int argc, char *argv[] )
 	argstr = argv[arg_cnt];
 	if ( argstr == "-8" ) {
 	    flag_output_8bit = true;
+	    arg_cnt ++;
+	}
+	else if ( argstr == "-16" ) {
+	    flag_output_16bit = true;
 	    arg_cnt ++;
 	}
 	else if ( argstr == "-t" ) {
@@ -144,7 +154,7 @@ int main( int argc, char *argv[] )
 	goto quit;
     }
     else {
-	size_t bytes;
+	int bytes;
 	mdarray_double dark_rgb(false);
 	f_in.close();
 	dark_rgb.resize_1d(3);
@@ -156,7 +166,8 @@ int main( int argc, char *argv[] )
 	    goto quit;
 	}
 	if ( bytes == 1 ) sio.printf("Found an 8-bit dark image\n");
-	else sio.printf("Found a 16-bit dark image\n");
+	else if ( bytes == 2 ) sio.printf("Found a 16-bit dark image\n");
+	else sio.printf("Found a float(32-bit) dark image\n");
 	//img_dark_buf.dprint();
 	img_dark_buf *= dark_factor;
 	dark_rgb[0] = md_median(img_dark_buf.sectionf("*,*,0"));
@@ -169,32 +180,57 @@ int main( int argc, char *argv[] )
     }
 
     /* check flat file */
-    if ( f_in.open("r", "flat.tiff") < 0 ) {
-	sio.eprintf("[NOTICE] Not found: flat.tiff\n");
+    flag_use_flat = -1;
+    if ( f_in.open("r", filename_flat[0]) < 0 ) {
+	if ( f_in.open("r", filename_flat[1]) < 0 ) {
+	    sio.eprintf("[NOTICE] Not found: flat[.float].tiff\n");
+	}
+	else flag_use_flat = 1;
     }
-    else {
-	size_t bytes;
+    else flag_use_flat = 0;
+
+    if ( 0 <= flag_use_flat ) {
+	int bytes;
 	f_in.close();
-	sio.printf("Loading '%s'\n", filename_flat);
-	if ( read_tiff24or48_to_float(filename_flat,
+	sio.printf("Loading '%s'\n", filename_flat[flag_use_flat]);
+	if ( read_tiff24or48_to_float(filename_flat[flag_use_flat],
 				      &img_flat_buf, NULL, &bytes, NULL) < 0 ) {
-	    sio.eprintf("[ERROR] cannot load '%s'\n", filename_flat);
+	    sio.eprintf("[ERROR] cannot load '%s'\n",
+			filename_flat[flag_use_flat]);
 	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	    goto quit;
 	}
 	if ( bytes == 1 ) sio.printf("Found an 8-bit flat image\n");
-	else sio.printf("Found a 16-bit flat image\n");
+	else if ( bytes == 2 ) sio.printf("Found a 16-bit flat image\n");
+	else {
+	    sio.printf("Found a float(32-bit) flat image\n");
+	    //sio.eprintf("[DEBUG]: \n");
+	    //img_flat_buf.dprint();
+	}
 	if ( flat_factor != 1.0 || flat_idx_factor != 1.0 ) {
-	    for ( i=0 ; i < img_flat_buf.length() ; i++ ) {
-	        img_flat_buf[i] -= 32768.0;
-		img_flat_buf[i] *= flat_factor;
-		img_flat_buf[i] += 32768.0;
-	        img_flat_buf[i] *= (1.0/32768.0);
-		img_flat_buf[i] = pow(img_flat_buf[i], flat_idx_factor);
+	    if ( bytes < 0 ) {
+		for ( i=0 ; i < img_flat_buf.length() ; i++ ) {
+		    img_flat_buf[i] *= flat_factor;
+		    img_flat_buf[i] = pow(img_flat_buf[i], flat_idx_factor);
+		}
+	    }
+	    else {
+		for ( i=0 ; i < img_flat_buf.length() ; i++ ) {
+		    img_flat_buf[i] -= 32768.0;
+		    img_flat_buf[i] *= flat_factor;
+		    img_flat_buf[i] += 32768.0;
+		    img_flat_buf[i] *= (1.0/32768.0);
+		    img_flat_buf[i] = pow(img_flat_buf[i], flat_idx_factor);
+		}
 	    }
 	}
 	else {
-	    img_flat_buf *= (1.0/32768.0);
+	    if ( bytes < 0 ) {
+		/* NOP */
+	    }
+	    else {
+		img_flat_buf *= (1.0/32768.0);
+	    }
 	}
     }
     //img_flat_buf.dprint();
@@ -205,7 +241,7 @@ int main( int argc, char *argv[] )
 	    sio.eprintf("[NOTICE] Not found: '%s'\n", filename_sky.cstr());
 	}
 	else {
-	    size_t bytes;
+	    int bytes;
 	    mdarray_double sky_rgb(false);
 	    f_in.close();
 	    sky_rgb.resize_1d(3);
@@ -217,7 +253,8 @@ int main( int argc, char *argv[] )
 		goto quit;
 	    }
 	    if ( bytes == 1 ) sio.printf("Found an 8-bit sky image\n");
-	    else sio.printf("Found a 16-bit sky image\n");
+	    else if ( bytes == 2 ) sio.printf("Found a 16-bit sky image\n");
+	    else sio.printf("Found a float(32-bit) sky image\n");
 	    //
 	    sky_rgb[0] = md_median(img_sky_buf.sectionf("*,*,0"));
 	    sky_rgb[1] = md_median(img_sky_buf.sectionf("*,*,1"));
@@ -230,7 +267,7 @@ int main( int argc, char *argv[] )
     }
 
     for ( i=0 ; i < filenames_in.length() ; i++ ) {
-	size_t bytes;
+	int bytes;
 	tstring filename, filename_out;
 	float *ptr;
 	size_t j;
@@ -238,22 +275,24 @@ int main( int argc, char *argv[] )
 	filename = filenames_in[i];
 	sio.printf("Loading '%s'\n", filename.cstr());
 	if ( read_tiff24or48_to_float(filename.cstr(),
-				      &img_in_buf, &icc_buf, &bytes, camera_calibration1) < 0 ) {
+		    &img_in_buf, &icc_buf, &bytes, camera_calibration1) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename.cstr());
 	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	    goto quit;
 	}
 	if ( 0 < darkfile_list.length() ) {
+	    int bytes0;
 	    const char *fn = darkfile_list[i % darkfile_list.length()].cstr();
 	    sio.printf("Loading '%s'\n", fn);
 	    if ( read_tiff24or48_to_float(fn,
-					  &img_dark_buf, NULL, &bytes, NULL) < 0 ) {
+				  &img_dark_buf, NULL, &bytes0, NULL) < 0 ) {
 		sio.eprintf("[ERROR] cannot load '%s'\n", fn);
 		sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 		goto quit;
 	    }
-	    if ( bytes == 1 ) sio.printf("Found an 8-bit dark image\n");
-	    else sio.printf("Found a 16-bit dark image\n");
+	    if ( bytes0 == 1 ) sio.printf("Found an 8-bit dark image\n");
+	    else if ( bytes0 == 2 ) sio.printf("Found a 16-bit dark image\n");
+	    else sio.printf("Found a float(32-bit) dark image\n");
 	    img_dark_buf *= dark_factor;
 	}
 	img_in_buf -= img_dark_buf;
@@ -271,7 +310,7 @@ int main( int argc, char *argv[] )
 	}
 
 	/* Apply daylight multipliers, if possible */
-	if ( flag_raw_rgb == false && camera_calibration1[0] == 3 ) {
+	if ( flag_raw_rgb == false && raw_colors_p[0] == 3 ) {
 	    float mul_0;
 	    size_t len_xy = img_in_buf.x_length() * img_in_buf.y_length();
 	    mul_0 = daylight_multipliers[1];
@@ -303,15 +342,6 @@ int main( int argc, char *argv[] )
 	    sio.printf("[INFO] softbias = %g\n", softbias);
 	}
 	
-	/* create new filename */
-	if ( bytes == 1 ) {
-	    make_output_filename(filename.cstr(), "proc", "8bit",
-				 &filename_out);
-	}
-	else {
-	    make_output_filename(filename.cstr(), "proc", "16bit",
-				 &filename_out);
-	}
 
 	if ( icc_buf.length() == 0 ) {
 	    icc_buf.resize_1d(sizeof(Icc_srgb_profile));
@@ -320,7 +350,25 @@ int main( int argc, char *argv[] )
 
 	/* check min, max and write a processed file */
 	ptr = img_in_buf.array_ptr();
-	if ( bytes == 1 && flag_output_8bit == true ) {
+	if ( flag_output_16bit == true ) {
+	    make_output_filename(filename.cstr(), "proc", "16bit",
+				 &filename_out);
+	    for ( j=0 ; j < img_in_buf.length() ; j++ ) {
+		if ( ptr[j] < 0 ) ptr[j] = 0.0;
+		else if ( 65535.0 < ptr[j] ) ptr[j] = 65535.0;
+	    }
+	    sio.printf("Writing '%s' [16bit/ch] ", filename_out.cstr());
+	    if ( flag_dither == true ) sio.printf("using dither ...\n");
+	    else sio.printf("NOT using dither ...\n");
+	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 65535.0, flag_dither, 
+		   icc_buf, camera_calibration1, filename_out.cstr()) < 0 ) {
+		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
+		goto quit;
+	    }
+	}
+	else if ( bytes == 1 && flag_output_8bit == true ) {
+	    make_output_filename(filename.cstr(), "proc", "8bit",
+				 &filename_out);
 	    for ( j=0 ; j < img_in_buf.length() ; j++ ) {
 		ptr[j] /= 256.0;
 		if ( ptr[j] < 0 ) ptr[j] = 0.0;
@@ -330,26 +378,21 @@ int main( int argc, char *argv[] )
 	    if ( flag_dither == true ) sio.printf("using dither ...\n");
 	    else sio.printf("NOT using dither ...\n");
 	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 255.0, flag_dither, 
-					   icc_buf, filename_out.cstr()) < 0 ) {
+		   icc_buf, camera_calibration1, filename_out.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
 		goto quit;
 	    }
 	}
-	else {
-	    for ( j=0 ; j < img_in_buf.length() ; j++ ) {
-		if ( ptr[j] < 0 ) ptr[j] = 0.0;
-		else if ( 65535.0 < ptr[j] ) ptr[j] = 65535.0;
-	    }
-	    sio.printf("Writing '%s' [16bit/ch] ", filename_out.cstr());
-	    if ( flag_dither == true ) sio.printf("using dither ...\n");
-	    else sio.printf("NOT using dither ...\n");
-	    if ( write_float_to_tiff24or48(img_in_buf, 0.0, 65535.0, flag_dither, 
-					   icc_buf, filename_out.cstr()) < 0 ) {
-		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
+	else {	/* output float tiff */
+	    make_output_filename(filename.cstr(), "proc", "float",
+				 &filename_out);
+	    sio.printf("Writing '%s' [32-bit_float/ch]\n", filename_out.cstr());
+	    if ( write_float_to_tiff(img_in_buf, 
+		   icc_buf, camera_calibration1, filename_out.cstr()) < 0 ) {
+		sio.eprintf("[ERROR] write_float_to_tiff() failed\n");
 		goto quit;
 	    }
 	}
-	
     }
 
     
@@ -360,4 +403,5 @@ int main( int argc, char *argv[] )
 
 #include "read_tiff24or48_to_float.cc"
 #include "write_float_to_tiff24or48.cc"
+#include "write_float_to_tiff.cc"
 

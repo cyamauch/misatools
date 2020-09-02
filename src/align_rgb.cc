@@ -500,7 +500,7 @@ int main( int argc, char *argv[] )
 		sio.printf("Saved [%s]\n", out_filename.cstr());
 		image_rgb_buf /= 256.0;
 		if ( write_float_to_tiff24or48(image_rgb_buf, 0.0, 255.0, false,
-					  icc_buf, out_filename.cstr()) < 0 ) {
+				       icc_buf, NULL, out_filename.cstr()) < 0 ) {
 		    sio.eprintf("[ERROR] write_float_to_tiff24or48() failed.\n");
 		    goto quit;
 		}
@@ -511,7 +511,7 @@ int main( int argc, char *argv[] )
 				     &out_filename);
 		sio.printf("Saved [%s]\n", out_filename.cstr());
 		if ( write_float_to_tiff24or48(image_rgb_buf, 0.0, 65535.0, false,
-					  icc_buf, out_filename.cstr()) < 0 ) {
+				       icc_buf, NULL, out_filename.cstr()) < 0 ) {
 		    sio.eprintf("[ERROR] write_float_to_tiff24or48() failed.\n");
 		    goto quit;
 		}

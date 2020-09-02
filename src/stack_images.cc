@@ -15,6 +15,7 @@ const double Contrast_scale = 2.0;
 
 #include "read_tiff24or48_to_float.h"
 #include "write_float_to_tiff48.h"
+#include "write_float_to_tiff.h"
 #include "display_image.cc"
 #include "load_display_params.cc"
 #include "save_display_params.cc"
@@ -448,18 +449,27 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 
     /* save */
 #if 1
-    sio.printf("[INFO] scale will be changed\n");
     appended_str.printf("+%zdframes_stacked", n_plus);
+
+    /* save using float */
+    make_output_filename(filenames[ref_file_id].cstr(), appended_str.cstr(),
+			 "float", &out_filename);
+    sio.printf("Writing '%s' ...\n", out_filename.cstr());
+    if ( write_float_to_tiff(*stacked_buf_result_ptr, 
+			     icc_buf, NULL, out_filename.cstr()) < 0 ) {
+	sio.eprintf("[ERROR] write_float_to_tiff() failed.\n");
+	goto quit;
+    }
+    
+    /* save using 16-bit */
     make_output_filename(filenames[ref_file_id].cstr(), appended_str.cstr(),
 			 "16bit", &out_filename);
-    //out_filename.printf("%s+%zdframes_stacked_16bit.tiff",
-    //			filenames[ref_file_id].cstr(), n_plus);
-
     sio.printf("Writing '%s' ", out_filename.cstr());
     if ( flag_dither == true ) sio.printf("using dither ...\n");
     else sio.printf("NOT using dither ...\n");
+    sio.printf("[INFO] scale will be changed\n");
     if ( write_float_to_tiff48(*stacked_buf_result_ptr, 0.0, 0.0, flag_dither, 
-			       icc_buf, out_filename.cstr()) < 0 ) {
+			       icc_buf, NULL, out_filename.cstr()) < 0 ) {
 	sio.eprintf("[ERROR] write_float_to_tiff48() failed.\n");
 	goto quit;
     }
@@ -1204,3 +1214,4 @@ int main( int argc, char *argv[] )
 
 #include "read_tiff24or48_to_float.cc"
 #include "write_float_to_tiff48.cc"
+#include "write_float_to_tiff.cc"

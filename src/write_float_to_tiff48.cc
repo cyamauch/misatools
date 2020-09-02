@@ -6,6 +6,7 @@ static int write_float_to_tiff48( const mdarray_float &img_buf_in,
 				  double min_val, double max_val,
 				  bool dither,
 				  const mdarray_uchar &icc_buf_in,
+				  const float camera_calibration1[],
 				  const char *filename_out )
 {
     stdstreamio sio;
@@ -61,8 +62,13 @@ static int write_float_to_tiff48( const mdarray_float &img_buf_in,
     TIFFSetField(tiff_out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
     TIFFSetField(tiff_out, TIFFTAG_BITSPERSAMPLE, bps);
     TIFFSetField(tiff_out, TIFFTAG_SAMPLESPERPIXEL, spp);
+    TIFFSetField(tiff_out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
     TIFFSetField(tiff_out, TIFFTAG_ROWSPERSTRIP, (uint32)1);
-    
+
+    if ( camera_calibration1 != NULL ) {
+	TIFFSetField(tiff_out, TIFFTAG_CAMERACALIBRATION1, 12, camera_calibration1);
+    }
+
     if ( 0 < icc_buf_in.length() ) {
 	icc_prof_size = icc_buf_in.length();
 	TIFFSetField(tiff_out, TIFFTAG_ICCPROFILE,

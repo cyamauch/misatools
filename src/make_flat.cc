@@ -7,6 +7,7 @@ using namespace sli;
 
 #include "read_tiff24or48_to_float.h"
 #include "write_float_to_tiff24or48.h"
+#include "write_float_to_tiff.h"
 #include "icc_srgb_profile.c"
 
 /* Maximum byte length of 3-d image buffer to get median */
@@ -28,10 +29,14 @@ int main( int argc, char *argv[] )
     const char *filename_dark_list = "dark.txt";
     const char *filename_out[4] = {"flat_r.tiff","flat_g.tiff","flat_b.tiff",
 				   "flat.tiff"};
+    const char *filename_out_float[4] = {
+		"flat_r.float.tiff","flat_g.float.tiff","flat_b.float.tiff",
+		"flat.float.tiff"};
     const char *rgb_str[] = {"R","G","B"};
     
     size_t i, j, k, cnt_dark, k_step, width, height;
     int target_channel = 3;
+    bool flag_float_tiff = true;
     bool flag_dither = true;
     double flat_pow = 1.0;
     uint64_t nbytes_img_stat_full;
@@ -49,6 +54,7 @@ int main( int argc, char *argv[] )
 	sio.eprintf("$ %s [-b r,g or b] flat_1.tiff flat_2.tiff ...\n",
 		    argv[0]);
 	sio.eprintf("\n");
+	sio.eprintf("-i ... output integer tiff (default: float tiff)\n");
 	sio.eprintf("-b r,g or b ... If set, create single band (channel) flat\n");
 	sio.eprintf("-t ... If set, output truncated real without dither\n");
 	/*
@@ -78,6 +84,10 @@ int main( int argc, char *argv[] )
 		sio.eprintf("[ERROR] Invalid arg: %s\n", argv[arg_cnt]);
 		goto quit;
 	    }
+	    arg_cnt ++;
+	}
+	else if ( argstr == "-i" ) {
+	    flag_float_tiff = false;
 	    arg_cnt ++;
 	}
 	else if ( argstr == "-t" ) {
@@ -216,6 +226,12 @@ int main( int argc, char *argv[] )
     img_load_buf.init(false);
     img_stat_buf.init(false);
 
+    if ( icc_buf.length() == 0 ) {
+	icc_buf.resize_1d(sizeof(Icc_srgb_profile));
+	icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
+    }
+    
+    /* */
     if ( target_channel < 3 ) {
 	if ( target_channel == 0 ) {
 	    result_buf.paste(result_buf.sectionf("*,*,0"), 0,0,1);
@@ -231,44 +247,65 @@ int main( int argc, char *argv[] )
 	}
     }
     
-    sio.printf("Writing '%s' ", filename_out[target_channel]);
-    if ( flag_dither == true ) sio.printf("using dither ...\n");
-    else sio.printf("NOT using dither ...\n");
+    if ( flag_float_tiff == true ) {
 
-    /* zero- and max-check */
-    ptr = result_buf.array_ptr();
-    if ( flat_pow < 1.0 ) {	/* pow(v,?) flat when v < 1.0 */
-	for ( i=0 ; i < result_buf.length() ; i++ ) {
-	    if ( ptr[i] < 1.0 ) ptr[i] = pow(ptr[i], flat_pow);
-	    ptr[i] *= 32768;
-	    if ( ptr[i] <= 0 ) ptr[i] = /* 1 */ 32768.0 /* maybe bad pixels */;
-	    else if ( 65535.0 < ptr[i] ) ptr[i] = 65535.0;
+	sio.printf("Writing '%s' ", filename_out_float[target_channel]);
+
+	//sio.eprintf("[DEBUG]: \n");
+	//result_buf.dprint();
+
+	/* zero- and max-check */
+	ptr = result_buf.array_ptr();
+	if ( flat_pow < 1.0 ) {	/* pow(v,?) flat when v < 1.0 */
+	    for ( i=0 ; i < result_buf.length() ; i++ ) {
+		if ( ptr[i] < 1.0 ) ptr[i] = pow(ptr[i], flat_pow);
+	    }
 	}
+    
+	if ( write_float_to_tiff(result_buf,
+		 icc_buf, NULL, filename_out_float[target_channel]) < 0 ) {
+	    sio.eprintf("[ERROR] write_float_to_tiff() failed\n");
+	    goto quit;
+	}
+
     }
-    else {			/* normal flat */
-	for ( i=0 ; i < result_buf.length() ; i++ ) {
-	    ptr[i] *= 32768;
-	    if ( ptr[i] <= 0 ) ptr[i] = /* 1 */ 32768.0 /* maybe bad pixels */;
-	    else if ( 65535.0 < ptr[i] ) ptr[i] = 65535.0;
+    else {
+
+	sio.printf("Writing '%s' ", filename_out[target_channel]);
+	if ( flag_dither == true ) sio.printf("using dither ...\n");
+	else sio.printf("NOT using dither ...\n");
+
+	/* zero- and max-check */
+	ptr = result_buf.array_ptr();
+	if ( flat_pow < 1.0 ) {	/* pow(v,?) flat when v < 1.0 */
+	    for ( i=0 ; i < result_buf.length() ; i++ ) {
+		if ( ptr[i] < 1.0 ) ptr[i] = pow(ptr[i], flat_pow);
+		ptr[i] *= 32768;
+		if ( ptr[i] <= 0 ) ptr[i] = /* 1 */ 32768.0 /* maybe bad pixels */;
+		else if ( 65535.0 < ptr[i] ) ptr[i] = 65535.0;
+	    }
 	}
+	else {			/* normal flat */
+	    for ( i=0 ; i < result_buf.length() ; i++ ) {
+		ptr[i] *= 32768;
+		if ( ptr[i] <= 0 ) ptr[i] = /* 1 */ 32768.0 /* maybe bad pixels */;
+		else if ( 65535.0 < ptr[i] ) ptr[i] = 65535.0;
+	    }
+	}
+    
+	if ( write_float_to_tiff24or48(result_buf, 0.0, 65535.0, flag_dither, 
+			   icc_buf, NULL, filename_out[target_channel]) < 0 ) {
+	    sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
+	    goto quit;
+	}
+
     }
     
-    if ( icc_buf.length() == 0 ) {
-	icc_buf.resize_1d(sizeof(Icc_srgb_profile));
-	icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
-    }
-
-    if ( write_float_to_tiff24or48(result_buf, 0.0, 65535.0, flag_dither, 
-				   icc_buf, filename_out[target_channel]) < 0 ) {
-        sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
-	goto quit;
-    }
-
-  
     return_status = 0;
  quit:
     return return_status;
 }
 
 #include "read_tiff24or48_to_float.cc"
+#include "write_float_to_tiff.cc"
 #include "write_float_to_tiff24or48.cc"

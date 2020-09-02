@@ -8,7 +8,7 @@ static int read_tiff24or48( const char *filename_in,
 
     /* TIFF: See http://www.libtiff.org/man/TIFFGetField.3t.html */
     TIFF *tiff_in = NULL;
-    uint16 bps, byps, spp, pconfig, photom;
+    uint16 bps, byps, spp, pconfig, photom, format;
     uint32 width, height, icc_prof_size = 0, camera_calibration1_size = 0;
     void *icc_prof_data = NULL;
     float *camera_calibration1 = NULL;
@@ -22,6 +22,14 @@ static int read_tiff24or48( const char *filename_in,
     tiff_in = TIFFOpen(filename_in, "r");
     if ( tiff_in == NULL ) {
 	sio.eprintf("[ERROR] cannot open: %s\n", filename_in);
+	goto quit;
+    }
+
+    if ( TIFFGetField(tiff_in, TIFFTAG_SAMPLEFORMAT, &format) == 0 ) {
+	format = SAMPLEFORMAT_UINT;
+    }
+    if ( format != SAMPLEFORMAT_UINT ) {
+	sio.eprintf("[ERROR] TIFF format is not SAMPLEFORMAT_UINT\n");
 	goto quit;
     }
 
