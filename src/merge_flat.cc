@@ -35,7 +35,7 @@ int main( int argc, char *argv[] )
     
     filename_in = argv[1];
     sio.printf("Loading %s\n", filename_in);
-    if ( read_tiff24or48_to_float(filename_in,
+    if ( read_tiff24or48_to_float(filename_in, 1.0,
 			  &img_flat_r_buf, &icc_buf, &bytes_r, NULL) < 0 ) {
 	sio.eprintf("[ERROR] cannot load '%s'\n", filename_in);
 	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
@@ -44,7 +44,7 @@ int main( int argc, char *argv[] )
     
     filename_in = argv[2];
     sio.printf("Loading %s\n", filename_in);
-    if ( read_tiff24or48_to_float(filename_in,
+    if ( read_tiff24or48_to_float(filename_in, 1.0,
 			  &img_flat_g_buf, &icc_buf, &bytes_g, NULL) < 0 ) {
 	sio.eprintf("[ERROR] cannot load '%s'\n", filename_in);
 	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
@@ -53,7 +53,7 @@ int main( int argc, char *argv[] )
 
     filename_in = argv[3];
     sio.printf("Loading %s\n", filename_in);
-    if ( read_tiff24or48_to_float(filename_in,
+    if ( read_tiff24or48_to_float(filename_in, 1.0,
 			  &img_flat_b_buf, &icc_buf, &bytes_r, NULL) < 0 ) {
 	sio.eprintf("[ERROR] cannot load '%s'\n", filename_in);
 	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
@@ -73,7 +73,7 @@ int main( int argc, char *argv[] )
 	sio.printf("Writing %s ...\n", filename_out_float);
 
 	if ( write_float_to_tiff(img_flat_g_buf, icc_buf, NULL,
-				 filename_out_float) < 0 ) {
+				 1.0, filename_out_float) < 0 ) {
 	    sio.eprintf("[ERROR] write_float_to_tiff() failed\n");
 	    goto quit;
 	}
@@ -81,8 +81,10 @@ int main( int argc, char *argv[] )
     else {
 	sio.printf("Writing %s ...\n", filename_out);
 
-	if ( write_float_to_tiff24or48(img_flat_g_buf, 0.0, 65535.0, false, 
-				   icc_buf, NULL, filename_out) < 0 ) {
+	img_flat_g_buf *= 65536.0;
+
+	if ( write_float_to_tiff24or48(img_flat_g_buf, icc_buf, NULL, 
+				     0.0, 65535.0, false, filename_out) < 0 ) {
 	    sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
 	    goto quit;
 	}

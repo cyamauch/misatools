@@ -820,7 +820,7 @@ int main( int argc, char *argv[] )
 
     win_image = gopen(600,400);
 
-    if ( read_tiff24or48_to_float(target_filename.cstr(),
+    if ( read_tiff24or48_to_float(target_filename.cstr(), 65536.0,
 				  &target_img_buf, &icc_buf, NULL, NULL) < 0 ) {
         sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	goto quit;

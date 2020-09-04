@@ -27,8 +27,9 @@ int main( int argc, char *argv[] )
     tarray_tstring filenames_in;
     const char *filename_dark = "dark.tiff";
     const char *filename_dark_list = "dark.txt";
-    const char *filename_out[4] = {"flat_r.tiff","flat_g.tiff","flat_b.tiff",
-				   "flat.tiff"};
+    const char *filename_out[4] = {
+		"flat_r.16bit.tiff","flat_g.16bit.tiff","flat_b.16bit.tiff",
+		"flat.16bit.tiff"};
     const char *filename_out_float[4] = {
 		"flat_r.float.tiff","flat_g.float.tiff","flat_b.float.tiff",
 		"flat.float.tiff"};
@@ -136,7 +137,7 @@ int main( int argc, char *argv[] )
     }
 
     sio.printf("Loading %s\n", filename_dark);
-    if ( read_tiff24or48_to_float(filename_dark,
+    if ( read_tiff24or48_to_float(filename_dark, 65536.0,
 				  &img_dark_buf, &icc_buf, NULL, NULL) < 0 ) {
 	sio.eprintf("[ERROR] cannot load dark\n");
 	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
@@ -175,7 +176,7 @@ int main( int argc, char *argv[] )
 		const char *filename_in = filenames_in[i].cstr();
 		//size_t l;
 		sio.printf("  Reading %s\n",filename_in);
-		if ( read_tiff24or48_to_float(filename_in,
+		if ( read_tiff24or48_to_float(filename_in, 65536.0,
 					 &img_load_buf, &icc_buf, NULL, NULL) < 0 ) {
 		    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 		    goto quit;
@@ -185,7 +186,7 @@ int main( int argc, char *argv[] )
 		    filename_dark =
 		       darkfile_list[cnt_dark % darkfile_list.length()].cstr();
 		    sio.printf("  Reading %s\n", filename_dark);
-		    if ( read_tiff24or48_to_float(filename_dark,
+		    if ( read_tiff24or48_to_float(filename_dark, 65536.0,
 					 &img_dark_buf, &icc_buf, NULL, NULL) < 0 ) {
 			sio.eprintf("[ERROR] cannot load dark\n");
 			sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
@@ -259,11 +260,19 @@ int main( int argc, char *argv[] )
 	if ( flat_pow < 1.0 ) {	/* pow(v,?) flat when v < 1.0 */
 	    for ( i=0 ; i < result_buf.length() ; i++ ) {
 		if ( ptr[i] < 1.0 ) ptr[i] = pow(ptr[i], flat_pow);
+		if ( ptr[i] <= 0 ) ptr[i] = 1.0;	 /* maybe bad pixels */
+		ptr[i] -= 0.5;
+	    }
+	}
+	else {			/* normal flat */
+	    for ( i=0 ; i < result_buf.length() ; i++ ) {
+		if ( ptr[i] <= 0 ) ptr[i] = 1.0;	 /* maybe bad pixels */
+		ptr[i] -= 0.5;
 	    }
 	}
     
-	if ( write_float_to_tiff(result_buf,
-		 icc_buf, NULL, filename_out_float[target_channel]) < 0 ) {
+	if ( write_float_to_tiff(result_buf, icc_buf, NULL, 
+			       1.0, filename_out_float[target_channel]) < 0 ) {
 	    sio.eprintf("[ERROR] write_float_to_tiff() failed\n");
 	    goto quit;
 	}
@@ -280,21 +289,23 @@ int main( int argc, char *argv[] )
 	if ( flat_pow < 1.0 ) {	/* pow(v,?) flat when v < 1.0 */
 	    for ( i=0 ; i < result_buf.length() ; i++ ) {
 		if ( ptr[i] < 1.0 ) ptr[i] = pow(ptr[i], flat_pow);
-		ptr[i] *= 32768;
-		if ( ptr[i] <= 0 ) ptr[i] = /* 1 */ 32768.0 /* maybe bad pixels */;
+		ptr[i] *= 65536.0;
+		ptr[i] -= 32768.0;
+		if ( ptr[i] <= 0 ) ptr[i] = 32768.0 /* maybe bad pixels */;
 		else if ( 65535.0 < ptr[i] ) ptr[i] = 65535.0;
 	    }
 	}
 	else {			/* normal flat */
 	    for ( i=0 ; i < result_buf.length() ; i++ ) {
-		ptr[i] *= 32768;
-		if ( ptr[i] <= 0 ) ptr[i] = /* 1 */ 32768.0 /* maybe bad pixels */;
+		ptr[i] *= 65536.0;
+		ptr[i] -= 32768.0;
+		if ( ptr[i] <= 0 ) ptr[i] = 32768.0 /* maybe bad pixels */;
 		else if ( 65535.0 < ptr[i] ) ptr[i] = 65535.0;
 	    }
 	}
     
-	if ( write_float_to_tiff24or48(result_buf, 0.0, 65535.0, flag_dither, 
-			   icc_buf, NULL, filename_out[target_channel]) < 0 ) {
+	if ( write_float_to_tiff24or48(result_buf, icc_buf, NULL,
+	       0.0, 65535.0, flag_dither, filename_out[target_channel]) < 0 ) {
 	    sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
 	    goto quit;
 	}

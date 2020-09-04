@@ -2,7 +2,7 @@
 
 /* this returns float array (data contents are unsigned 16-bit) */
 /* this returns 1 or 2 (for 8-/16-bit) to *ret_bytes            */
-static int read_tiff24or48_to_float( const char *filename_in,
+static int read_tiff24or48_to_float( const char *filename_in, double scale,
     mdarray_float *ret_img_buf, mdarray_uchar *ret_icc_buf, int *ret_bytes,
     float camera_calibration1_ret[] )
 {
@@ -120,10 +120,9 @@ static int read_tiff24or48_to_float( const char *filename_in,
 
         mdarray_uchar strip_buf(false);
 	unsigned char *strip_buf_ptr = NULL;
-	float *ret_r_img_ptr = NULL;
-	float *ret_g_img_ptr = NULL;
-	float *ret_b_img_ptr = NULL;
+	float *ret_rgb_img_ptr = NULL;
 	size_t pix_offset, i;
+	double scl;
 	
         strip_buf.resize_1d(strip_size);
 	/* get line buf ptr */
@@ -136,15 +135,14 @@ static int read_tiff24or48_to_float( const char *filename_in,
 		ret_img_buf->init(false);
 		ret_img_buf->resize_3d(width,height,3);
 	    }
-	    /* get array ptr of each ch */
-	    ret_r_img_ptr = ret_img_buf->array_ptr(0,0,0);
-	    ret_g_img_ptr = ret_img_buf->array_ptr(0,0,1);
-	    ret_b_img_ptr = ret_img_buf->array_ptr(0,0,2);
 	}
-    
+
+	if ( scale == 65536.0 ) scl = 256.0;
+	else scl = scale / 256.0;
+	
 	pix_offset = 0;
 	for ( i=0 ; i < strip_max ; i++ ) {
-	    size_t len_pix, j, jj;
+	    size_t len_pix, j, jj, ch;
 	    ssize_t s_len = TIFFReadEncodedStrip(tiff_in, i,
 						 (void *)strip_buf_ptr,
 						 strip_size);
@@ -155,14 +153,13 @@ static int read_tiff24or48_to_float( const char *filename_in,
 	    len_pix = s_len / (byps * spp);
 
 	    if ( ret_img_buf != NULL ) {
-		for ( j=0, jj=0 ; j < len_pix ; j++, jj+=3 ) {
-		    ret_r_img_ptr[pix_offset+j] = strip_buf_ptr[jj] * 256.0;
-		}
-		for ( j=0, jj=1 ; j < len_pix ; j++, jj+=3 ) {
-		    ret_g_img_ptr[pix_offset+j] = strip_buf_ptr[jj] * 256.0;
-		}
-		for ( j=0, jj=2 ; j < len_pix ; j++, jj+=3 ) {
-		    ret_b_img_ptr[pix_offset+j] = strip_buf_ptr[jj] * 256.0;
+		for ( ch=0 ; ch < 3 ; ch++ ) {
+		    /* get array ptr of each ch */
+		    ret_rgb_img_ptr = ret_img_buf->array_ptr(0,0,ch);
+		    for ( j=0, jj=ch ; j < len_pix ; j++, jj+=3 ) {
+			ret_rgb_img_ptr[pix_offset+j] 
+			    = strip_buf_ptr[jj] * scl;
+		    }
 		}
 	    }
 	    pix_offset += len_pix;
@@ -173,11 +170,10 @@ static int read_tiff24or48_to_float( const char *filename_in,
 
         mdarray_uchar strip_buf(false);
 	uint16_t *strip_buf_ptr = NULL;
-	float *ret_r_img_ptr = NULL;
-	float *ret_g_img_ptr = NULL;
-	float *ret_b_img_ptr = NULL;
+	float *ret_rgb_img_ptr = NULL;
 	size_t pix_offset, i;
-
+	double scl;
+	
 	strip_buf.resize_1d(strip_size);
 	/* get line buf ptr */
 	strip_buf_ptr = (uint16_t *)strip_buf.data_ptr();
@@ -185,15 +181,14 @@ static int read_tiff24or48_to_float( const char *filename_in,
 	if ( ret_img_buf != NULL ) {
 	    ret_img_buf->init(false);
 	    ret_img_buf->resize_3d(width,height,3);
-	    /* get array ptr of each ch */
-	    ret_r_img_ptr = ret_img_buf->array_ptr(0,0,0);
-	    ret_g_img_ptr = ret_img_buf->array_ptr(0,0,1);
-	    ret_b_img_ptr = ret_img_buf->array_ptr(0,0,2);
 	}
+
+	if ( scale == 65536.0 ) scl = 1.0;
+	else scl = scale / 65536.0;
 
 	pix_offset = 0;
 	for ( i=0 ; i < strip_max ; i++ ) {
-	    size_t len_pix, j, jj;
+	    size_t len_pix, j, jj, ch;
 	    ssize_t s_len = TIFFReadEncodedStrip(tiff_in, i,
 						 (void *)strip_buf_ptr,
 						 strip_size);
@@ -204,14 +199,13 @@ static int read_tiff24or48_to_float( const char *filename_in,
 	    len_pix = s_len / (byps * spp);
 
 	    if ( ret_img_buf != NULL ) {
-		for ( j=0, jj=0 ; j < len_pix ; j++, jj+=3 ) {
-		    ret_r_img_ptr[pix_offset+j] = strip_buf_ptr[jj];
-		}
-		for ( j=0, jj=1 ; j < len_pix ; j++, jj+=3 ) {
-		    ret_g_img_ptr[pix_offset+j] = strip_buf_ptr[jj];
-		}
-		for ( j=0, jj=2 ; j < len_pix ; j++, jj+=3 ) {
-		    ret_b_img_ptr[pix_offset+j] = strip_buf_ptr[jj];
+		for ( ch=0 ; ch < 3 ; ch++ ) {
+		    /* get array ptr of each ch */
+		    ret_rgb_img_ptr = ret_img_buf->array_ptr(0,0,ch);
+		    for ( j=0, jj=ch ; j < len_pix ; j++, jj+=3 ) {
+			ret_rgb_img_ptr[pix_offset+j]
+			    = strip_buf_ptr[jj] * scl;
+		    }
 		}
 	    }
 	    pix_offset += len_pix;
@@ -222,9 +216,7 @@ static int read_tiff24or48_to_float( const char *filename_in,
 
         mdarray_uchar strip_buf(false);
 	float *strip_buf_ptr = NULL;
-	float *ret_r_img_ptr = NULL;
-	float *ret_g_img_ptr = NULL;
-	float *ret_b_img_ptr = NULL;
+	float *ret_rgb_img_ptr = NULL;
 	size_t pix_offset, i;
 
 	strip_buf.resize_1d(strip_size);
@@ -234,15 +226,11 @@ static int read_tiff24or48_to_float( const char *filename_in,
 	if ( ret_img_buf != NULL ) {
 	    ret_img_buf->init(false);
 	    ret_img_buf->resize_3d(width,height,3);
-	    /* get array ptr of each ch */
-	    ret_r_img_ptr = ret_img_buf->array_ptr(0,0,0);
-	    ret_g_img_ptr = ret_img_buf->array_ptr(0,0,1);
-	    ret_b_img_ptr = ret_img_buf->array_ptr(0,0,2);
 	}
 
 	pix_offset = 0;
 	for ( i=0 ; i < strip_max ; i++ ) {
-	    size_t len_pix, j, jj;
+	    size_t len_pix, j, jj, ch;
 	    ssize_t s_len = TIFFReadEncodedStrip(tiff_in, i,
 						 (void *)strip_buf_ptr,
 						 strip_size);
@@ -253,14 +241,13 @@ static int read_tiff24or48_to_float( const char *filename_in,
 	    len_pix = s_len / (byps * spp);
 
 	    if ( ret_img_buf != NULL ) {
-		for ( j=0, jj=0 ; j < len_pix ; j++, jj+=3 ) {
-		    ret_r_img_ptr[pix_offset+j] = strip_buf_ptr[jj];
-		}
-		for ( j=0, jj=1 ; j < len_pix ; j++, jj+=3 ) {
-		    ret_g_img_ptr[pix_offset+j] = strip_buf_ptr[jj];
-		}
-		for ( j=0, jj=2 ; j < len_pix ; j++, jj+=3 ) {
-		    ret_b_img_ptr[pix_offset+j] = strip_buf_ptr[jj];
+		for ( ch=0 ; ch < 3 ; ch++ ) {
+		    /* get array ptr of each ch */
+		    ret_rgb_img_ptr = ret_img_buf->array_ptr(0,0,ch);
+		    for ( j=0, jj=ch ; j < len_pix ; j++, jj+=3 ) {
+			ret_rgb_img_ptr[pix_offset+j]
+			    = strip_buf_ptr[jj] * scale;
+		    }
 		}
 	    }
 	    pix_offset += len_pix;

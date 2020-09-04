@@ -187,7 +187,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 
     /* load reference ... needs for ICC data */
     sio.printf("Stacking [%s]\n", filenames[ref_file_id].cstr());
-    if ( read_tiff24or48_to_float(filenames[ref_file_id].cstr(),
+    if ( read_tiff24or48_to_float(filenames[ref_file_id].cstr(), 65536.0,
 				  &img_buf, &icc_buf, NULL, NULL) < 0 ) {
 	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	goto quit;
@@ -230,7 +230,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     for ( i=0 ; i < filenames.length() ; i++ ) {
         if ( flg_saved[i] == true ) {
 	    sio.printf("Stacking [%s]\n", filenames[i].cstr());
-	    if ( read_tiff24or48_to_float(filenames[i].cstr(),
+	    if ( read_tiff24or48_to_float(filenames[i].cstr(), 65536.0,
 					  &img_buf, NULL, NULL, NULL) < 0 ) {
 		sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	    }
@@ -329,7 +329,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 	for ( i=0 ; i < filenames.length() ; i++ ) {
 	    if ( (int)i == ref_file_id || flg_saved[i] == true ) {
 		sio.printf("Stacking with Sigma-Clipping [%s]\n", filenames[i].cstr());
-		if ( read_tiff24or48_to_float(filenames[i].cstr(),
+		if ( read_tiff24or48_to_float(filenames[i].cstr(), 65536.0,
 					      &img_buf, NULL, NULL, NULL) < 0 ) {
 		    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 		}
@@ -455,8 +455,8 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     make_output_filename(filenames[ref_file_id].cstr(), appended_str.cstr(),
 			 "float", &out_filename);
     sio.printf("Writing '%s' ...\n", out_filename.cstr());
-    if ( write_float_to_tiff(*stacked_buf_result_ptr, 
-			     icc_buf, NULL, out_filename.cstr()) < 0 ) {
+    if ( write_float_to_tiff(*stacked_buf_result_ptr, icc_buf, NULL, 
+			     65536.0, out_filename.cstr()) < 0 ) {
 	sio.eprintf("[ERROR] write_float_to_tiff() failed.\n");
 	goto quit;
     }
@@ -712,7 +712,7 @@ int main( int argc, char *argv[] )
 	    count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 	    (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
 
-    if ( read_tiff24or48_to_float(filenames[ref_file_id].cstr(),
+    if ( read_tiff24or48_to_float(filenames[ref_file_id].cstr(), 65536.0,
 				  &ref_img_buf, NULL, NULL, NULL) < 0 ) {
         sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	goto quit;
@@ -779,7 +779,7 @@ int main( int argc, char *argv[] )
 	    sio.printf("Open: %s\n", filenames[f_id].cstr());
 	    img_display.init(false);	/* save memory ... */
 		    
-	    if ( read_tiff24or48_to_float(filenames[f_id].cstr(),
+	    if ( read_tiff24or48_to_float(filenames[f_id].cstr(), 65536.0,
 					  &img_buf, NULL, NULL, NULL) < 0 ) {
 	        sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 		sel_file_id = -1;
@@ -919,7 +919,7 @@ int main( int argc, char *argv[] )
 	    if ( 0 <= sel_file_id ) {
 		/* reload */
 		if ( read_tiff24or48_to_float(filenames[sel_file_id].cstr(),
-					  &img_buf, NULL, NULL, NULL) < 0 ) {
+				   65536.0, &img_buf, NULL, NULL, NULL) < 0 ) {
 		    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 		    sel_file_id = -1;
 		}
