@@ -189,7 +189,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     /* load reference ... needs for ICC data */
     sio.printf("Stacking [%s]\n", filenames[ref_file_id].cstr());
     if ( read_tiff24or48_to_float(filenames[ref_file_id].cstr(), 65536.0,
-				  &img_buf, &icc_buf, NULL, NULL) < 0 ) {
+				  &img_buf, NULL, &icc_buf, NULL) < 0 ) {
 	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	goto quit;
     }

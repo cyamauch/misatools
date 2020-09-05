@@ -1,9 +1,9 @@
 #include <tiffio.h>
 
 /* this returns float array (data contents are unsigned 16-bit) */
-/* this returns 1 or 2 (for 8-/16-bit) to *ret_bytes            */
+/* this returns 1 or 2 (for 8-/16-bit) to *ret_sztype            */
 static int read_tiff24or48_to_float( const char *filename_in, double scale,
-    mdarray_float *ret_img_buf, mdarray_uchar *ret_icc_buf, int *ret_bytes,
+    mdarray_float *ret_img_buf, int *ret_sztype, mdarray_uchar *ret_icc_buf, 
     float camera_calibration1_ret[] )
 {
     stdstreamio sio;
@@ -255,9 +255,9 @@ static int read_tiff24or48_to_float( const char *filename_in, double scale,
 
     }
     
-    if ( ret_bytes != NULL ) {
-	*ret_bytes = byps;
-	if ( format == SAMPLEFORMAT_IEEEFP ) *ret_bytes *= -1;
+    if ( ret_sztype != NULL ) {
+	*ret_sztype = byps;
+	if ( format == SAMPLEFORMAT_IEEEFP ) *ret_sztype *= -1;
     }
     if ( camera_calibration1_ret != NULL ) {
 	uint32 i;

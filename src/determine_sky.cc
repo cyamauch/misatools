@@ -48,7 +48,7 @@ int main( int argc, char *argv[] )
     bool flag_dither = true;
     
     int display_bin = 1;		/* binning factor for display */
-    int step_count, bytes;
+    int step_count, sztype;
     double obj_x, obj_y, obj_r, sky_r;
     bool flag_drawed = false;
     double sky_lv[3]; 
@@ -118,14 +118,14 @@ int main( int argc, char *argv[] )
     f_in.close();
 
     if ( read_tiff24or48_to_float( filename.cstr(), 65536.0,
-				   &image_buf, &icc_buf, &bytes, NULL ) < 0 ) {
+				   &image_buf, &sztype, &icc_buf, NULL ) < 0 ) {
 	sio.eprintf("[ERROR] read_tiff24or48() failed\n");
 	goto quit;
     }
-    if ( bytes == 1 ) {
+    if ( sztype == 1 ) {
 	sio.printf("found 8-bit RGB image.\n");
     }
-    else if ( bytes == 2 ) {
+    else if ( sztype == 2 ) {
 	sio.printf("found 16-bit RGB image.\n");
     }
     else {

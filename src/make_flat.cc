@@ -138,7 +138,7 @@ int main( int argc, char *argv[] )
 
     sio.printf("Loading %s\n", filename_dark);
     if ( read_tiff24or48_to_float(filename_dark, 65536.0,
-				  &img_dark_buf, &icc_buf, NULL, NULL) < 0 ) {
+				  &img_dark_buf, NULL, &icc_buf, NULL) < 0 ) {
 	sio.eprintf("[ERROR] cannot load dark\n");
 	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	goto quit;
@@ -177,7 +177,7 @@ int main( int argc, char *argv[] )
 		//size_t l;
 		sio.printf("  Reading %s\n",filename_in);
 		if ( read_tiff24or48_to_float(filename_in, 65536.0,
-					 &img_load_buf, &icc_buf, NULL, NULL) < 0 ) {
+				   &img_load_buf, NULL, &icc_buf, NULL) < 0 ) {
 		    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 		    goto quit;
 		}
@@ -187,7 +187,7 @@ int main( int argc, char *argv[] )
 		       darkfile_list[cnt_dark % darkfile_list.length()].cstr();
 		    sio.printf("  Reading %s\n", filename_dark);
 		    if ( read_tiff24or48_to_float(filename_dark, 65536.0,
-					 &img_dark_buf, &icc_buf, NULL, NULL) < 0 ) {
+				   &img_dark_buf, NULL, &icc_buf, NULL) < 0 ) {
 			sio.eprintf("[ERROR] cannot load dark\n");
 			sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 			goto quit;

@@ -160,19 +160,19 @@ int main( int argc, char *argv[] )
 	goto quit;
     }
     else {
-	int bytes;
+	int sztype;
 	mdarray_double dark_rgb(false);
 	f_in.close();
 	dark_rgb.resize_1d(3);
 	sio.printf("Loading '%s'\n", filename_dark);
 	if ( read_tiff24or48_to_float(filename_dark, 65536.0, 
-				      &img_dark_buf, NULL, &bytes, NULL) < 0 ) {
+				    &img_dark_buf, &sztype, NULL, NULL) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename_dark);
 	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	    goto quit;
 	}
-	if ( bytes == 1 ) sio.printf("Found an 8-bit dark image\n");
-	else if ( bytes == 2 ) sio.printf("Found a 16-bit dark image\n");
+	if ( sztype == 1 ) sio.printf("Found an 8-bit dark image\n");
+	else if ( sztype == 2 ) sio.printf("Found a 16-bit dark image\n");
 	else sio.printf("Found a float(32-bit) dark image\n");
 	//img_dark_buf.dprint();
 	img_dark_buf *= dark_factor;
@@ -196,18 +196,18 @@ int main( int argc, char *argv[] )
     else flag_use_flat = 0;
 
     if ( 0 <= flag_use_flat ) {
-	int bytes;
+	int sztype;
 	f_in.close();
 	sio.printf("Loading '%s'\n", filename_flat[flag_use_flat]);
 	if ( read_tiff24or48_to_float(filename_flat[flag_use_flat], 1.0,
-				      &img_flat_buf, NULL, &bytes, NULL) < 0 ) {
+				    &img_flat_buf, &sztype, NULL, NULL) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n",
 			filename_flat[flag_use_flat]);
 	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	    goto quit;
 	}
-	if ( bytes == 1 ) sio.printf("Found an 8-bit flat image\n");
-	else if ( bytes == 2 ) sio.printf("Found a 16-bit flat image\n");
+	if ( sztype == 1 ) sio.printf("Found an 8-bit flat image\n");
+	else if ( sztype == 2 ) sio.printf("Found a 16-bit flat image\n");
 	else {
 	    sio.printf("Found a float(32-bit) flat image\n");
 	    //sio.eprintf("[DEBUG]: \n");
@@ -233,19 +233,19 @@ int main( int argc, char *argv[] )
 	    sio.eprintf("[NOTICE] Not found: '%s'\n", filename_sky.cstr());
 	}
 	else {
-	    int bytes;
+	    int sztype;
 	    mdarray_double sky_rgb(false);
 	    f_in.close();
 	    sky_rgb.resize_1d(3);
 	    sio.printf("Loading '%s'\n", filename_sky.cstr());
 	    if ( read_tiff24or48_to_float(filename_sky.cstr(), 65536.0, 
-					  &img_sky_buf, NULL, &bytes, NULL) < 0 ) {
+				     &img_sky_buf, &sztype, NULL, NULL) < 0 ) {
 		sio.eprintf("[ERROR] cannot load '%s'\n", filename_sky.cstr());
 		sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 		goto quit;
 	    }
-	    if ( bytes == 1 ) sio.printf("Found an 8-bit sky image\n");
-	    else if ( bytes == 2 ) sio.printf("Found a 16-bit sky image\n");
+	    if ( sztype == 1 ) sio.printf("Found an 8-bit sky image\n");
+	    else if ( sztype == 2 ) sio.printf("Found a 16-bit sky image\n");
 	    else sio.printf("Found a float(32-bit) sky image\n");
 	    //
 	    sky_rgb[0] = md_median(img_sky_buf.sectionf("*,*,0"));
@@ -259,7 +259,7 @@ int main( int argc, char *argv[] )
     }
 
     for ( i=0 ; i < filenames_in.length() ; i++ ) {
-	int bytes;
+	int sztype;
 	tstring filename, filename_out;
 	float *ptr;
 	size_t j;
@@ -267,23 +267,23 @@ int main( int argc, char *argv[] )
 	filename = filenames_in[i];
 	sio.printf("Loading '%s'\n", filename.cstr());
 	if ( read_tiff24or48_to_float(filename.cstr(), 65536.0, 
-		    &img_in_buf, &icc_buf, &bytes, camera_calibration1) < 0 ) {
+		   &img_in_buf, &sztype, &icc_buf, camera_calibration1) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename.cstr());
 	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	    goto quit;
 	}
 	if ( 0 < darkfile_list.length() ) {
-	    int bytes0;
+	    int sztype0;
 	    const char *fn = darkfile_list[i % darkfile_list.length()].cstr();
 	    sio.printf("Loading '%s'\n", fn);
 	    if ( read_tiff24or48_to_float(fn, 65536.0, 
-				  &img_dark_buf, NULL, &bytes0, NULL) < 0 ) {
+				  &img_dark_buf, &sztype0, NULL, NULL) < 0 ) {
 		sio.eprintf("[ERROR] cannot load '%s'\n", fn);
 		sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 		goto quit;
 	    }
-	    if ( bytes0 == 1 ) sio.printf("Found an 8-bit dark image\n");
-	    else if ( bytes0 == 2 ) sio.printf("Found a 16-bit dark image\n");
+	    if ( sztype0 == 1 ) sio.printf("Found an 8-bit dark image\n");
+	    else if ( sztype0 == 2 ) sio.printf("Found a 16-bit dark image\n");
 	    else sio.printf("Found a float(32-bit) dark image\n");
 	    img_dark_buf *= dark_factor;
 	}
@@ -359,7 +359,7 @@ int main( int argc, char *argv[] )
 		goto quit;
 	    }
 	}
-	else if ( bytes == 1 && flag_output_8bit == true ) {
+	else if ( sztype == 1 && flag_output_8bit == true ) {
 	    make_output_filename(filename.cstr(), "proc", "8bit",
 				 &filename_out);
 	    for ( j=0 ; j < img_in_buf.length() ; j++ ) {

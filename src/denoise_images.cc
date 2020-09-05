@@ -122,7 +122,7 @@ int main( int argc, char *argv[] )
 
 
     for ( i=0 ; i < filenames_in.length() ; i++ ) {
-	int bytes;
+	int sztype;
 	tstring filename, filename_out;
 	float *ptr;
 	size_t j;
@@ -130,7 +130,7 @@ int main( int argc, char *argv[] )
 	filename = filenames_in[i];
 	sio.printf("Loading %s\n", filename.cstr());
 	if ( read_tiff24or48_to_float(filename.cstr(), 65536.0,
-		    &img_in_buf, &icc_buf, &bytes, camera_calibration1) < 0 ) {
+		    &img_in_buf, &sztype, &icc_buf, camera_calibration1) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename.cstr());
 	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	    goto quit;
@@ -146,7 +146,7 @@ int main( int argc, char *argv[] )
 			 img_work_buf.array_ptr() );
 	
 	/* create new filename */
-	if ( bytes == 1 ) {
+	if ( sztype == 1 ) {
 	}
 	else {
 	}
@@ -175,7 +175,7 @@ int main( int argc, char *argv[] )
 		goto quit;
 	    }
 	}
-	else if ( bytes == 1 && flag_output_8bit == true ) {
+	else if ( sztype == 1 && flag_output_8bit == true ) {
 	    make_output_filename(filename.cstr(), "denoised", "8bit",
 				 &filename_out);
 	    for ( j=0 ; j < img_in_buf.length() ; j++ ) {
