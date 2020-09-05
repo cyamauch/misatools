@@ -1,7 +1,8 @@
 #include <tiffio.h>
 
-static int write_tiff24or48( const mdarray &img_buf_in,
+static int write_tiff24or48( const mdarray &img_buf_in, int sztype,
 			     const mdarray_uchar &icc_buf_in,
+			     const float camera_calibration1[],	/* [12] */
 			     const char *filename_out )
 {
     stdstreamio sio;
@@ -15,8 +16,8 @@ static int write_tiff24or48( const mdarray &img_buf_in,
 
     if ( filename_out == NULL ) return 0;
 
-    if ( img_buf_in.size_type() == UCHAR_ZT ) bps = 8;
-    else if ( img_buf_in.size_type() == FLOAT_ZT ) bps = 16;
+    if ( sztype == 1 && img_buf_in.size_type() == UCHAR_ZT ) bps = 8;
+    else if ( sztype == 2 && img_buf_in.size_type() == FLOAT_ZT ) bps = 16;
     else {
         sio.eprintf("[ERROR] unexpected array type\n");
 	goto quit;
@@ -42,8 +43,13 @@ static int write_tiff24or48( const mdarray &img_buf_in,
     TIFFSetField(tiff_out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
     TIFFSetField(tiff_out, TIFFTAG_BITSPERSAMPLE, bps);
     TIFFSetField(tiff_out, TIFFTAG_SAMPLESPERPIXEL, spp);
+    TIFFSetField(tiff_out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
     TIFFSetField(tiff_out, TIFFTAG_ROWSPERSTRIP, (uint32)1);
     
+    if ( camera_calibration1 != NULL ) {
+	TIFFSetField(tiff_out, TIFFTAG_CAMERACALIBRATION1, 12, camera_calibration1);
+    }
+
     if ( 0 < icc_buf_in.length() ) {
 	icc_prof_size = icc_buf_in.length();
 	TIFFSetField(tiff_out, TIFFTAG_ICCPROFILE,
@@ -56,40 +62,29 @@ static int write_tiff24or48( const mdarray &img_buf_in,
 	mdarray_uchar strip_buf(false);
 	unsigned char *strip_buf_ptr;
 	
-	const unsigned char *r_img_in_ptr;
-	const unsigned char *g_img_in_ptr;
-	const unsigned char *b_img_in_ptr;
+	const unsigned char *rgb_img_in_ptr;
 
 	size_t pix_offset, i;
 
 	strip_buf.resize_1d(byps * spp * width);
 	strip_buf_ptr = strip_buf.array_ptr();
 
-	/* get ptr of each ch */
-	r_img_in_ptr = (const unsigned char *)img_buf_in.data_ptr_cs(0,0,0);
-	g_img_in_ptr = (const unsigned char *)img_buf_in.data_ptr_cs(0,0,1);
-	b_img_in_ptr = (const unsigned char *)img_buf_in.data_ptr_cs(0,0,2);
-
 	pix_offset = 0;
 	for ( i=0 ; i < height ; i++ ) {
-	    size_t j, jj;
-
-	    for ( j=0, jj=0 ; j < width ; j++, jj+=3 ) {
-		strip_buf_ptr[jj] = r_img_in_ptr[pix_offset+j];
+	    size_t j, jj, ch;
+	    for ( ch=0 ; ch < 3 ; ch++ ) {
+		/* get ptr of each ch */
+		rgb_img_in_ptr =
+		    (const unsigned char *)img_buf_in.data_ptr_cs(0,0,ch);
+		for ( j=0, jj=ch ; j < width ; j++, jj+=3 ) {
+		    strip_buf_ptr[jj] = rgb_img_in_ptr[pix_offset+j];
+		}
+		if ( TIFFWriteEncodedStrip(tiff_out, i, strip_buf_ptr,
+					   width * byps * spp) == 0 ) {
+		    sio.eprintf("[ERROR] TIFFWriteEncodedStrip() failed\n");
+		    goto quit;
+		}
 	    }
-	    for ( j=0, jj=1 ; j < width ; j++, jj+=3 ) {
-		strip_buf_ptr[jj] = g_img_in_ptr[pix_offset+j];
-	    }
-	    for ( j=0, jj=2 ; j < width ; j++, jj+=3 ) {
-		strip_buf_ptr[jj] = b_img_in_ptr[pix_offset+j];
-	    }
-	    
-	    if ( TIFFWriteEncodedStrip(tiff_out, i, strip_buf_ptr,
-				       width * byps * spp) == 0 ) {
-		sio.eprintf("[ERROR] TIFFWriteEncodedStrip() failed\n");
-		goto quit;
-	    }
-
 	    pix_offset += width;
 	}
 
@@ -99,33 +94,25 @@ static int write_tiff24or48( const mdarray &img_buf_in,
 	mdarray_uchar strip_buf(false);
 	uint16_t *strip_buf_ptr;
 
-	const float *r_img_in_ptr;
-	const float *g_img_in_ptr;
-	const float *b_img_in_ptr;
+	const float *rgb_img_in_ptr;
 
 	size_t pix_offset, i;
 
 	strip_buf.resize_1d(byps * spp * width);
 	strip_buf_ptr = (uint16_t *)strip_buf.data_ptr();
 
-	/* get ptr of each ch */
-	r_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,0);
-	g_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,1);
-	b_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,2);
-
 	pix_offset = 0;
 	for ( i=0 ; i < height ; i++ ) {
-	    size_t j, jj;
+	    size_t j, jj, ch;
 
-	    for ( j=0, jj=0 ; j < width ; j++, jj+=3 ) {
-		strip_buf_ptr[jj] = r_img_in_ptr[pix_offset+j];
-	    }
-	    for ( j=0, jj=1 ; j < width ; j++, jj+=3 ) {
-		strip_buf_ptr[jj] = g_img_in_ptr[pix_offset+j];
-	    }
-	    for ( j=0, jj=2 ; j < width ; j++, jj+=3 ) {
-		strip_buf_ptr[jj] = b_img_in_ptr[pix_offset+j];
-	    }
+	    for ( ch=0 ; ch < 3 ; ch++ ) {
+		/* get ptr of each ch */
+		rgb_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,ch);
+
+		for ( j=0, jj=ch ; j < width ; j++, jj+=3 ) {
+		    strip_buf_ptr[jj] = rgb_img_in_ptr[pix_offset+j];
+		}
+	    }		
 	    
 	    if ( TIFFWriteEncodedStrip(tiff_out, i, strip_buf_ptr,
 				       width * byps * spp) == 0 ) {

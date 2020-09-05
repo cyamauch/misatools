@@ -7,7 +7,14 @@ using namespace sli;
 
 #include "read_tiff24or48.h"
 #include "write_tiff24or48.h"
+#include "write_float_to_tiff.h"
 #include "icc_srgb_profile.c"
+
+/**
+ * @file   make_dark.cc
+ * @brief  construct a master dark image.
+ *         8/16-bit integer and 32-bit float images are supported.
+ */
 
 /* Maximum byte length of 3-d image buffer to get median */
 static const uint64_t Max_stat_buf_bytes = (uint64_t)200 * 1024 * 1024;
@@ -26,7 +33,7 @@ int main( int argc, char *argv[] )
     const char *rgb_str[] = {"R","G","B"};
     
     size_t i, j, k, k_step, width, height;
-    int sz_type;
+    int sz_type, tiff_szt;
     uint64_t nbytes_img_stat_full;
     
     int return_status = -1;
@@ -44,7 +51,8 @@ int main( int argc, char *argv[] )
     filenames_in.erase(0, 1);	/* erase command name */
 
     filename_in = filenames_in[0].cstr();
-    if ( read_tiff24or48(filename_in, &img_load_buf, &icc_buf) < 0 ) {
+    if ( read_tiff24or48(filename_in, &img_load_buf, &tiff_szt,
+			 &icc_buf, NULL) < 0 ) {
 	sio.eprintf("[ERROR] read_tiff24or48() failed\n");
 	goto quit;
     }
@@ -52,8 +60,9 @@ int main( int argc, char *argv[] )
     height = img_load_buf.y_length();
     sz_type = img_load_buf.size_type();
     //sio.printf("sz_type = %d\n",(int)sz_type);
-    if ( sz_type == UCHAR_ZT ) sio.printf("Found an 8-bit RGB image\n");
-    else sio.printf("Found a 16-bit RGB image\n");
+    if ( tiff_szt == 1 ) sio.printf("Found an 8-bit RGB image\n");
+    else if ( tiff_szt == 2 ) sio.printf("Found a 16-bit RGB image\n");
+    else sio.printf("Found a 32-bit float RGB image\n");
     
     result_buf.init(sz_type, false);
     result_buf.resize_3d(width, height, 3);
@@ -82,14 +91,16 @@ int main( int argc, char *argv[] )
 	for ( k=0 ; k < height ; k+=k_step ) {			/* block[y] */
 	    sio.printf(" y of section = %zd\n",k);
 	    for ( i=0 ; i < filenames_in.length() ; i++ ) {	/* files */
+		int tiff_szt0;
 		filename_in = filenames_in[i].cstr();
 		sio.printf("  Reading %s\n",filename_in);
 		img_load_buf.init(sz_type, false);
-		if ( read_tiff24or48(filename_in, &img_load_buf, NULL) < 0 ) {
+		if ( read_tiff24or48(filename_in, &img_load_buf, &tiff_szt0,
+				     NULL, NULL) < 0 ) {
 		    sio.eprintf("[ERROR] read_tiff24or48() failed\n");
 		    goto quit;
 		}
-		if ( img_load_buf.size_type() != sz_type ) {
+		if ( tiff_szt0 != tiff_szt ) {
 		    sio.eprintf("[ERROR] invalid type of image: %s\n",
 				filename_in);
 		    goto quit;
@@ -116,11 +127,20 @@ int main( int argc, char *argv[] )
 	icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
     }
 
-    if ( write_tiff24or48(result_buf, icc_buf, filename_out) < 0 ) {
-        sio.eprintf("[ERROR] write_tiff24or48() failed\n");
-	goto quit;
+    if ( tiff_szt < 0 ) {
+	if ( write_float_to_tiff(result_buf, icc_buf,
+				 NULL, 1.0, filename_out) < 0 ) {
+	    sio.eprintf("[ERROR] write_float_to_tiff() failed\n");
+	    goto quit;
+	}
     }
-
+    else {
+	if ( write_tiff24or48(result_buf, tiff_szt, icc_buf,
+			      NULL, filename_out) < 0 ) {
+	    sio.eprintf("[ERROR] write_tiff24or48() failed\n");
+	    goto quit;
+	}
+    }
   
     return_status = 0;
  quit:
@@ -129,3 +149,4 @@ int main( int argc, char *argv[] )
 
 #include "read_tiff24or48.cc"
 #include "write_tiff24or48.cc"
+#include "write_float_to_tiff.cc"

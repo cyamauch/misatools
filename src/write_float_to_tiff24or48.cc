@@ -77,63 +77,39 @@ static int write_float_to_tiff24or48( const mdarray_float &img_buf_in,
 		     icc_prof_size, icc_buf_in.data_ptr());
     }
 
-    if ( byps == 2 ) {		/* 16-bit */
+    if ( byps == 2 ) {			/* 16-bit */
 
 	mdarray_uchar strip_buf(false);
 	uint16_t *strip_buf_ptr;
 
-	const float *r_img_in_ptr;
-	const float *g_img_in_ptr;
-	const float *b_img_in_ptr;
+	const float *rgb_img_in_ptr;
 
 	size_t pix_offset;
 
 	strip_buf.resize_1d(byps * spp * width);
 	strip_buf_ptr = (uint16_t *)strip_buf.data_ptr();
 
-	/* get ptr of each ch */
-	r_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,0);
-	g_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,1);
-	b_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,2);
-
 	pix_offset = 0;
 	for ( i=0 ; i < height ; i++ ) {
-	    size_t j, jj;
+	    size_t j, jj, ch;
 	    double v;
 
-	    if ( dither == false ) {
-		for ( j=0, jj=0 ; j < width ; j++, jj+=3 ) {
-		    v = ((r_img_in_ptr[pix_offset+j] - min_val)/range) * 65535.0;
-		    strip_buf_ptr[jj] = (uint16_t)(v + 0.5);
-		}
-		for ( j=0, jj=1 ; j < width ; j++, jj+=3 ) {
-		    v = ((g_img_in_ptr[pix_offset+j] - min_val)/range) * 65535.0;
-		   strip_buf_ptr[jj] = (uint16_t)(v + 0.5);
-		}
-		for ( j=0, jj=2 ; j < width ; j++, jj+=3 ) {
-		    v = ((b_img_in_ptr[pix_offset+j] - min_val)/range) * 65535.0;
-		    strip_buf_ptr[jj] = (uint16_t)(v + 0.5);
-		}
-	    }
-	    else {
-	        uint16_t v1;
-		for ( j=0, jj=0 ; j < width ; j++, jj+=3 ) {
-		    v = ((r_img_in_ptr[pix_offset+j] - min_val)/range) * 65535.0;
-		    v1 = (uint16_t)v;
-		    if ( v1 < 65535 && genrand_real2() < v - floor(v) ) v1 ++;
-		    strip_buf_ptr[jj] = v1;
-		}
-		for ( j=0, jj=1 ; j < width ; j++, jj+=3 ) {
-		    v = ((g_img_in_ptr[pix_offset+j] - min_val)/range) * 65535.0;
-		    v1 = (uint16_t)v;
-		    if ( v1 < 65535 && genrand_real2() < v - floor(v) ) v1 ++;
-		    strip_buf_ptr[jj] = v1;
-		}
-		for ( j=0, jj=2 ; j < width ; j++, jj+=3 ) {
-		    v = ((b_img_in_ptr[pix_offset+j] - min_val)/range) * 65535.0;
-		    v1 = (uint16_t)v;
-		    if ( v1 < 65535 && genrand_real2() < v - floor(v) ) v1 ++;
-		    strip_buf_ptr[jj] = v1;
+	    for ( ch=0 ; ch < 3 ; ch++ ) {
+		/* get ptr of each ch */
+		rgb_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,ch);
+		if ( dither == false ) {
+		    for ( j=0, jj=ch ; j < width ; j++, jj+=3 ) {
+			v = ((rgb_img_in_ptr[pix_offset+j] - min_val)/range) * 65535.0;
+			strip_buf_ptr[jj] = (uint16_t)(v + 0.5);
+		    }
+		} else {
+		    uint16_t v1;
+		    for ( j=0, jj=ch ; j < width ; j++, jj+=3 ) {
+			v = ((rgb_img_in_ptr[pix_offset+j] - min_val)/range) * 65535.0;
+			v1 = (uint16_t)v;
+			if ( v1 < 65535 && genrand_real2() < v - floor(v) ) v1 ++;
+			strip_buf_ptr[jj] = v1;
+		    }
 		}
 	    }
 	    
@@ -147,64 +123,43 @@ static int write_float_to_tiff24or48( const mdarray_float &img_buf_in,
 	}
 
     }
-    else {		/* 8-bit */
+    else if ( byps == 1 ) {		/* 8-bit */
 
 	mdarray_uchar strip_buf(false);
 	unsigned char *strip_buf_ptr;
 
-	const float *r_img_in_ptr;
-	const float *g_img_in_ptr;
-	const float *b_img_in_ptr;
+	const float *rgb_img_in_ptr;
 
 	size_t pix_offset, i;
 
 	strip_buf.resize_1d(byps * spp * width);
 	strip_buf_ptr = (unsigned char *)strip_buf.data_ptr();
 
-	/* get ptr of each ch */
-	r_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,0);
-	g_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,1);
-	b_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,2);
 
 	pix_offset = 0;
 	for ( i=0 ; i < height ; i++ ) {
-	    size_t j, jj;
+	    size_t j, jj, ch;
 	    double v;
 
-	    if ( dither == false ) {
-		for ( j=0, jj=0 ; j < width ; j++, jj+=3 ) {
-		    v = ((r_img_in_ptr[pix_offset+j] - min_val)/range) * 255.0;
-		    strip_buf_ptr[jj] = (unsigned char)(v + 0.5);
+	    for ( ch=0 ; ch < 3 ; ch++ ) {
+		/* get ptr of each ch */
+		rgb_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,ch);
+	    
+		if ( dither == false ) {
+		    for ( j=0, jj=ch ; j < width ; j++, jj+=3 ) {
+			v = ((rgb_img_in_ptr[pix_offset+j] - min_val)/range) * 255.0;
+			strip_buf_ptr[jj] = (unsigned char)(v + 0.5);
+		    }
 		}
-		for ( j=0, jj=1 ; j < width ; j++, jj+=3 ) {
-		    v = ((g_img_in_ptr[pix_offset+j] - min_val)/range) * 255.0;
-		    strip_buf_ptr[jj] = (unsigned char)(v + 0.5);
+		else {
+		    unsigned char v1;
+		    for ( j=0, jj=ch ; j < width ; j++, jj+=3 ) {
+			v = ((rgb_img_in_ptr[pix_offset+j] - min_val)/range) * 255.0;
+			v1 = (unsigned char)v;
+			if ( v1 < 255 && genrand_real2() < v - floor(v) ) v1 ++;
+			strip_buf_ptr[jj] = v1;
+		    }
 		}
-		for ( j=0, jj=2 ; j < width ; j++, jj+=3 ) {
-		    v = ((b_img_in_ptr[pix_offset+j] - min_val)/range) * 255.0;
-		    strip_buf_ptr[jj] = (unsigned char)(v + 0.5);
-	        }
-	    }
-	    else {
-	        unsigned char v1;
-		for ( j=0, jj=0 ; j < width ; j++, jj+=3 ) {
-		    v = ((r_img_in_ptr[pix_offset+j] - min_val)/range) * 255.0;
-		    v1 = (unsigned char)v;
-		    if ( v1 < 255 && genrand_real2() < v - floor(v) ) v1 ++;
-		    strip_buf_ptr[jj] = v1;
-		}
-		for ( j=0, jj=1 ; j < width ; j++, jj+=3 ) {
-		    v = ((g_img_in_ptr[pix_offset+j] - min_val)/range) * 255.0;
-		    v1 = (unsigned char)v;
-		    if ( v1 < 255 && genrand_real2() < v - floor(v) ) v1 ++;
-		    strip_buf_ptr[jj] = v1;
-		}
-		for ( j=0, jj=2 ; j < width ; j++, jj+=3 ) {
-		    v = ((b_img_in_ptr[pix_offset+j] - min_val)/range) * 255.0;
-		    v1 = (unsigned char)v;
-		    if ( v1 < 255 && genrand_real2() < v - floor(v) ) v1 ++;
-		    strip_buf_ptr[jj] = v1;
-	        }
 	    }
 	    
 	    if ( TIFFWriteEncodedStrip(tiff_out, i, strip_buf_ptr,
@@ -217,7 +172,10 @@ static int write_float_to_tiff24or48( const mdarray_float &img_buf_in,
 	}
 	
     }
-
+    else {
+	goto quit;
+    }
+    
     
     ret_status = 0;
  quit:

@@ -10,6 +10,7 @@ static int display_image( int win_image, const mdarray &img_buf,
     int src_ch[3];
     double ct[3];
     size_t display_width, display_height;
+    size_t n_img_buf_ch;
     size_t bin = binning;
     bool needs_resize_win = false;
 
@@ -52,13 +53,24 @@ static int display_image( int win_image, const mdarray &img_buf,
     }
     tmp_buf_ptr = tmp_buf->array_ptr();
 
+    n_img_buf_ch = img_buf.z_length();
+
+    //sio.eprintf("[DEBUG] n_img_buf_ch = %zd\n",n_img_buf_ch);
+    
     if ( img_buf.size_type() == UCHAR_ZT ) {
 	const unsigned char *img_buf_ptr[3];
 	size_t off1 = 0;
 	size_t off4 = 0;
-	img_buf_ptr[0] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[0]);
-	img_buf_ptr[1] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[1]);
-	img_buf_ptr[2] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[2]);
+	if ( n_img_buf_ch == 3 ) {
+	    img_buf_ptr[0] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[0]);
+	    img_buf_ptr[1] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[1]);
+	    img_buf_ptr[2] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[2]);
+	}
+	else {
+	    img_buf_ptr[0] = (const unsigned char *)img_buf.data_ptr();
+	    img_buf_ptr[1] = (const unsigned char *)img_buf.data_ptr();
+	    img_buf_ptr[2] = (const unsigned char *)img_buf.data_ptr();
+	}
 	if ( bin < 2 ) {
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
 		double v;
@@ -79,40 +91,63 @@ static int display_image( int win_image, const mdarray &img_buf,
 	else {
 	    float *lv_p = NULL;
 	    mdarray_float lv(false, &lv_p);
-	    size_t ii;
-	    lv.resize(display_width * 3);
+	    lv.resize(display_width * n_img_buf_ch);
 	    lv = 0.0;
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
-		for ( ii=0 ; ii < 3 ; ii++ ) {
+		size_t ii;
+		for ( ii=0 ; ii < n_img_buf_ch ; ii++ ) {
 		    const unsigned char *img_buf_ptr_rgb = img_buf_ptr[ii];
 		    for ( j=0, k=ii ; j < img_buf.x_length() ; j++ ) {
 			lv_p[k] += img_buf_ptr_rgb[off1 + j];
-			if ( (j+1) % bin == 0 ) k += 3;
+			if ( (j+1) % bin == 0 ) k += n_img_buf_ch;
 		    }
 		}
 		if ( (i+1) % bin == 0 || (i+1) == img_buf.y_length() ) {
 		    const double ftr = 1.0 / (double)(bin * bin);
 		    double v;
-		    for ( j=0, k=0, l=0 ; j < display_width ; j++ ) {
-			l++;
-			v = lv_p[k] * ftr * ct[0] + 0.5;
-			lv_p[k] = 0.0;
-			if ( 255.0 < v ) v = 255.0;
-			else if ( v < 0 ) v = 255.0;
-			tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			k++;  l++;
-			v = lv_p[k] * ftr * ct[1] + 0.5;
-			lv_p[k] = 0.0;
-			if ( 255.0 < v ) v = 255.0;
-			else if ( v < 0 ) v = 255.0;
-			tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			k++;  l++;
-			v = lv_p[k] * ftr * ct[2] + 0.5;
-			lv_p[k] = 0.0;
-			if ( 255.0 < v ) v = 255.0;
-			else if ( v < 0 ) v = 255.0;
-			tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			k++;  l++;
+		    if ( n_img_buf_ch == 3 ) {	/* RGB */
+			for ( j=0, k=0, l=0 ; j < display_width ; j++ ) {
+			    l++;
+			    v = lv_p[k] * ftr * ct[0] + 0.5;
+			    lv_p[k] = 0.0;
+			    if ( 255.0 < v ) v = 255.0;
+			    else if ( v < 0 ) v = 255.0;
+			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			    k++;  l++;
+			    v = lv_p[k] * ftr * ct[1] + 0.5;
+			    lv_p[k] = 0.0;
+			    if ( 255.0 < v ) v = 255.0;
+			    else if ( v < 0 ) v = 255.0;
+			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			    k++;  l++;
+			    v = lv_p[k] * ftr * ct[2] + 0.5;
+			    lv_p[k] = 0.0;
+			    if ( 255.0 < v ) v = 255.0;
+			    else if ( v < 0 ) v = 255.0;
+			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			    k++;  l++;
+			}
+		    }
+		    else {			/* MONO */
+			for ( j=0, k=0, l=0 ; j < display_width ; j++ ) {
+			    l++;
+			    v = lv_p[k] * ftr * ct[0] + 0.5;
+			    if ( 255.0 < v ) v = 255.0;
+			    else if ( v < 0 ) v = 255.0;
+			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			          l++;
+			    v = lv_p[k] * ftr * ct[1] + 0.5;
+			    if ( 255.0 < v ) v = 255.0;
+			    else if ( v < 0 ) v = 255.0;
+			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			          l++;
+			    v = lv_p[k] * ftr * ct[2] + 0.5;
+			    lv_p[k] = 0.0;
+			    if ( 255.0 < v ) v = 255.0;
+			    else if ( v < 0 ) v = 255.0;
+			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			    k++;  l++;
+			}
 		    }
 		    off4 += display_width * 4;
 		}
@@ -124,18 +159,25 @@ static int display_image( int win_image, const mdarray &img_buf,
 	const float *img_buf_ptr[3];
 	size_t off1 = 0;
 	size_t off4 = 0;
-	img_buf_ptr[0] = (const float *)img_buf.data_ptr(0,0,src_ch[0]);
-	img_buf_ptr[1] = (const float *)img_buf.data_ptr(0,0,src_ch[1]);
-	img_buf_ptr[2] = (const float *)img_buf.data_ptr(0,0,src_ch[2]);
+	if ( n_img_buf_ch == 3 ) {
+	    img_buf_ptr[0] = (const float *)img_buf.data_ptr(0,0,src_ch[0]);
+	    img_buf_ptr[1] = (const float *)img_buf.data_ptr(0,0,src_ch[1]);
+	    img_buf_ptr[2] = (const float *)img_buf.data_ptr(0,0,src_ch[2]);
+	}
+	else {
+	    img_buf_ptr[0] = (const float *)img_buf.data_ptr();
+	    img_buf_ptr[1] = (const float *)img_buf.data_ptr();
+	    img_buf_ptr[2] = (const float *)img_buf.data_ptr();
+	}
 	if ( bin < 2 ) {
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
+		/* assume unsigned 16-bit data */
 		const double ftr = 1.0 / 256.0;
 		double v;
 		size_t ii;
 		for ( ii=0 ; ii < 3 ; ii++ ) {
 		    const float *img_buf_ptr_rgb = img_buf_ptr[ii];
 		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++, k+=4 ) {
-			/* assume unsigned 16-bit data */
 			v = img_buf_ptr_rgb[off1 + j] * ftr * ct[ii] + 0.5;
 			if ( 255.0 < v ) v = 255.0;
 			else if ( v < 0 ) v = 255.0;
@@ -149,40 +191,63 @@ static int display_image( int win_image, const mdarray &img_buf,
 	else {
 	    float *lv_p = NULL;
 	    mdarray_float lv(false, &lv_p);
-	    size_t ii;
-	    lv.resize(display_width * 3);
+	    lv.resize(display_width * n_img_buf_ch);
 	    lv = 0.0;
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
-		for ( ii=0 ; ii < 3 ; ii++ ) {
+		size_t ii;
+		for ( ii=0 ; ii < n_img_buf_ch ; ii++ ) {
 		    const float *img_buf_ptr_rgb = img_buf_ptr[ii];
 		    for ( j=0, k=ii ; j < img_buf.x_length() ; j++ ) {
 			lv_p[k] += img_buf_ptr_rgb[off1 + j];
-			if ( (j+1) % bin == 0 ) k += 3;
+			if ( (j+1) % bin == 0 ) k += n_img_buf_ch;
 		    }
 		}
 		if ( (i+1) % bin == 0 || (i+1) == img_buf.y_length() ) {
 		    const double ftr = 1.0 / (double)(256 * bin * bin);
 		    double v;
-		    for ( j=0, k=0, l=0 ; j < display_width ; j++ ) {
-			l++;
-			v = lv_p[k] * ftr * ct[0] + 0.5;
-			lv_p[k] = 0.0;
-			if ( 255.0 < v ) v = 255.0;
-			else if ( v < 0 ) v = 255.0;
-			tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			k++;  l++;
-			v = lv_p[k] * ftr * ct[1] + 0.5;
-			lv_p[k] = 0.0;
-			if ( 255.0 < v ) v = 255.0;
-			else if ( v < 0 ) v = 255.0;
-			tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			k++;  l++;
-			v = lv_p[k] * ftr * ct[2] + 0.5;
-			lv_p[k] = 0.0;
-			if ( 255.0 < v ) v = 255.0;
-			else if ( v < 0 ) v = 255.0;
-			tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			k++;  l++;
+		    if ( n_img_buf_ch == 3 ) {	/* RGB */
+			for ( j=0, k=0, l=0 ; j < display_width ; j++ ) {
+			    l++;
+			    v = lv_p[k] * ftr * ct[0] + 0.5;
+			    lv_p[k] = 0.0;
+			    if ( 255.0 < v ) v = 255.0;
+			    else if ( v < 0 ) v = 255.0;
+			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			    k++;  l++;
+			    v = lv_p[k] * ftr * ct[1] + 0.5;
+			    lv_p[k] = 0.0;
+			    if ( 255.0 < v ) v = 255.0;
+			    else if ( v < 0 ) v = 255.0;
+			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			    k++;  l++;
+			    v = lv_p[k] * ftr * ct[2] + 0.5;
+			    lv_p[k] = 0.0;
+			    if ( 255.0 < v ) v = 255.0;
+			    else if ( v < 0 ) v = 255.0;
+			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			    k++;  l++;
+			}
+		    }
+		    else {			/* MONO */
+			for ( j=0, k=0, l=0 ; j < display_width ; j++ ) {
+			    l++;
+			    v = lv_p[k] * ftr * ct[0] + 0.5;
+			    if ( 255.0 < v ) v = 255.0;
+			    else if ( v < 0 ) v = 255.0;
+			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			          l++;
+			    v = lv_p[k] * ftr * ct[1] + 0.5;
+			    if ( 255.0 < v ) v = 255.0;
+			    else if ( v < 0 ) v = 255.0;
+			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			          l++;
+			    v = lv_p[k] * ftr * ct[2] + 0.5;
+			    lv_p[k] = 0.0;
+			    if ( 255.0 < v ) v = 255.0;
+			    else if ( v < 0 ) v = 255.0;
+			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
+			    k++;  l++;
+			}
 		    }
 		    off4 += display_width * 4;
 		}

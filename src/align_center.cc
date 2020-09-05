@@ -10,13 +10,14 @@ using namespace sli;
 
 #include "read_tiff24or48.h"
 #include "write_tiff24or48.h"
+#include "write_float_to_tiff.h"
 #include "make_output_filename.cc"
 #include "icc_srgb_profile.c"
 
 /**
  * @file   align_center.cc
  * @brief  estimate center of object and output aligned image.
- *         8/16-bit images are supported.
+ *         8/16-bit integer and 32-bit float images are supported.
  */
 
 /* for qsort() arg */
@@ -35,23 +36,28 @@ static int do_align( const char *in_filename,
 		     const long crop_prms[], bool binning )
 {
     stdstreamio sio, f_in;
-    size_t i, j, k;
-    tstring filename_in, filename_out;
-    tarray_tstring sarr_buf;
-    size_t width = 0, height = 0;
+
     mdarray img_buf0(UCHAR_ZT,false);		/* 8/16-bit RGB image (in) */
     mdarray img_buf1(UCHAR_ZT,false);		/* 8/16-bit RGB image (out) */
     mdarray_float arr_stat(false);
     mdarray_uchar icc_buf(false);
+    tstring filename_in, filename_out;
+    tarray_tstring sarr_buf;
+    float camera_calibration1[12];			/* for TIFF tag */
+
+    size_t width = 0, height = 0;
     size_t obj_x_cen, obj_y_cen;
     size_t x_out, y_out, width_out, height_out;	/* actual crop area */
+    int tiff_szt;
+    size_t i, j, k;
     
     int ret_status = -1;
 
     filename_in = in_filename;
     
     /* read tiff-24or48-bit file and store its data to array */
-    if ( read_tiff24or48( filename_in.cstr(), &img_buf0, &icc_buf ) < 0 ) {
+    if ( read_tiff24or48( filename_in.cstr(), &img_buf0, &tiff_szt,
+			  &icc_buf, camera_calibration1 ) < 0 ) {
         sio.eprintf("[ERROR] read_tiff24or48() failed\n");
 	goto quit;
     }
@@ -175,7 +181,7 @@ static int do_align( const char *in_filename,
 	width1 = img_buf1.x_length() / 2;
 	height1 = img_buf1.y_length() / 2;
 
-	if ( img_buf1.size_type() == UCHAR_ZT ) {
+	if ( tiff_szt == 1 ) {
 	    /* get 3-d array ptr */
 	    unsigned char *const *const *img_arr1_ptr
 		= (unsigned char *const *const *)(img_buf1.data_ptr_3d(true));
@@ -195,7 +201,7 @@ static int do_align( const char *in_filename,
 		}
 	    }
 	}
-	else if ( img_buf1.size_type() == FLOAT_ZT ) {
+	else if ( tiff_szt == 2 ) {
 	    /* get 3-d array ptr */
 	    float *const *const *img_arr1_ptr
 		= (float *const *const *)(img_buf1.data_ptr_3d(true));
@@ -215,6 +221,24 @@ static int do_align( const char *in_filename,
 		}
 	    }
 	}
+	else if ( tiff_szt == -4 ) {
+	    /* get 3-d array ptr */
+	    float *const *const *img_arr1_ptr
+		= (float *const *const *)(img_buf1.data_ptr_3d(true));
+
+	    for ( i=0 ; i < height1 ; i++ ) {
+		size_t ii = i*2;
+		for ( j=0 ; j < width1 ; j++ ) {
+		    size_t jj = j*2;
+		    for ( k=0 ; k < 3 ; k++ ) {
+			double v = img_arr1_ptr[k][ii][jj] + img_arr1_ptr[k][ii][jj+1] + 
+			    img_arr1_ptr[k][ii+1][jj] + img_arr1_ptr[k][ii+1][jj+1];
+			v /= 4.0;
+			img_arr1_ptr[k][i][j] = (float)v;
+		    }
+		}
+	    }
+	}
 	else {
 	    sio.eprintf("[FATAL] unexpected error\n");
 	    goto quit;
@@ -226,26 +250,42 @@ static int do_align( const char *in_filename,
 
     /* write image data file */
     
-    if ( img_buf1.bytes() == 1 ) {
-	make_output_filename(filename_in.cstr(), "centered", "8bit",
-			     &filename_out);
-    }
-    else {
-	make_output_filename(filename_in.cstr(), "centered", "16bit",
-			     &filename_out);
-    }
-    
-    sio.printf("Writing %s ...\n", filename_out.cstr());
-
     if ( icc_buf.length() == 0 ) {
 	icc_buf.resize_1d(sizeof(Icc_srgb_profile));
 	icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
     }
     
-    if ( write_tiff24or48(img_buf1, icc_buf, filename_out.cstr()) < 0 ) {
-        sio.eprintf("[ERROR] write_tiff24or48() failed\n");
-	goto quit;
+    if ( tiff_szt == 1 ) {
+	make_output_filename(filename_in.cstr(), "centered", "8bit",
+			     &filename_out);
+	sio.printf("Writing %s ...\n", filename_out.cstr());
+	if ( write_tiff24or48(img_buf1, tiff_szt,
+		     icc_buf, camera_calibration1, filename_out.cstr()) < 0 ) {
+	    sio.eprintf("[ERROR] write_tiff24or48() failed\n");
+	    goto quit;
+	}
     }
+    else if ( tiff_szt == 2 ) {
+	make_output_filename(filename_in.cstr(), "centered", "16bit",
+			     &filename_out);
+	sio.printf("Writing %s ...\n", filename_out.cstr());
+	if ( write_tiff24or48(img_buf1, tiff_szt,
+		     icc_buf, camera_calibration1, filename_out.cstr()) < 0 ) {
+	    sio.eprintf("[ERROR] write_tiff24or48() failed\n");
+	    goto quit;
+	}
+    }
+    else {
+	make_output_filename(filename_in.cstr(), "centered", "float",
+			     &filename_out);
+	sio.printf("Writing %s ...\n", filename_out.cstr());
+	if ( write_float_to_tiff(img_buf1, icc_buf, camera_calibration1,
+				 1.0, filename_out.cstr()) < 0 ) {
+	    sio.eprintf("[ERROR] write_float_to_tiff() failed\n");
+	    goto quit;
+	}
+    }
+    
 
     ret_status = 0;
  quit:
@@ -410,3 +450,4 @@ int main( int argc, char *argv[] )
 
 #include "read_tiff24or48.cc"
 #include "write_tiff24or48.cc"
+#include "write_float_to_tiff.cc"

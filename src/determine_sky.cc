@@ -119,7 +119,7 @@ int main( int argc, char *argv[] )
 
     if ( read_tiff24or48_to_float( filename.cstr(), 65536.0,
 				   &image_buf, &sztype, &icc_buf, NULL ) < 0 ) {
-	sio.eprintf("[ERROR] read_tiff24or48() failed\n");
+	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	goto quit;
     }
     if ( sztype == 1 ) {

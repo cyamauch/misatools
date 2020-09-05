@@ -8,6 +8,7 @@ using namespace sli;
 
 #include "read_tiff24or48.h"
 #include "write_tiff24or48.h"
+#include "write_float_to_tiff.h"
 #include "icc_srgb_profile.c"
 
 /* Maximum byte length of 3-d image buffer to calculate sky values */
@@ -129,24 +130,21 @@ int main( int argc, char *argv[] )
     mdarray img_stat_buf_result(UCHAR_ZT,false);
     tarray_tstring filenames_in;
     const char *filename_in;
-    tstring filename_out;
+    tstring filename_out = "";
     const char *rgb_str[] = {"R","G","B"};
     
     size_t i, j, k, k_step, width, height;
-    int sz_type;
+    int sz_type, tiff_szt;
     uint64_t nbytes_img_stat_full;
     
     int return_status = -1;
 
-    filename_out = "sky.tiff";
-    
     if ( argc < 2 ) {
         sio.eprintf("Create master sky frame\n");
         sio.eprintf("\n");
         sio.eprintf("[USAGE]\n");
 	sio.eprintf("$ %s [-o output] sky_1.tiff sky_2.tiff ...\n",argv[0]);
-	sio.eprintf("NOTE: Default filename of output is '%s'.\n",
-		    filename_out.cstr());
+	sio.eprintf("NOTE: Default filename of output is 'sky.[8bit|16bit|float].tiff'.\n");
 	goto quit;
     }
 
@@ -159,7 +157,8 @@ int main( int argc, char *argv[] )
     }
     
     filename_in = filenames_in[0].cstr();
-    if ( read_tiff24or48(filename_in, &img_load_buf, &icc_buf) < 0 ) {
+    if ( read_tiff24or48(filename_in, &img_load_buf, &tiff_szt,
+			 &icc_buf, NULL) < 0 ) {
 	sio.eprintf("[ERROR] read_tiff24or48() failed\n");
 	goto quit;
     }
@@ -167,8 +166,9 @@ int main( int argc, char *argv[] )
     height = img_load_buf.y_length();
     sz_type = img_load_buf.size_type();
     //sio.printf("sz_type = %d\n",(int)sz_type);
-    if ( sz_type == UCHAR_ZT ) sio.printf("Found an 8-bit RGB image\n");
-    else sio.printf("Found a 16-bit RGB image\n");
+    if ( tiff_szt == 1 ) sio.printf("Found an 8-bit RGB image\n");
+    else if ( tiff_szt == 2 ) sio.printf("Found an 16-bit RGB image\n");
+    else sio.printf("Found a 32-bit float RGB image\n");
     
     result_buf.init(sz_type, false);
     result_buf.resize_3d(width, height, 3);
@@ -199,13 +199,15 @@ int main( int argc, char *argv[] )
 	for ( k=0 ; k < height ; k+=k_step ) {			/* block[y] */
 	    sio.printf(" y of section = %zd\n",k);
 	    for ( i=0 ; i < filenames_in.length() ; i++ ) {	/* files */
+		int tiff_szt0;
 		filename_in = filenames_in[i].cstr();
 		sio.printf("  Reading %s\n",filename_in);
-		if ( read_tiff24or48(filename_in, &img_load_buf, NULL) < 0 ) {
+		if ( read_tiff24or48(filename_in, &img_load_buf, &tiff_szt0,
+				     NULL, NULL) < 0 ) {
 		    sio.eprintf("[ERROR] read_tiff24or48() failed\n");
 		    goto quit;
 		}
-		if ( img_load_buf.size_type() != sz_type ) {
+		if ( tiff_szt0 != tiff_szt ) {
 		    sio.eprintf("[ERROR] invalid type of image: %s\n",
 				filename_in);
 		    goto quit;
@@ -226,18 +228,33 @@ int main( int argc, char *argv[] )
     img_load_buf.init(sz_type, false);
     img_stat_buf.init(sz_type, false);
 
-    sio.printf("Writing %s ...\n", filename_out.cstr());
-
     if ( icc_buf.length() == 0 ) {
 	icc_buf.resize_1d(sizeof(Icc_srgb_profile));
 	icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
     }
-
-    if ( write_tiff24or48(result_buf, icc_buf, filename_out.cstr()) < 0 ) {
-        sio.eprintf("[ERROR] write_tiff24or48() failed\n");
-	goto quit;
+    
+    if ( filename_out.length() == 0 ) {
+	if ( tiff_szt == 1 ) filename_out="sky.8bit.tiff";
+	else if ( tiff_szt == 2 ) filename_out="sky.16bit.tiff";
+	else filename_out="sky.float.tiff";
     }
+    
+    sio.printf("Writing %s ...\n", filename_out.cstr());
 
+    if ( tiff_szt < 0 ) {
+	if ( write_float_to_tiff(result_buf, icc_buf, NULL,
+				 1.0, filename_out.cstr()) < 0 ) {
+	    sio.eprintf("[ERROR] write_float_to_tiff() failed\n");
+	    goto quit;
+	}
+    }
+    else {
+	if ( write_tiff24or48(result_buf, tiff_szt, icc_buf, NULL,
+			      filename_out.cstr()) < 0 ) {
+	    sio.eprintf("[ERROR] write_tiff24or48() failed\n");
+	    goto quit;
+	}
+    }
   
     return_status = 0;
  quit:
@@ -246,3 +263,4 @@ int main( int argc, char *argv[] )
 
 #include "read_tiff24or48.cc"
 #include "write_tiff24or48.cc"
+#include "write_float_to_tiff.cc"

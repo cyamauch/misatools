@@ -1,7 +1,7 @@
 #include <tiffio.h>
 
 /* write tiff of 32-bit float data */
-static int write_float_to_tiff( const mdarray_float &img_buf_in,
+static int write_float_to_tiff( const mdarray &img_buf_in,
 				const mdarray_uchar &icc_buf_in,
 				const float camera_calibration1[],
 				double scale,
@@ -16,6 +16,11 @@ static int write_float_to_tiff( const mdarray_float &img_buf_in,
     size_t i;
     
     int ret_status = -1;
+
+    if ( img_buf_in.size_type() != FLOAT_ZT ) {
+	sio.eprintf("[ERROR] write_float_to_tiff() only support FLOAT_ZT\n");
+	goto quit;
+    }
     
     if ( filename_out == NULL ) return 0;
 
