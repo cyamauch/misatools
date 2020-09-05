@@ -17,7 +17,7 @@ int main( int argc, char *argv[] )
     mdarray_float img_flat_b_buf(false);
     mdarray_uchar icc_buf(false);
     const char *filename_in;
-    const char *filename_out = "flat.tiff";
+    const char *filename_out = "flat.16bit.tiff";
     const char *filename_out_float = "flat.float.tiff";
     int bytes_r=0, bytes_g=0, bytes_b=0;
 
@@ -29,7 +29,8 @@ int main( int argc, char *argv[] )
         sio.eprintf("[USAGE]\n");
 	sio.eprintf("$ %s flat_r.tiff flat_g.tiff flat_b.tiff\n",
 		    argv[0]);
-	sio.eprintf("NOTE: name of output file is %s\n", filename_out);
+	sio.eprintf("NOTE: name of output file is %s or %s\n",
+		    filename_out_float, filename_out);
 	goto quit;
     }
     

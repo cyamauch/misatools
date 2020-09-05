@@ -16,16 +16,18 @@ const double Contrast_scale = 2.0;
 
 #include "read_tiff24or48_to_float.h"
 #include "write_float_to_tiff48.h"
+#include "write_float_to_tiff.h"
 #include "display_image.cc"
 #include "load_display_params.cc"
 #include "save_display_params.cc"
+#include "get_bin_factor_for_display.c"
 #include "make_output_filename.cc"
 #include "icc_srgb_profile.c"
 
 /**
  * @file   pseudo_images.cc
  * @brief  interactive tool to create pseudo sky image
- *         8/16-bit images are supported.
+ *         8/16-bit integer and 32-bit float images are supported.
  */
 
 const int Font_y_off = 3;
@@ -771,8 +773,6 @@ int main( int argc, char *argv[] )
     
     int return_status = -1;
 
-    load_display_params("display_0.txt", contrast_rgb);
-
     if ( argc < 2 ) {
         sio.eprintf("Interactive tool to create pseudo sky image\n");
 	sio.eprintf("\n");
@@ -781,6 +781,7 @@ int main( int argc, char *argv[] )
     }
     target_filename = argv[1];
     
+
     /*
      * GRAPHICS
      */
@@ -825,12 +826,22 @@ int main( int argc, char *argv[] )
         sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	goto quit;
     }
-    
+
     if ( icc_buf.length() == 0 ) {
 	icc_buf.resize_1d(sizeof(Icc_srgb_profile));
 	icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
     }
 
+    display_bin = get_bin_factor_for_display(target_img_buf.x_length(),
+					     target_img_buf.y_length());
+    if ( display_bin < 0 ) {
+        sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
+		    "bad display depth\n");
+	goto quit;
+    }
+
+    load_display_params("display_0.txt", contrast_rgb);
+    
     /* set size of box on sky point */
     Skypoint_box_size =
 	(target_img_buf.x_length() + target_img_buf.y_length()) / 170;
@@ -885,7 +896,6 @@ int main( int argc, char *argv[] )
 	}
     }
     
-
     sort_sky_point_list(&sky_point_list);
     
     /*
@@ -1031,14 +1041,22 @@ int main( int argc, char *argv[] )
 	}
 	else if ( cmd_id == CMD_SAVE_SKY ) {
 	    tstring out_filename;
+	    /* save using float */
+	    make_output_filename(target_filename.cstr(), "pseudo-sky",
+			 "float", &out_filename);
+	    sio.printf("Writing '%s' ...\n", out_filename.cstr());
+	    if ( write_float_to_tiff(sky_img_buf, icc_buf, NULL,
+				     65536.0, out_filename.cstr()) < 0 ) {
+		sio.eprintf("[ERROR] write_float_to_tiff() failed.\n");
+	    }
+	    /* save using 16-bit */
 	    make_output_filename(target_filename.cstr(), "pseudo-sky",
 			 "16bit", &out_filename);
 	    sio.printf("Writing '%s' ", out_filename.cstr());
 	    if ( flag_dither == true ) sio.printf("using dither ...\n");
 	    else sio.printf("NOT using dither ...\n");
-	    /* */
-	    if ( write_float_to_tiff48(sky_img_buf, 0.0, 65535.0,
-		       flag_dither, icc_buf, NULL, out_filename.cstr()) < 0 ) {
+	    if ( write_float_to_tiff48(sky_img_buf, icc_buf, NULL,
+		        0.0, 65535.0, flag_dither, out_filename.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff48() failed.\n");
 	    }
 	}
@@ -1049,6 +1067,23 @@ int main( int argc, char *argv[] )
 	    result_img_buf.resize(target_img_buf);
 	    result_img_buf.paste(target_img_buf);
 	    result_img_buf.subtract(sky_img_buf);
+	    /* save using float */
+	    make_output_filename(target_filename.cstr(),
+				 "pseudo-sky_subtracted",
+				 "float", &out_filename);
+	    sio.printf("Writing '%s' ...\n", out_filename.cstr());
+	    if ( write_float_to_tiff(result_img_buf, icc_buf, NULL,
+				     65536, out_filename.cstr()) < 0 ) {
+		sio.eprintf("[ERROR] write_float_to_tiff() failed.\n");
+	    }
+	    /* save using 16-bit */
+	    make_output_filename(target_filename.cstr(),
+				 "pseudo-sky_subtracted",
+				 "16bit", &out_filename);
+	    sio.printf("Writing '%s' ", out_filename.cstr());
+	    if ( flag_dither == true ) sio.printf("using dither ...\n");
+	    else sio.printf("NOT using dither ...\n");
+	    /* */
 	    min_v = md_min(result_img_buf);
 	    if ( min_v < 0.0 ){
 		result_img_buf -= min_v;
@@ -1057,15 +1092,9 @@ int main( int argc, char *argv[] )
 	    }
 	    /* */
 	    sio.printf("[INFO] scale will be changed\n");
-	    make_output_filename(target_filename.cstr(),
-				 "pseudo-sky_subtracted",
-				 "16bit", &out_filename);
-	    sio.printf("Writing '%s' ", out_filename.cstr());
-	    if ( flag_dither == true ) sio.printf("using dither ...\n");
-	    else sio.printf("NOT using dither ...\n");
 	    /* */
-	    if ( write_float_to_tiff48(result_img_buf, 0.0, 0.0,
-		       flag_dither, icc_buf, NULL, out_filename.cstr()) < 0 ) {
+	    if ( write_float_to_tiff48(result_img_buf, icc_buf, NULL,
+			    0.0, 0.0, flag_dither, out_filename.cstr()) < 0 ) {
 		sio.eprintf("[ERROR] write_float_to_tiff48() failed.\n");
 	    }
 	}
@@ -1468,3 +1497,4 @@ int main( int argc, char *argv[] )
 
 #include "read_tiff24or48_to_float.cc"
 #include "write_float_to_tiff48.cc"
+#include "write_float_to_tiff.cc"

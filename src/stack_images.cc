@@ -16,6 +16,7 @@ const double Contrast_scale = 2.0;
 #include "read_tiff24or48_to_float.h"
 #include "write_float_to_tiff48.h"
 #include "write_float_to_tiff.h"
+#include "get_bin_factor_for_display.c"
 #include "display_image.cc"
 #include "load_display_params.cc"
 #include "save_display_params.cc"
@@ -26,8 +27,8 @@ const double Contrast_scale = 2.0;
 
 /**
  * @file   stack_images.cc
- * @brief  interactive xy matching and stacking tool
- *         8/16-bit images are supported.
+ * @brief  interactive xy matching and stacking tool.
+ *         8/16-bit integer and 32-bit float images are supported.
  */
 
 const char *Refframe_conffile = "refframe.txt";
@@ -468,8 +469,8 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     if ( flag_dither == true ) sio.printf("using dither ...\n");
     else sio.printf("NOT using dither ...\n");
     sio.printf("[INFO] scale will be changed\n");
-    if ( write_float_to_tiff48(*stacked_buf_result_ptr, 0.0, 0.0, flag_dither, 
-			       icc_buf, NULL, out_filename.cstr()) < 0 ) {
+    if ( write_float_to_tiff48(*stacked_buf_result_ptr, icc_buf, NULL,
+			    0.0, 0.0, flag_dither, out_filename.cstr()) < 0 ) {
 	sio.eprintf("[ERROR] write_float_to_tiff48() failed.\n");
 	goto quit;
     }
@@ -718,6 +719,14 @@ int main( int argc, char *argv[] )
 	goto quit;
     }
 
+    display_bin = get_bin_factor_for_display(ref_img_buf.x_length(),
+					     ref_img_buf.y_length());
+    if ( display_bin < 0 ) {
+        sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
+		    "bad display depth\n");
+	goto quit;
+    }
+    
     /* display reference image */
     display_image(win_image, ref_img_buf,
 		  display_bin, display_ch, contrast_rgb, &tmp_buf);

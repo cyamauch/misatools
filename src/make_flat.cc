@@ -55,9 +55,9 @@ int main( int argc, char *argv[] )
 	sio.eprintf("$ %s [-b r,g or b] flat_1.tiff flat_2.tiff ...\n",
 		    argv[0]);
 	sio.eprintf("\n");
-	sio.eprintf("-i ... output integer tiff (default: float tiff)\n");
+	sio.eprintf("-16 ... output 16-bit integer tiff (default: 32-bit float tiff)\n");
 	sio.eprintf("-b r,g or b ... If set, create single band (channel) flat\n");
-	sio.eprintf("-t ... If set, output truncated real without dither\n");
+	sio.eprintf("-t ... If set, dither is not used to output 8/16-bit images\n");
 	/*
 	sio.eprintf("-x param\n");
 	sio.eprintf("   param=1.0: normal flat\n");
@@ -87,7 +87,7 @@ int main( int argc, char *argv[] )
 	    }
 	    arg_cnt ++;
 	}
-	else if ( argstr == "-i" ) {
+	else if ( argstr == "-16" ) {
 	    flag_float_tiff = false;
 	    arg_cnt ++;
 	}

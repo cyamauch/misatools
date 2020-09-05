@@ -11,6 +11,12 @@ using namespace sli;
 #include "make_output_filename.cc"
 #include "icc_srgb_profile.c"
 
+/**
+ * @file   proc_images.cc
+ * @brief  a command-line tool for object frame with dark, flat and sky proc.
+ *         8/16-bit integer and 32-bit float images are supported.
+ */
+
 int main( int argc, char *argv[] )
 {
     stdstreamio sio, f_in;
@@ -54,7 +60,7 @@ int main( int argc, char *argv[] )
 	sio.eprintf("\n");
 	sio.eprintf("-8 ... If set, output 8-bit processed images for 8-bit original images\n");
 	sio.eprintf("-16 .. If set, output 16-bit processed images\n");
-	sio.eprintf("-t ... If set, output truncated real without dither\n");
+	sio.eprintf("-t ... If set, not using dither to output 8/16-bit images\n");
 	sio.eprintf("-r ... If set, output raw RGB without applying daylight multipliers\n");
 	sio.eprintf("-s param ... Set softbias value. Default is 0.0\n");
 	sio.eprintf("-d param ... Set dark factor to param. Default is 1.0.\n");
