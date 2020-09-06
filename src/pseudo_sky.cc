@@ -1073,7 +1073,7 @@ int main( int argc, char *argv[] )
 	    result_img_buf.subtract(sky_img_buf);
 	    /* save using float */
 	    make_output_filename(target_filename.cstr(),
-				 "pseudo-sky_subtracted",
+				 "pseudo-sky-subtracted",
 				 "float", &out_filename);
 	    sio.printf("Writing '%s' ...\n", out_filename.cstr());
 	    if ( write_float_to_tiff(result_img_buf, icc_buf, NULL,
@@ -1082,7 +1082,7 @@ int main( int argc, char *argv[] )
 	    }
 	    /* save using 16-bit */
 	    make_output_filename(target_filename.cstr(),
-				 "pseudo-sky_subtracted",
+				 "pseudo-sky-subtracted",
 				 "16bit", &out_filename);
 	    sio.printf("Writing '%s' ", out_filename.cstr());
 	    if ( flag_dither == true ) sio.printf("using dither ...\n");
