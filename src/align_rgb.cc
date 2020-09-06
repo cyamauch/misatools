@@ -15,6 +15,7 @@ const double Contrast_scale = 4.0;
 
 #include "read_tiff24or48_separate_buffer.h"
 #include "write_float_to_tiff24or48.h"
+#include "write_float_to_tiff.h"
 #include "get_bin_factor_for_display.c"
 #include "display_image.cc"
 #include "load_display_params.cc"
@@ -25,7 +26,7 @@ const double Contrast_scale = 4.0;
 /**
  * @file   align_rgb.cc
  * @brief  interactive rgb matching tool
- *         8/16-bit images are supported.
+ *         8/16-bit integer and 32-bit float images are supported.
  */
 
 const int Font_y_off = 3;
@@ -33,10 +34,24 @@ const int Font_margin = 2;
 static int Fontsize = 14;
 #include "set_fontsize.c"
 
+static int get_result_rgb_image( 
+    long off_r_x, long off_r_y, long off_b_x, long off_b_y,
+    const mdarray &in_img_r, const mdarray &in_img_g, const mdarray &in_img_b,
+    mdarray_float *image_rgb_buf )
+{
+    if ( image_rgb_buf != NULL ) {	/* RGB */
+	image_rgb_buf->paste(in_img_r, off_r_x, off_r_y, 0);
+	image_rgb_buf->paste(in_img_g, 0, 0,             1);
+	image_rgb_buf->paste(in_img_b, off_b_x, off_b_y, 2);
+    }
+    return 0;
+}
+
 static int update_image_buffer( int display_type,
      long display_gain_r, long display_gain_b,
      long off_r_x, long off_r_y, long off_b_x, long off_b_y,
      const mdarray &in_img_r, const mdarray &in_img_g, const mdarray &in_img_b,
+     int tiff_szt,
      mdarray_float *image_rgb_buf,
      mdarray_float *image_gr_buf,
      mdarray_float *image_gb_buf )
@@ -44,10 +59,10 @@ static int update_image_buffer( int display_type,
     int ret_status = -1;
 
     if ( image_rgb_buf != NULL ) {	/* RGB */
-	image_rgb_buf->paste(in_img_r, off_r_x, off_r_y, 0);
-	image_rgb_buf->paste(in_img_g, 0, 0,             1);
-	image_rgb_buf->paste(in_img_b, off_b_x, off_b_y, 2);
-	if ( in_img_r.size_type() == UCHAR_ZT ) (*image_rgb_buf) *= 256.0;
+	get_result_rgb_image(off_r_x, off_r_y, off_b_x, off_b_y,
+			     in_img_r, in_img_g, in_img_b, image_rgb_buf);
+	if ( tiff_szt == 1 ) (*image_rgb_buf) *= 256.0;		/* 8-bit */
+	else if ( tiff_szt == -4 ) (*image_rgb_buf) *= 65536.0;	/* float */
     }
     if ( image_gr_buf != NULL ) {	/* G - R */
 	if ( display_type == 0 ) {
@@ -65,7 +80,8 @@ static int update_image_buffer( int display_type,
 	    if ( display_type == 4 ) (*image_gr_buf) *= 4.0;
 	    if ( display_type == 5 ) (*image_gr_buf) *= 8.0;
 	}
-	if ( in_img_r.size_type() == UCHAR_ZT ) (*image_gr_buf) *= 256.0;
+	if ( tiff_szt == 1 ) (*image_gr_buf) *= 256.0;		/* 8-bit */
+	else if ( tiff_szt == -4 ) (*image_gr_buf) *= 65536.0;	/* float */
     }
     if ( image_gb_buf != NULL ) {	/* G - B */
 	if ( display_type == 0 ) {
@@ -83,7 +99,8 @@ static int update_image_buffer( int display_type,
 	    if ( display_type == 4 ) (*image_gb_buf) *= 4.0;
 	    if ( display_type == 5 ) (*image_gb_buf) *= 8.0;
 	}
-	if ( in_img_r.size_type() == UCHAR_ZT ) (*image_gb_buf) *= 256.0;
+	if ( tiff_szt == 1 ) (*image_gb_buf) *= 256.0;		/* 8-bit */
+	else if ( tiff_szt == -4 ) (*image_gb_buf) *= 65536.0;	/* float */
     }
 
     ret_status = 0;
@@ -155,7 +172,8 @@ int main( int argc, char *argv[] )
     mdarray_uchar icc_buf(false);
     mdarray_uchar tmp_buf(false);	/* tmp buffer for displaying */
     size_t width = 0, height = 0;
-
+    int tiff_szt = 0;
+    
     int win_rgb, win_gr, win_gb, win_command;
     int win_command_col_height;
 
@@ -196,16 +214,13 @@ int main( int argc, char *argv[] )
 
     if ( read_tiff24or48_separate_buffer( filename.cstr(),
 			  &in_image_r_buf, &in_image_g_buf, &in_image_b_buf,
-			  &icc_buf ) < 0 ) {
+			  &tiff_szt, &icc_buf, NULL ) < 0 ) {
 	sio.eprintf("[ERROR] read_tiff24or48_separate_buffer() failed\n");
 	goto quit;
     }
-    if ( in_image_r_buf.size_type() == UCHAR_ZT ) {
-	sio.printf("found 8-bit RGB image.\n");
-    }
-    else if ( in_image_r_buf.size_type() == FLOAT_ZT ) {
-	sio.printf("found 16-bit RGB image.\n");
-    }
+    if ( tiff_szt == 1 ) sio.printf("found 8-bit RGB image.\n");
+    else if ( tiff_szt == 2 ) sio.printf("found 16-bit RGB image.\n");
+    else if ( tiff_szt == -4 ) sio.printf("found 32-bit float RGB image.\n");
     else {
 	sio.eprintf("[ERROR] unexpected image type\n");
 	goto quit;
@@ -218,13 +233,12 @@ int main( int argc, char *argv[] )
     image_gb_buf.resize_2d(width,height);
 
     
-    display_bin = get_bin_factor_for_display(width, height);
+    display_bin = get_bin_factor_for_display(width * 2, height * 2);
     if ( display_bin < 0 ) {
         sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
 		    "bad display depth\n");
 	goto quit;
     }
-    display_bin *= 2;
 
     /*
      * GRAPHICS
@@ -275,10 +289,10 @@ int main( int argc, char *argv[] )
 
     /* refresh windows */
     update_image_buffer( display_type,
-			 display_gain_r, display_gain_b,
-			 offset_r_x, offset_r_y, offset_b_x, offset_b_y,
-			 in_image_r_buf, in_image_g_buf, in_image_b_buf,
-			 &image_rgb_buf, &image_gr_buf, &image_gb_buf );
+		      display_gain_r, display_gain_b,
+		      offset_r_x, offset_r_y, offset_b_x, offset_b_y,
+		      in_image_r_buf, in_image_g_buf, in_image_b_buf, tiff_szt,
+		      &image_rgb_buf, &image_gr_buf, &image_gb_buf );
 
     display_image( win_rgb, image_rgb_buf, display_bin, 0,
 		   contrast_rgb, true, &tmp_buf );
@@ -387,20 +401,17 @@ int main( int argc, char *argv[] )
 	else if ( cmd_id == CMD_SAVE ) {
 	    tstring out_filename;
 	    image_rgb_buf.clean();
-	    update_image_buffer( display_type,
-				 display_gain_r, display_gain_b,
-				 offset_r_x, offset_r_y, offset_b_x, offset_b_y,
-				 in_image_r_buf, in_image_g_buf, in_image_b_buf,
-				 &image_rgb_buf, NULL, NULL );
+	    get_result_rgb_image( offset_r_x,offset_r_y, offset_b_x,offset_b_y,
+				in_image_r_buf, in_image_g_buf, in_image_b_buf,
+				&image_rgb_buf);
 	    if ( icc_buf.length() == 0 ) {
 		icc_buf.resize_1d(sizeof(Icc_srgb_profile));
 		icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
 	    }
-	    if ( in_image_r_buf.size_type() == UCHAR_ZT ) {
-		make_output_filename(filename.cstr(), "aligned_rgb", "8bit",
+	    if ( tiff_szt == 1 ) {	/* 8-bit */
+		make_output_filename(filename.cstr(), "aligned-rgb", "8bit",
 				     &out_filename);
 		sio.printf("Saved [%s]\n", out_filename.cstr());
-		image_rgb_buf /= 256.0;
 		if ( write_float_to_tiff24or48(image_rgb_buf, icc_buf, NULL, 
 				0.0, 255.0, false, out_filename.cstr()) < 0 ) {
 		    sio.eprintf("[ERROR] write_float_to_tiff24or48() failed.\n");
@@ -408,13 +419,23 @@ int main( int argc, char *argv[] )
 		}
 		refresh_image = 2;
 	    }
-	    else {
-		make_output_filename(filename.cstr(), "aligned_rgb", "16bit",
+	    else if ( tiff_szt == 2 ) {
+		make_output_filename(filename.cstr(), "aligned-rgb", "16bit",
 				     &out_filename);
 		sio.printf("Saved [%s]\n", out_filename.cstr());
 		if ( write_float_to_tiff24or48(image_rgb_buf, icc_buf, NULL, 
 			      0.0, 65535.0, false, out_filename.cstr()) < 0 ) {
 		    sio.eprintf("[ERROR] write_float_to_tiff24or48() failed.\n");
+		    goto quit;
+		}
+	    }
+	    else if ( tiff_szt == -4 ) {
+		make_output_filename(filename.cstr(), "aligned-rgb", "float",
+				     &out_filename);
+		sio.printf("Saved [%s]\n", out_filename.cstr());
+		if ( write_float_to_tiff(image_rgb_buf, icc_buf, NULL, 
+					 1.0, out_filename.cstr()) < 0 ) {
+		    sio.eprintf("[ERROR] write_float_to_tiff() failed.\n");
 		    goto quit;
 		}
 	    }
@@ -561,10 +582,11 @@ int main( int argc, char *argv[] )
 	if ( refresh_image != 0 ) {
 	    if ( 1 < refresh_image ) {
 		update_image_buffer( display_type,
-				 display_gain_r, display_gain_b,
-				 offset_r_x, offset_r_y, offset_b_x, offset_b_y,
-				 in_image_r_buf, in_image_g_buf, in_image_b_buf,
-				 &image_rgb_buf, &image_gr_buf, &image_gb_buf );
+				display_gain_r, display_gain_b,
+				offset_r_x, offset_r_y, offset_b_x, offset_b_y,
+				in_image_r_buf, in_image_g_buf, in_image_b_buf,
+				tiff_szt,
+				&image_rgb_buf, &image_gr_buf, &image_gb_buf );
 	    }
 	    display_image( win_rgb, image_rgb_buf, display_bin, 0,
 			   contrast_rgb, refresh_winsize, &tmp_buf );
@@ -579,10 +601,10 @@ int main( int argc, char *argv[] )
 	    const char *im_str = "Residual";
 	    if ( 1 < refresh_gr ) {
 		update_image_buffer( display_type,
-				 display_gain_r, display_gain_b,
-				 offset_r_x, offset_r_y, offset_b_x, offset_b_y,
-				 in_image_r_buf, in_image_g_buf, in_image_b_buf,
-				 NULL, &image_gr_buf, NULL );
+				display_gain_r, display_gain_b,
+				offset_r_x, offset_r_y, offset_b_x, offset_b_y,
+				in_image_r_buf, in_image_g_buf, in_image_b_buf,
+				tiff_szt, NULL, &image_gr_buf, NULL );
 	    }
 	    if ( display_type == 0 ) {
 		display_image(win_gr, image_gr_buf, display_bin, 1,
@@ -605,7 +627,7 @@ int main( int argc, char *argv[] )
 				 display_gain_r, display_gain_b,
 				 offset_r_x, offset_r_y, offset_b_x, offset_b_y,
 				 in_image_r_buf, in_image_g_buf, in_image_b_buf,
-				 NULL, NULL, &image_gb_buf );
+				 tiff_szt, NULL, NULL, &image_gb_buf );
 	    }
 	    if ( display_type == 0 ) {
 		display_image(win_gb, image_gb_buf, display_bin, 3,
@@ -633,3 +655,4 @@ int main( int argc, char *argv[] )
 
 #include "read_tiff24or48_separate_buffer.cc"
 #include "write_float_to_tiff24or48.cc"
+#include "write_float_to_tiff.cc"
