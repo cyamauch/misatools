@@ -1,3 +1,11 @@
+#include "test_simd.h"
+
+#if defined(_SSE3_IS_OK)
+#include <xmmintrin.h>
+#include <pmmintrin.h>
+#endif
+
+
 static int display_image( int win_image, const mdarray &img_buf,
 			  int binning,		/* 1: original scale 2:1/2 */ 
 			  int display_ch,	/* 0:RGB 1:R 2:G 3:B */
@@ -91,61 +99,65 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    float *lv_p = NULL;
 	    mdarray_float lv(false, &lv_p);
 	    lv.resize(display_width * n_img_buf_ch);
-	    lv = 0.0;
+	    lv.clean();
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
 		size_t ii;
 		for ( ii=0 ; ii < n_img_buf_ch ; ii++ ) {
 		    const unsigned char *img_buf_ptr_rgb = img_buf_ptr[ii];
-		    for ( j=0, k=ii ; j < img_buf.x_length() ; j++ ) {
+		    k = ii * display_width;	/* offset */
+		    for ( j=0 ; j < img_buf.x_length() ; j++ ) {
 			lv_p[k] += img_buf_ptr_rgb[off1 + j];
-			if ( (j+1) % bin == 0 ) k += n_img_buf_ch;
+			if ( (j+1) % bin == 0 ) k++;
 		    }
 		}
 		if ( (i+1) % bin == 0 || (i+1) == img_buf.y_length() ) {
 		    const double ftr = 1.0 / (double)(bin * bin);
 		    double v;
 		    if ( n_img_buf_ch == 3 ) {	/* RGB */
-			for ( j=0, k=0, l=0 ; j < display_width ; j++ ) {
-			    l++;
-			    v = lv_p[k] * ftr * ct[0] + 0.5;
-			    lv_p[k] = 0.0;
+			float *lv_p_r = lv_p + 0;
+			float *lv_p_g = lv_p + display_width;
+			float *lv_p_b = lv_p + 2 * display_width;
+			for ( j=0, l=0 ; j < display_width ; j++ ) {
+			          l++;
+			    v = lv_p_r[j] * ftr * ct[0] + 0.5;
+			    lv_p_r[j] = 0.0;
 			    if ( 255.0 < v ) v = 255.0;
 			    else if ( v < 0 ) v = 255.0;
 			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			    k++;  l++;
-			    v = lv_p[k] * ftr * ct[1] + 0.5;
-			    lv_p[k] = 0.0;
+			          l++;
+			    v = lv_p_g[j] * ftr * ct[1] + 0.5;
+			    lv_p_g[j] = 0.0;
 			    if ( 255.0 < v ) v = 255.0;
 			    else if ( v < 0 ) v = 255.0;
 			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			    k++;  l++;
-			    v = lv_p[k] * ftr * ct[2] + 0.5;
-			    lv_p[k] = 0.0;
+			          l++;
+			    v = lv_p_b[j] * ftr * ct[2] + 0.5;
+			    lv_p_b[j] = 0.0;
 			    if ( 255.0 < v ) v = 255.0;
 			    else if ( v < 0 ) v = 255.0;
 			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			    k++;  l++;
+			          l++;
 			}
 		    }
 		    else {			/* MONO */
-			for ( j=0, k=0, l=0 ; j < display_width ; j++ ) {
-			    l++;
-			    v = lv_p[k] * ftr * ct[0] + 0.5;
+			for ( j=0, l=0 ; j < display_width ; j++ ) {
+			          l++;
+			    v = lv_p[j] * ftr * ct[0] + 0.5;
 			    if ( 255.0 < v ) v = 255.0;
 			    else if ( v < 0 ) v = 255.0;
 			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
 			          l++;
-			    v = lv_p[k] * ftr * ct[1] + 0.5;
+			    v = lv_p[j] * ftr * ct[1] + 0.5;
 			    if ( 255.0 < v ) v = 255.0;
 			    else if ( v < 0 ) v = 255.0;
 			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
 			          l++;
-			    v = lv_p[k] * ftr * ct[2] + 0.5;
-			    lv_p[k] = 0.0;
+			    v = lv_p[j] * ftr * ct[2] + 0.5;
+			    lv_p[j] = 0.0;
 			    if ( 255.0 < v ) v = 255.0;
 			    else if ( v < 0 ) v = 255.0;
 			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			    k++;  l++;
+			          l++;
 			}
 		    }
 		    off4 += display_width * 4;
@@ -169,11 +181,38 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    img_buf_ptr[2] = (const float *)img_buf.data_ptr();
 	}
 	if ( bin < 2 ) {
+	    float *lv_p = NULL;
+	    mdarray_float lv(false, &lv_p);
+	    lv.resize(img_buf.x_length() * n_img_buf_ch);
+	    lv.clean();
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
 		/* assume unsigned 16-bit data */
 		const double ftr = 1.0 / 256.0;
 		double v;
 		size_t ii;
+#if 1
+		for ( ii=0 ; ii < n_img_buf_ch ; ii++ ) {
+		    /* use internal SIMD */
+		    lv.put_elements(img_buf_ptr[ii] + off1,	/* src */
+				    img_buf.x_length(),		/* len_src */
+				    ii * img_buf.x_length());	/* to... */
+		}
+		for ( ii=0 ; ii < 3 ; ii++ ) {
+		    float *p;
+		    if ( n_img_buf_ch == 3 ) {	/* RGB */
+			p = lv_p + ii * img_buf.x_length();
+		    }
+		    else {			/* MONO */
+			p = lv_p;
+		    }
+		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++, k+=4 ) {
+			v = p[j] * ftr * ct[ii] + 0.5;
+			if ( 255.0 < v ) v = 255.0;
+			else if ( v < 0 ) v = 255.0;
+			tmp_buf_ptr[off4 + k] = (unsigned char)v;
+		    }
+		}
+#else
 		for ( ii=0 ; ii < 3 ; ii++ ) {
 		    const float *img_buf_ptr_rgb = img_buf_ptr[ii];
 		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++, k+=4 ) {
@@ -183,6 +222,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 			tmp_buf_ptr[off4 + k] = (unsigned char)v;
 		    }
 		}
+#endif
 		off4 += display_width * 4;
 		off1 += img_buf.x_length();
 	    }
@@ -191,61 +231,153 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    float *lv_p = NULL;
 	    mdarray_float lv(false, &lv_p);
 	    lv.resize(display_width * n_img_buf_ch);
-	    lv = 0.0;
+	    lv.clean();
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
 		size_t ii;
 		for ( ii=0 ; ii < n_img_buf_ch ; ii++ ) {
 		    const float *img_buf_ptr_rgb = img_buf_ptr[ii];
-		    for ( j=0, k=ii ; j < img_buf.x_length() ; j++ ) {
+		    size_t j_start = 0;
+		    k = ii * display_width;	/* offset */
+#if defined(_SSE3_IS_OK)
+		    if ( bin == 2 ) {
+			size_t n_sse = img_buf.x_length() / 8;
+			const float *p_src = img_buf_ptr_rgb + off1;
+			float *p_dst = lv_p + k;
+			for ( j=0 ; j < n_sse ; j++ ) {
+			    __m128 r0, r1;
+			    r0 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    /* */
+			    r0 = _mm_hadd_ps( r0, r1 );
+			    r1 = _mm_loadu_ps( p_dst );
+			    r0 = _mm_add_ps( r0, r1 );
+			    _mm_storeu_ps(p_dst, r0);
+			    p_dst += 4;
+			}
+			k += 4 * n_sse;
+			j_start = 8 * n_sse;
+		    }
+		    else if ( bin == 4 ) {
+			size_t n_sse = img_buf.x_length() / 16;
+			const float *p_src = img_buf_ptr_rgb + off1;
+			float *p_dst = lv_p + k;
+			for ( j=0 ; j < n_sse ; j++ ) {
+			    __m128 r0, r1, r2;
+			    r0 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r0 = _mm_hadd_ps( r0, r1 );	/* result */
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r2 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_hadd_ps( r1, r2 );	/* result */
+			    /* */
+			    r0 = _mm_hadd_ps( r0, r1 );
+			    r1 = _mm_loadu_ps( p_dst );
+			    r0 = _mm_add_ps( r0, r1 );
+			    _mm_storeu_ps(p_dst, r0);
+			    p_dst += 4;
+			}
+			k += 4 * n_sse;
+			j_start = 16 * n_sse;
+		    }
+		    else if ( bin == 8 ) {
+			size_t n_sse = img_buf.x_length() / 32;
+			const float *p_src = img_buf_ptr_rgb + off1;
+			float *p_dst = lv_p + k;
+			for ( j=0 ; j < n_sse ; j++ ) {
+			    __m128 r0, r1, r2, r3;
+			    r0 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r0 = _mm_hadd_ps( r0, r1 );	/* result */
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r2 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_hadd_ps( r1, r2 );	/* result */
+			    r3 = _mm_hadd_ps( r0, r1 );	/* result2 */
+			    /* */
+			    r0 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r0 = _mm_hadd_ps( r0, r1 );	/* result */
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r2 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_hadd_ps( r1, r2 );	/* result */
+			    r2 = _mm_hadd_ps( r0, r1 );	/* result2 */
+			    /* */
+			    r0 = _mm_hadd_ps( r3, r2 );
+			    r1 = _mm_loadu_ps( p_dst );
+			    r0 = _mm_add_ps( r0, r1 );
+			    _mm_storeu_ps(p_dst, r0);
+			    p_dst += 4;
+			}
+			k += 4 * n_sse;
+			j_start = 32 * n_sse;
+		    }
+#endif
+		    for ( j=j_start ; j < img_buf.x_length() ; j++ ) {
 			lv_p[k] += img_buf_ptr_rgb[off1 + j];
-			if ( (j+1) % bin == 0 ) k += n_img_buf_ch;
+			if ( (j+1) % bin == 0 ) k++;
 		    }
 		}
 		if ( (i+1) % bin == 0 || (i+1) == img_buf.y_length() ) {
 		    const double ftr = 1.0 / (double)(256 * bin * bin);
 		    double v;
 		    if ( n_img_buf_ch == 3 ) {	/* RGB */
-			for ( j=0, k=0, l=0 ; j < display_width ; j++ ) {
-			    l++;
-			    v = lv_p[k] * ftr * ct[0] + 0.5;
-			    lv_p[k] = 0.0;
+			float *lv_p_r = lv_p + 0;
+			float *lv_p_g = lv_p + display_width;
+			float *lv_p_b = lv_p + 2 * display_width;
+			for ( j=0, l=0 ; j < display_width ; j++ ) {
+			          l++;
+			    v = lv_p_r[j] * ftr * ct[0] + 0.5;
+			    lv_p_r[j] = 0.0;
 			    if ( 255.0 < v ) v = 255.0;
 			    else if ( v < 0 ) v = 255.0;
 			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			    k++;  l++;
-			    v = lv_p[k] * ftr * ct[1] + 0.5;
-			    lv_p[k] = 0.0;
+			          l++;
+			    v = lv_p_g[j] * ftr * ct[1] + 0.5;
+			    lv_p_g[j] = 0.0;
 			    if ( 255.0 < v ) v = 255.0;
 			    else if ( v < 0 ) v = 255.0;
 			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			    k++;  l++;
-			    v = lv_p[k] * ftr * ct[2] + 0.5;
-			    lv_p[k] = 0.0;
+			          l++;
+			    v = lv_p_b[j] * ftr * ct[2] + 0.5;
+			    lv_p_b[j] = 0.0;
 			    if ( 255.0 < v ) v = 255.0;
 			    else if ( v < 0 ) v = 255.0;
 			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			    k++;  l++;
+			          l++;
 			}
 		    }
 		    else {			/* MONO */
-			for ( j=0, k=0, l=0 ; j < display_width ; j++ ) {
-			    l++;
-			    v = lv_p[k] * ftr * ct[0] + 0.5;
+			for ( j=0, l=0 ; j < display_width ; j++ ) {
+			          l++;
+			    v = lv_p[j] * ftr * ct[0] + 0.5;
 			    if ( 255.0 < v ) v = 255.0;
 			    else if ( v < 0 ) v = 255.0;
 			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
 			          l++;
-			    v = lv_p[k] * ftr * ct[1] + 0.5;
+			    v = lv_p[j] * ftr * ct[1] + 0.5;
 			    if ( 255.0 < v ) v = 255.0;
 			    else if ( v < 0 ) v = 255.0;
 			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
 			          l++;
-			    v = lv_p[k] * ftr * ct[2] + 0.5;
-			    lv_p[k] = 0.0;
+			    v = lv_p[j] * ftr * ct[2] + 0.5;
+			    lv_p[j] = 0.0;
 			    if ( 255.0 < v ) v = 255.0;
 			    else if ( v < 0 ) v = 255.0;
 			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			    k++;  l++;
+			          l++;
 			}
 		    }
 		    off4 += display_width * 4;
