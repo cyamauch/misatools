@@ -15,6 +15,8 @@ const double Contrast_scale = 4.0;
 
 #include "read_tiff24or48_separate_buffer.h"
 #include "write_float_to_tiff24or48.h"
+#include "get_bin_factor_for_display.c"
+#include "display_image.cc"
 #include "load_display_params.cc"
 #include "save_display_params.cc"
 #include "make_output_filename.cc"
@@ -89,161 +91,6 @@ static int update_image_buffer( int display_type,
     return ret_status;
 }
 
-/* display 8- or 16-bit RGB or mono image */
-static int display_image( int win_image, const mdarray &img_buf,
-			  const int contrast_rgb[], int ch_mono,
-			  mdarray_uchar *tmp_buf )
-{
-    stdstreamio sio;
-    unsigned char *tmp_buf_ptr;
-    size_t j, jj, k;
-    bool needs_resize_win = false;
-
-    int ret_status = -1;
-
-    if ( img_buf.dim_length() != 3 && img_buf.dim_length() != 2 ) {
-        sio.eprintf("[ERROR] img_buf is not RGB data\n");
-	return -1;
-    }
-
-
-    /* check size of temporary array buffer */
-    if ( tmp_buf->x_length() != img_buf.x_length() * 4 ||
-	 tmp_buf->y_length() != img_buf.y_length() ) {
-        needs_resize_win = true;
-	tmp_buf->resize_2d(img_buf.x_length() * 4 /* ARGB */,
-			   img_buf.y_length());
-    }
-    tmp_buf_ptr = tmp_buf->array_ptr();
-    
-    if ( needs_resize_win == true ) {
-        gresize(win_image, img_buf.x_length(), img_buf.y_length());
-    }
-
-    if ( img_buf.size_type() == UCHAR_ZT ) {		/* 8-bit image */
-
-	if ( img_buf.z_length() == 1 ) {		/* mono image */
-	    size_t off1=0, off4=0;
-	    const unsigned char *img_buf_ptr;
-	    img_buf_ptr = (const unsigned char *)img_buf.data_ptr();
-	    for ( k=0 ; k < img_buf.y_length() ; k++ ) {
-		double v, ct;
-		ct = pow(2, contrast_rgb[ch_mono]/Contrast_scale);
-		for ( j=0, jj=1 ; j < img_buf.x_length() ; j++, jj+=4 ) {
-		    v = img_buf_ptr[off1 + j] * ct + 0.5;
-		    if ( 255.0 < v ) v = 255.0;
-		    tmp_buf_ptr[off4 + jj] = v;
-		    tmp_buf_ptr[off4 + jj + 1] = v;
-		    tmp_buf_ptr[off4 + jj + 2] = v;
-		}
-		off1 += img_buf.x_length();
-		off4 += img_buf.x_length() * 4;
-	    }
-	}
-	else {
-	    size_t off1=0, off4=0;
-	    const unsigned char *img_buf_ptr_r;
-	    const unsigned char *img_buf_ptr_g;
-	    const unsigned char *img_buf_ptr_b;
-	    img_buf_ptr_r = (const unsigned char *)img_buf.data_ptr(0,0,0);
-	    img_buf_ptr_g = (const unsigned char *)img_buf.data_ptr(0,0,1);
-	    img_buf_ptr_b = (const unsigned char *)img_buf.data_ptr(0,0,2);
-	    for ( k=0 ; k < img_buf.y_length() ; k++ ) {
-		double v, ct;
-		ct = pow(2, contrast_rgb[0]/Contrast_scale);
-		for ( j=0, jj=1 ; j < img_buf.x_length() ; j++, jj+=4 ) {
-		    v = img_buf_ptr_r[off1 + j] * ct + 0.5;
-		    if ( 255.0 < v ) v = 255.0;
-		    tmp_buf_ptr[off4 + jj] = v;
-		}
-		ct = pow(2, contrast_rgb[1]/Contrast_scale);
-		for ( j=0, jj=2 ; j < img_buf.x_length() ; j++, jj+=4 ) {
-		    v = img_buf_ptr_g[off1 + j] * ct + 0.5;
-		    if ( 255.0 < v ) v = 255.0;
-		    tmp_buf_ptr[off4 + jj] = v;
-		}
-		ct = pow(2, contrast_rgb[2]/Contrast_scale);
-		for ( j=0, jj=3 ; j < img_buf.x_length() ; j++, jj+=4 ) {
-		    v = img_buf_ptr_b[off1 + j] * ct + 0.5;
-		    if ( 255.0 < v ) v = 255.0;
-		    tmp_buf_ptr[off4 + jj] = v;
-		}
-		off1 += img_buf.x_length();
-		off4 += img_buf.x_length() * 4;
-	    }
-	}
-    }
-    else if ( img_buf.size_type() == FLOAT_ZT ) {	/* 16-bit image */
-
-	if ( img_buf.z_length() == 1 ) {		/* mono image */
-	    size_t off1=0, off4=0;
-	    const float *img_buf_ptr;
-	    img_buf_ptr = (const float *)img_buf.data_ptr();
-	    for ( k=0 ; k < img_buf.y_length() ; k++ ) {
-		double v, ct;
-		ct = pow(2, contrast_rgb[ch_mono]/Contrast_scale);
-		for ( j=0, jj=1 ; j < img_buf.x_length() ; j++, jj+=4 ) {
-		    v = (img_buf_ptr[off1 + j]/256.0) * ct + 0.5;
-		    if ( v < 0.0 ) v = 0.0;
-		    else if ( 255.0 < v ) v = 255.0;
-		    tmp_buf_ptr[off4 + jj] = (unsigned char)v;
-		    tmp_buf_ptr[off4 + jj + 1] = (unsigned char)v;
-		    tmp_buf_ptr[off4 + jj + 2] = (unsigned char)v;
-		}
-		off1 += img_buf.x_length();
-		off4 += img_buf.x_length() * 4;
-	    }
-	}
-	else {
-	    size_t off1=0, off4=0;
-	    const float *img_buf_ptr_r;
-	    const float *img_buf_ptr_g;
-	    const float *img_buf_ptr_b;
-	    img_buf_ptr_r = (const float *)img_buf.data_ptr(0,0,0);
-	    img_buf_ptr_g = (const float *)img_buf.data_ptr(0,0,1);
-	    img_buf_ptr_b = (const float *)img_buf.data_ptr(0,0,2);
-	    for ( k=0 ; k < img_buf.y_length() ; k++ ) {
-		double v, ct;
-		ct = pow(2, contrast_rgb[0]/Contrast_scale);
-		for ( j=0, jj=1 ; j < img_buf.x_length() ; j++, jj+=4 ) {
-		    v = (img_buf_ptr_r[off1 + j]/256.0) * ct + 0.5;
-		    if ( v < 0.0 ) v = 0.0;
-		    else if ( 255.0 < v ) v = 255.0;
-		    tmp_buf_ptr[off4 + jj] = (unsigned char)v;
-		}
-		ct = pow(2, contrast_rgb[1]/Contrast_scale);
-		for ( j=0, jj=2 ; j < img_buf.x_length() ; j++, jj+=4 ) {
-		    v = (img_buf_ptr_g[off1 + j]/256.0) * ct + 0.5;
-		    if ( v < 0.0 ) v = 0.0;
-		    else if ( 255.0 < v ) v = 255.0;
-		    tmp_buf_ptr[off4 + jj] = (unsigned char)v;
-		}
-		ct = pow(2, contrast_rgb[2]/Contrast_scale);
-		for ( j=0, jj=3 ; j < img_buf.x_length() ; j++, jj+=4 ) {
-		    v = (img_buf_ptr_b[off1 + j]/256.0) * ct + 0.5;
-		    if ( v < 0.0 ) v = 0.0;
-		    else if ( 255.0 < v ) v = 255.0;
-		    tmp_buf_ptr[off4 + jj] = (unsigned char)v;
-		}
-		off1 += img_buf.x_length();
-		off4 += img_buf.x_length() * 4;
-	    }
-	}
-
-    }
-    else {
-	/* error */
-	goto quit;
-    }
-    
-    gputimage(win_image, 0,0,
-	      tmp_buf_ptr, img_buf.x_length(), img_buf.y_length(), 0);
-    
-    ret_status = 0;
- quit:
-    return ret_status;
-}
-
 static void update_display_gain_rb( const int contrast_rgb[],
 				    long *display_gain_r_ret,
 				    long *display_gain_b_ret )
@@ -275,21 +122,19 @@ const command_list Cmd_list[] = {
         {CMD_DISPLAY_RESIDUAL4, "Display Residual x4      [5]"},
 #define CMD_DISPLAY_RESIDUAL8 6
         {CMD_DISPLAY_RESIDUAL8, "Display Residual x8      [6]"},
-#define CMD_CONT_PLUS_R 7
-        {CMD_CONT_PLUS_R,       "Red Contrast +           [r]"},
-#define CMD_CONT_MINUS_R 8
-        {CMD_CONT_MINUS_R,      "Red Contrast -           [R]"},
-#define CMD_CONT_PLUS_G 9
-        {CMD_CONT_PLUS_G,       "Green Contrast +         [g]"},
-#define CMD_CONT_MINUS_G 10
-        {CMD_CONT_MINUS_G,      "Green Contrast -         [G]"},
-#define CMD_CONT_PLUS_B 11
-        {CMD_CONT_PLUS_B,       "Blue Contrast +          [b]"},
-#define CMD_CONT_MINUS_B 12
-        {CMD_CONT_MINUS_B,      "Blue Contrast -          [B]"},
-#define CMD_SAVE 13
+#define CMD_ZOOM 7
+        {CMD_ZOOM,              "Zoom +/-                 [+][-]"},
+#define CMD_CONT_RGB 8
+        {CMD_CONT_RGB,          "RGB Contrast +/-         [<][>]"},
+#define CMD_CONT_R 9
+        {CMD_CONT_R,            "Red Contrast +/-         [r][R]"},
+#define CMD_CONT_G 10
+        {CMD_CONT_G,            "Green Contrast +/-       [g][G]"},
+#define CMD_CONT_B 11
+        {CMD_CONT_B,            "Blue Contrast +/-        [b][B]"},
+#define CMD_SAVE 12
         {CMD_SAVE,              "Save Aligned Image       [Enter]"},
-#define CMD_EXIT 14
+#define CMD_EXIT 13
         {CMD_EXIT,              "Exit                     [q]"}
 };
 
@@ -297,7 +142,7 @@ const size_t N_cmd_list = sizeof(Cmd_list) / sizeof(Cmd_list[0]);
 
 int main( int argc, char *argv[] )
 {
-    int contrast_rgb[3] = {8, 8, 8};
+    const char *conf_file_display = "display_1.txt";
 
     stdstreamio sio, f_in;
     tstring filename;
@@ -315,6 +160,9 @@ int main( int argc, char *argv[] )
     int win_command_col_height;
 
     int display_type = 2 /* residual */;	/* flag to display image type */
+    int display_bin = 1;		/* binning factor for display */
+    int contrast_rgb[3] = {8, 8, 8};
+
     long offset_r_x = 0;
     long offset_r_y = 0;
     long offset_b_x = 0;
@@ -334,7 +182,7 @@ int main( int argc, char *argv[] )
 	goto quit;
     }
 
-    load_display_params( "display_1.txt", contrast_rgb );
+    load_display_params( conf_file_display, contrast_rgb );
 
     update_display_gain_rb( contrast_rgb, &display_gain_r, &display_gain_b );
     
@@ -368,7 +216,15 @@ int main( int argc, char *argv[] )
     image_rgb_buf.resize_3d(width,height,3);
     image_gr_buf.resize_2d(width,height);
     image_gb_buf.resize_2d(width,height);
+
     
+    display_bin = get_bin_factor_for_display(width, height);
+    if ( display_bin < 0 ) {
+        sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
+		    "bad display depth\n");
+	goto quit;
+    }
+    display_bin *= 2;
 
     /*
      * GRAPHICS
@@ -411,16 +267,11 @@ int main( int argc, char *argv[] )
 	win_command_col_height = c_height;
     }
 
-    win_rgb = gopen(width, height);
-    winname(win_rgb, "RGB image");
+    win_rgb = gopen(width/display_bin, height/display_bin);
     
-    win_gr = gopen(width, height);
-    winname(win_gr, "Display for G and R [Residual]");
+    win_gr = gopen(width/display_bin, height/display_bin);
 
-    win_gb = gopen(width, height);
-    winname(win_gb, "Display for G and B [Residual]");
-
-
+    win_gb = gopen(width/display_bin, height/display_bin);
 
     /* refresh windows */
     update_image_buffer( display_type,
@@ -429,9 +280,18 @@ int main( int argc, char *argv[] )
 			 in_image_r_buf, in_image_g_buf, in_image_b_buf,
 			 &image_rgb_buf, &image_gr_buf, &image_gb_buf );
 
-    display_image( win_rgb, image_rgb_buf, contrast_rgb, 0, &tmp_buf );
-    display_image( win_gr, image_gr_buf, contrast_rgb, 1, &tmp_buf );
-    display_image( win_gb, image_gb_buf, contrast_rgb, 1, &tmp_buf );
+    display_image( win_rgb, image_rgb_buf, display_bin, 0,
+		   contrast_rgb, true, &tmp_buf );
+    winname(win_rgb, "RGB  zoom = 1/%d  contrast = ( %d, %d, %d )",
+	    display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
+
+    display_image( win_gr, image_gr_buf, display_bin, 2,
+		   contrast_rgb, true, &tmp_buf );
+    winname(win_gr, "Display for G and R [Residual]");
+    
+    display_image( win_gb, image_gb_buf, display_bin, 2,
+		   contrast_rgb, true, &tmp_buf );
+    winname(win_gb, "Display for G and B [Residual]");
 
     
     /*
@@ -443,20 +303,24 @@ int main( int argc, char *argv[] )
 	int ev_win, ev_type, ev_btn;	/* for event handling */
 	double ev_x, ev_y;
 
-        bool update_image = false;
-        bool refresh_gr = false;
-        bool refresh_gb = false;
-
+        int refresh_image = 0;		/* 1:display only  2:both */
+        int refresh_gr = 0;
+        int refresh_gb = 0;
+	bool refresh_winsize = false;
+	
 	int cmd_id = -1;
 	
         /* waiting an event */
         ev_win = eggx_ggetxpress(&ev_type,&ev_btn,&ev_x,&ev_y);
 
+	/*
+	 *  Check command window
+	 */
+
 	if ( ev_type == ButtonPress && ev_win == win_command ) {
 	    cmd_id = 1 + ev_y / win_command_col_height;
 	}
-
-	if ( ev_type == KeyPress ) {
+	else if ( ev_type == KeyPress ) {
 	    //sio.printf("[%d]\n", ev_btn);
 	    if ( ev_btn == '1' ) cmd_id = CMD_DISPLAY_TARGET;
 	    else if ( ev_btn == '2' ) cmd_id = CMD_DISPLAY_REFERENCE;
@@ -464,12 +328,46 @@ int main( int argc, char *argv[] )
 	    else if ( ev_btn == '4' ) cmd_id = CMD_DISPLAY_RESIDUAL2;
 	    else if ( ev_btn == '5' ) cmd_id = CMD_DISPLAY_RESIDUAL4;
 	    else if ( ev_btn == '6' ) cmd_id = CMD_DISPLAY_RESIDUAL8;
-	    else if ( ev_btn == 'r' ) cmd_id = CMD_CONT_PLUS_R;
-	    else if ( ev_btn == 'R' ) cmd_id = CMD_CONT_MINUS_R;
-	    else if ( ev_btn == 'g' ) cmd_id = CMD_CONT_PLUS_G;
-	    else if ( ev_btn == 'G' ) cmd_id = CMD_CONT_MINUS_G;
-	    else if ( ev_btn == 'b' ) cmd_id = CMD_CONT_PLUS_B;
-	    else if ( ev_btn == 'B' ) cmd_id = CMD_CONT_MINUS_B;
+	    else if ( ev_btn == '+' || ev_btn == ';' ) {
+		cmd_id = CMD_ZOOM;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == '-' ) {
+		cmd_id = CMD_ZOOM;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == '>' || ev_btn == '.' ) {
+		cmd_id = CMD_CONT_RGB;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == '<' || ev_btn == ',' ) {
+		cmd_id = CMD_CONT_RGB;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == 'r' ) {
+		cmd_id = CMD_CONT_R;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'R' ) {
+		cmd_id = CMD_CONT_R;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == 'g' ) {
+		cmd_id = CMD_CONT_G;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'G' ) {
+		cmd_id = CMD_CONT_G;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == 'b' ) {
+		cmd_id = CMD_CONT_B;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'B' ) {
+		cmd_id = CMD_CONT_B;
+		ev_btn = 3;
+	    }
 	    else if ( ev_btn == 13 ) cmd_id = CMD_SAVE;
 	    /* ESC key or 'q' */
 	    else if ( ev_btn == 27 || ev_btn =='q' ) cmd_id = CMD_EXIT;
@@ -478,6 +376,10 @@ int main( int argc, char *argv[] )
 		else cmd_id = CMD_DISPLAY_TARGET;
 	    }
 	}
+	
+	/*
+	 *  Handle cmd_id
+	 */
 
 	if ( cmd_id == CMD_EXIT ) {
 	    break;
@@ -504,7 +406,7 @@ int main( int argc, char *argv[] )
 		    sio.eprintf("[ERROR] write_float_to_tiff24or48() failed.\n");
 		    goto quit;
 		}
-		update_image = true;
+		refresh_image = 2;
 	    }
 	    else {
 		make_output_filename(filename.cstr(), "aligned_rgb", "16bit",
@@ -520,190 +422,199 @@ int main( int argc, char *argv[] )
 	else if ( CMD_DISPLAY_TARGET <= cmd_id &&
 		  cmd_id <= CMD_DISPLAY_RESIDUAL8 ) {
 	    display_type = cmd_id - CMD_DISPLAY_TARGET;
-	    refresh_gr = true;
-	    refresh_gb = true;
+	    refresh_gr = 2;
+	    refresh_gb = 2;
 	}
-	else if ( cmd_id == CMD_CONT_PLUS_R ) {
+	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
+	    if ( 1 < display_bin ) {
+		display_bin --;
+		refresh_image = 1;
+		refresh_winsize = true;
+	    }
+	}
+	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
+	    if ( display_bin < 10 ) {
+		display_bin ++;
+		refresh_image = 1;
+		refresh_winsize = true;
+	    }
+	}
+	else if ( cmd_id == CMD_CONT_RGB && ev_btn == 1 ) {
+	    contrast_rgb[0] ++;
+	    contrast_rgb[1] ++;
+	    contrast_rgb[2] ++;
+	    update_display_gain_rb( contrast_rgb,
+				    &display_gain_r, &display_gain_b );
+	    save_display_params(conf_file_display, contrast_rgb);
+	    refresh_image = 2;
+	}
+	else if ( cmd_id == CMD_CONT_RGB && ev_btn == 3 ) {
+	    bool changed = false;
+	    if ( 0 < contrast_rgb[0] ) {
+	        contrast_rgb[0] --;  changed = true;
+	    }
+	    if ( 0 < contrast_rgb[1] ) {
+	        contrast_rgb[1] --;  changed = true;
+	    }
+	    if ( 0 < contrast_rgb[2] ) {
+	        contrast_rgb[2] --;  changed = true;
+	    }
+	    if ( changed == true ) {
+		update_display_gain_rb( contrast_rgb,
+					&display_gain_r, &display_gain_b );
+		save_display_params(conf_file_display, contrast_rgb);
+		refresh_image = 2;
+	    }
+	}
+	else if ( cmd_id == CMD_CONT_R && ev_btn == 1 ) {
 	    contrast_rgb[0] ++;
 	    update_display_gain_rb( contrast_rgb,
 				    &display_gain_r, &display_gain_b );
-	    save_display_params("display_1.txt", contrast_rgb);
-	    update_image = true;
+	    save_display_params(conf_file_display, contrast_rgb);
+	    refresh_image = 2;
 	}
-	else if ( cmd_id == CMD_CONT_MINUS_R ) {
+	else if ( cmd_id == CMD_CONT_R && ev_btn == 3 ) {
 	    if ( 0 < contrast_rgb[0] ) {
 		contrast_rgb[0] --;
 		update_display_gain_rb( contrast_rgb,
 					&display_gain_r, &display_gain_b );
-		save_display_params("display_1.txt", contrast_rgb);
-		update_image = true;
+		save_display_params(conf_file_display, contrast_rgb);
+		refresh_image = 2;
 	    }
 	}
-	else if ( cmd_id == CMD_CONT_PLUS_G ) {
+	else if ( cmd_id == CMD_CONT_G && ev_btn == 1 ) {
 	    contrast_rgb[1] ++;
 	    update_display_gain_rb( contrast_rgb,
 				    &display_gain_r, &display_gain_b );
-	    save_display_params("display_1.txt", contrast_rgb);
-	    update_image = true;
+	    save_display_params(conf_file_display, contrast_rgb);
+	    refresh_image = 2;
 	}
-	else if ( cmd_id == CMD_CONT_MINUS_G ) {
+	else if ( cmd_id == CMD_CONT_G && ev_btn == 3 ) {
 	    if ( 0 < contrast_rgb[1] ) {
 		contrast_rgb[1] --;
 		update_display_gain_rb( contrast_rgb,
 					&display_gain_r, &display_gain_b );
-		save_display_params("display_1.txt", contrast_rgb);
-		update_image = true;
+		save_display_params(conf_file_display, contrast_rgb);
+		refresh_image = 2;
 	    }
 	}
-	else if ( cmd_id == CMD_CONT_PLUS_B ) {
+	else if ( cmd_id == CMD_CONT_B && ev_btn == 1 ) {
 	    contrast_rgb[2] ++;
 	    update_display_gain_rb( contrast_rgb,
 				    &display_gain_r, &display_gain_b );
-	    save_display_params("display_1.txt", contrast_rgb);
-	    update_image = true;
+	    save_display_params(conf_file_display, contrast_rgb);
+	    refresh_image = 2;
 	}
-	else if ( cmd_id == CMD_CONT_MINUS_B ) {
+	else if ( cmd_id == CMD_CONT_B && ev_btn == 3 ) {
 	    if ( 0 < contrast_rgb[2] ) {
 		contrast_rgb[2] --;
 		update_display_gain_rb( contrast_rgb,
 					&display_gain_r, &display_gain_b );
-		save_display_params("display_1.txt", contrast_rgb);
-		update_image = true;
+		save_display_params(conf_file_display, contrast_rgb);
+		refresh_image = 2;
 	    }
 	}
 	else if ( ev_type == KeyPress ) {
-#if 0
-	    //sio.printf("key = %d\n", ev_btn);
-	    if ( ev_btn == '+' || ev_btn == ';' ) {	/* + key */
-		if ( ev_win == win_gr ) {
-		    display_gain_r += 10;
-		    update_image = true;
-		}
-		else if ( ev_win == win_gb ) {
-		    display_gain_b += 10;
-		    update_image = true;
-		}
-	    }
-	    else if ( ev_btn == '-' ) {			/* - key */
-		if ( ev_win == win_gr ) {
-		    display_gain_r -= 10;
-		    if ( display_gain_r < 10 ) display_gain_r += 10;
-		    else update_image = true;
-		}
-		else if ( ev_win == win_gb ) {
-		    display_gain_b -= 10;
-		    if ( display_gain_b < 10 ) display_gain_b += 10;
-		    else update_image = true;
-		}
-	    }
-#endif
 	    if ( ev_btn == 28 ) {		/* Right key */
 		if ( ev_win == win_gr ) {
 		    offset_r_x ++;
-		    update_image = true;
+		    refresh_image = 2;
 		}
 		else if ( ev_win == win_gb ) {
 		    offset_b_x ++;
-		    update_image = true;
+		    refresh_image = 2;
 		}
 	    }
 	    else if ( ev_btn == 29 ) {	/* Left key */
 		if ( ev_win == win_gr ) {
 		    offset_r_x --;
-		    update_image = true;
+		    refresh_image = 2;
 		}
 		else if ( ev_win == win_gb ) {
 		    offset_b_x --;
-		    update_image = true;
+		    refresh_image = 2;
 		}
 	    }
 	    else if ( ev_btn == 30 ) {	/* Up key */
 		if ( ev_win == win_gr ) {
 		    offset_r_y --;
-		    update_image = true;
+		    refresh_image = 2;
 		}
 		else if ( ev_win == win_gb ) {
 		    offset_b_y --;
-		    update_image = true;
+		    refresh_image = 2;
 		}
 	    }
 	    else if ( ev_btn == 31 ) {	/* Down key */
 		if ( ev_win == win_gr ) {
 		    offset_r_y ++;
-		    update_image = true;
+		    refresh_image = 2;
 		}
 		else if ( ev_win == win_gb ) {
 		    offset_b_y ++;
-		    update_image = true;
+		    refresh_image = 2;
 		}
 	    }
 	}
 
 
-	if ( update_image == true ) {
-	    const char *im_str;
-	    update_image_buffer( display_type,
+	if ( refresh_image != 0 ) {
+	    if ( 1 < refresh_image ) {
+		update_image_buffer( display_type,
 				 display_gain_r, display_gain_b,
 				 offset_r_x, offset_r_y, offset_b_x, offset_b_y,
 				 in_image_r_buf, in_image_g_buf, in_image_b_buf,
 				 &image_rgb_buf, &image_gr_buf, &image_gb_buf );
-	    display_image( win_rgb, image_rgb_buf, contrast_rgb, 0, &tmp_buf );
-	    im_str = "Residual";
-	    if ( display_type == 0 ) {
-		display_image(win_gr, image_gr_buf, contrast_rgb, 0, &tmp_buf);
-		im_str = "Red";
 	    }
-	    else {
-		display_image(win_gr, image_gr_buf, contrast_rgb, 1, &tmp_buf);
-		if ( display_type == 1 ) im_str = "Green";
-	    }
-	    winname(win_gr, "G and R  offset_r_x = %ld  offset_r_y = %ld  "
-		    "[%s]", offset_r_x, offset_r_y, im_str);
-	    im_str = "Residual";
-	    if ( display_type == 0 ) {
-		display_image(win_gb, image_gb_buf, contrast_rgb, 2, &tmp_buf);
-		im_str = "Blue";
-	    }
-	    else {
-		display_image(win_gb, image_gb_buf, contrast_rgb, 1, &tmp_buf);
-		if ( display_type == 1 ) im_str = "Green";
-	    }
-	    winname(win_gb, "G and B  offset_b_x = %ld  offset_b_y = %ld  "
-		    "[%s]", offset_b_x, offset_b_y, im_str);
+	    display_image( win_rgb, image_rgb_buf, display_bin, 0,
+			   contrast_rgb, refresh_winsize, &tmp_buf );
+	    winname(win_rgb,
+	       "RGB  zoom = 1/%d  contrast = ( %d, %d, %d )",
+	       display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
+	    refresh_gr = 1;
+	    refresh_gb = 1;
 	}
 
-	if ( refresh_gr == true ) {
+	if ( 0 < refresh_gr ) {
 	    const char *im_str = "Residual";
-	    update_image_buffer( display_type,
+	    if ( 1 < refresh_gr ) {
+		update_image_buffer( display_type,
 				 display_gain_r, display_gain_b,
 				 offset_r_x, offset_r_y, offset_b_x, offset_b_y,
 				 in_image_r_buf, in_image_g_buf, in_image_b_buf,
 				 NULL, &image_gr_buf, NULL );
+	    }
 	    if ( display_type == 0 ) {
-		display_image(win_gr, image_gr_buf, contrast_rgb, 0, &tmp_buf);
+		display_image(win_gr, image_gr_buf, display_bin, 1,
+			      contrast_rgb, refresh_winsize, &tmp_buf);
 		im_str = "Red";
 	    }
 	    else {
-		display_image(win_gr, image_gr_buf, contrast_rgb, 1, &tmp_buf);
+		display_image(win_gr, image_gr_buf, display_bin, 2,
+			      contrast_rgb, refresh_winsize, &tmp_buf);
 		if ( display_type == 1 ) im_str = "Green";
 	    }
 	    winname(win_gr, "G and R  offset_r_x = %ld  offset_r_y = %ld  "
 		    "[%s]", offset_r_x, offset_r_y, im_str);
 	}
 
-	if ( refresh_gb == true ) {
+	if ( 0 < refresh_gb ) {
 	    const char *im_str = "Residual";
-	    update_image_buffer( display_type,
+	    if ( 1 < refresh_gb ) {
+		update_image_buffer( display_type,
 				 display_gain_r, display_gain_b,
 				 offset_r_x, offset_r_y, offset_b_x, offset_b_y,
 				 in_image_r_buf, in_image_g_buf, in_image_b_buf,
 				 NULL, NULL, &image_gb_buf );
+	    }
 	    if ( display_type == 0 ) {
-		display_image(win_gb, image_gb_buf, contrast_rgb, 2, &tmp_buf);
+		display_image(win_gb, image_gb_buf, display_bin, 3,
+			      contrast_rgb, refresh_winsize, &tmp_buf);
 		im_str = "Blue";
 	    }
 	    else {
-		display_image(win_gb, image_gb_buf, contrast_rgb, 1, &tmp_buf);
+		display_image(win_gb, image_gb_buf, display_bin, 2,
+			      contrast_rgb, refresh_winsize, &tmp_buf);
 		if ( display_type == 1 ) im_str = "Green";
 	    }
 	    winname(win_gb, "G and B  offset_b_x = %ld  offset_b_y = %ld  "

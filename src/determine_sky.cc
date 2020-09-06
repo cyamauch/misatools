@@ -31,7 +31,7 @@ const double Contrast_scale = 4.0;
 
 int main( int argc, char *argv[] )
 {
-    int contrast_rgb[3] = {8, 8, 8};
+    const char *conf_file_display = "display_1.txt";
 
     stdstreamio sio, f_in;
     tstring filename;
@@ -48,6 +48,7 @@ int main( int argc, char *argv[] )
     bool flag_dither = true;
     
     int display_bin = 1;		/* binning factor for display */
+    int contrast_rgb[3] = {8, 8, 8};
     int step_count, sztype;
     double obj_x, obj_y, obj_r, sky_r;
     bool flag_drawed = false;
@@ -71,7 +72,7 @@ int main( int argc, char *argv[] )
 	goto quit;
     }
 
-    load_display_params( "display_1.txt", contrast_rgb );
+    load_display_params( conf_file_display, contrast_rgb );
 
     arg_cnt = 1;
 
@@ -148,11 +149,11 @@ int main( int argc, char *argv[] )
 
     gsetinitialattributes(DISABLE, BOTTOMLEFTORIGIN) ;
     
-    win_image = gopen(600, 400);
-    winname(win_image, "RGB image");
+    win_image = gopen(width/display_bin, height/display_bin);
     
     display_image(win_image, image_buf,
-		  display_bin, 0, contrast_rgb, &tmp_buf);
+		  display_bin, 0, contrast_rgb, true, &tmp_buf);
+    winname(win_image, "RGB image");
 
     /* set drawing mode */
     newgcfunction(win_image, GXxor);
@@ -173,6 +174,7 @@ int main( int argc, char *argv[] )
 	int ev_win, ev_type, ev_btn;	/* for event handling */
 	double ev_x, ev_y;
 	bool refresh_image = false;
+	bool refresh_winsize = false;
 	
         ev_win = eggx_ggetevent(&ev_type,&ev_btn,&ev_x,&ev_y);
 	if ( ev_win == win_image ) {
@@ -180,62 +182,64 @@ int main( int argc, char *argv[] )
 		if ( ev_btn == 27 || ev_btn == 'q' ) {
 		    goto quit;
 		}
-		else if ( ev_btn == '+' ) {		/* zoom-in */
+		else if ( ev_btn == '+' || ev_btn == ';' ) {	/* zoom-in */
 		    if ( 1 < display_bin ) {
 			display_bin --;
 			refresh_image = true;
+			refresh_winsize = true;
 		    }
 		}
 		else if ( ev_btn == '-' ) {		/* zoom-out */
 		    if ( display_bin < 10 ) {
 			display_bin ++;
 			refresh_image = true;
+			refresh_winsize = true;
 		    }
 		}
 		else if ( ev_btn == 'r' ) {
 		    contrast_rgb[0] ++;
-		    save_display_params("display_1.txt", contrast_rgb);
+		    save_display_params(conf_file_display, contrast_rgb);
 		    refresh_image = true;
 		}
 		else if ( ev_btn == 'R' ) {
 		    if ( 0 < contrast_rgb[0] ) {
 			contrast_rgb[0] --;
-			save_display_params("display_1.txt", contrast_rgb);
+			save_display_params(conf_file_display, contrast_rgb);
 			refresh_image = true;
 		    }
 		}
 		else if ( ev_btn == 'g' ) {
 		    contrast_rgb[1] ++;
-		    save_display_params("display_1.txt", contrast_rgb);
+		    save_display_params(conf_file_display, contrast_rgb);
 		    refresh_image = true;
 		}
 		else if ( ev_btn == 'G' ) {
 		    if ( 0 < contrast_rgb[1] ) {
 			contrast_rgb[1] --;
-			save_display_params("display_1.txt", contrast_rgb);
+			save_display_params(conf_file_display, contrast_rgb);
 			refresh_image = true;
 		    }
 		}
 		else if ( ev_btn == 'b' ) {
 		    contrast_rgb[2] ++;
-		    save_display_params("display_1.txt", contrast_rgb);
+		    save_display_params(conf_file_display, contrast_rgb);
 		    refresh_image = true;
 		}
 		else if ( ev_btn == 'B' ) {
 		    if ( 0 < contrast_rgb[2] ) {
 			contrast_rgb[2] --;
-			save_display_params("display_1.txt", contrast_rgb);
+			save_display_params(conf_file_display, contrast_rgb);
 			refresh_image = true;
 		    }
 		}
-		else if ( ev_btn == '>' ) {
+		else if ( ev_btn == '>' || ev_btn == '.' ) {
 		    contrast_rgb[0] ++;
 		    contrast_rgb[1] ++;
 		    contrast_rgb[2] ++;
-		    save_display_params("display_1.txt", contrast_rgb);
+		    save_display_params(conf_file_display, contrast_rgb);
 		    refresh_image = true;
 		}
-		else if ( ev_btn == '<' ) {
+		else if ( ev_btn == '<' || ev_btn == ',' ) {
 		    bool changed = false;
 		    if ( 0 < contrast_rgb[0] ) {
 			contrast_rgb[0] --;  changed = true;
@@ -247,7 +251,7 @@ int main( int argc, char *argv[] )
 			contrast_rgb[2] --;  changed = true;
 		    }
 		    if ( changed == true ) {
-			save_display_params("display_1.txt", contrast_rgb);
+			save_display_params(conf_file_display, contrast_rgb);
 			refresh_image = true;
 		    }
 		}
@@ -312,8 +316,8 @@ int main( int argc, char *argv[] )
 
 	if ( refresh_image == true ) {
 	    newgcfunction(win_image, GXcopy);	/* set normal mode */
-	    display_image(win_image, image_buf,
-			  display_bin, 0, contrast_rgb, &tmp_buf);
+	    display_image(win_image, image_buf, display_bin, 0, contrast_rgb,
+			  refresh_winsize, &tmp_buf);
 	    winname(win_image,
 		    "RGB image  zoom = 1/%d  contrast = ( %d, %d, %d )",
 		    display_bin,

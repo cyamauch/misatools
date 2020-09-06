@@ -2,6 +2,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 			  int binning,		/* 1: original scale 2:1/2 */ 
 			  int display_ch,	/* 0:RGB 1:R 2:G 3:B */
 			  const int contrast_rgb[],
+			  bool needs_resize_win,
 			  mdarray_uchar *tmp_buf )
 {
     stdstreamio sio;
@@ -12,9 +13,8 @@ static int display_image( int win_image, const mdarray &img_buf,
     size_t display_width, display_height;
     size_t n_img_buf_ch;
     size_t bin = binning;
-    bool needs_resize_win = false;
 
-    if ( img_buf.dim_length() != 3 ) {
+    if ( img_buf.dim_length() != 3 && img_buf.dim_length() != 2 ) {
         sio.eprintf("[ERROR] img_buf is not RGB data\n");
 	return -1;
     }
@@ -47,7 +47,6 @@ static int display_image( int win_image, const mdarray &img_buf,
     /* check size of temporary array buffer */
     if ( tmp_buf->x_length() != display_width * 4 ||
 	 tmp_buf->y_length() != display_height ) {
-        needs_resize_win = true;
 	tmp_buf->resize_2d(display_width * 4 /* ARGB */,
 			   display_height);
     }

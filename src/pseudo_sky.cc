@@ -736,6 +736,8 @@ const size_t N_cmd_list = sizeof(Cmd_list) / sizeof(Cmd_list[0]);
 
 int main( int argc, char *argv[] )
 {
+    const char *conf_file_display = "display_1.txt";
+
     stdstreamio sio, f_in;
     tstring target_filename;
     
@@ -819,8 +821,6 @@ int main( int argc, char *argv[] )
     
     /* image viewer */
 
-    win_image = gopen(600,400);
-
     if ( read_tiff24or48_to_float(target_filename.cstr(), 65536.0,
 				  &target_img_buf, NULL, &icc_buf, NULL) < 0 ) {
         sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
@@ -840,7 +840,7 @@ int main( int argc, char *argv[] )
 	goto quit;
     }
 
-    load_display_params("display_0.txt", contrast_rgb);
+    load_display_params(conf_file_display, contrast_rgb);
     
     /* set size of box on sky point */
     Skypoint_box_size =
@@ -906,9 +906,12 @@ int main( int argc, char *argv[] )
     }
     */
     
+    win_image = gopen(target_img_buf.x_length() / display_bin,
+		      target_img_buf.y_length() / display_bin);
+
     /* display reference image */
     display_image(win_image, target_img_buf,
-		  display_bin, display_ch, contrast_rgb, &tmp_buf);
+		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
 
     winname(win_image, "Imave Viewer  contrast = ( %d, %d, %d )  dither=%d",
 	contrast_rgb[0], contrast_rgb[1], contrast_rgb[2], (int)flag_dither);
@@ -934,6 +937,7 @@ int main( int argc, char *argv[] )
 
         int refresh_image = 0;		/* 1:display only  2:both */
 	bool refresh_graphics = false;
+	bool refresh_winsize = false;
         bool refresh_winname = false;
         bool refresh_sky = false;
 	
@@ -961,7 +965,7 @@ int main( int argc, char *argv[] )
 		else if ( display_ch == 2 ) cmd_id = CMD_DISPLAY_B;
 		else cmd_id = CMD_DISPLAY_RGB;
 	    }
-	    else if ( ev_btn == '+' ) {
+	    else if ( ev_btn == '+' || ev_btn == ';' ) {
 		cmd_id = CMD_ZOOM;
 		ev_btn = 1;
 	    }
@@ -969,11 +973,11 @@ int main( int argc, char *argv[] )
 		cmd_id = CMD_ZOOM;
 		ev_btn = 3;
 	    }
-	    else if ( ev_btn == '>' ) {
+	    else if ( ev_btn == '>' || ev_btn == '.' ) {
 		cmd_id = CMD_CONT_RGB;
 		ev_btn = 1;
 	    }
-	    else if ( ev_btn == '<' ) {
+	    else if ( ev_btn == '<' || ev_btn == ',' ) {
 		cmd_id = CMD_CONT_RGB;
 		ev_btn = 3;
 	    }
@@ -1121,18 +1125,24 @@ int main( int argc, char *argv[] )
 	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
-	    if ( 1 < display_bin ) display_bin --;
-	    refresh_image = 1;
+	    if ( 1 < display_bin ) {
+		display_bin --;
+		refresh_image = 1;
+		refresh_winsize = true;
+	    }
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
-	    if ( display_bin < 10 ) display_bin ++;
-	    refresh_image = 1;
+	    if ( display_bin < 10 ) {
+		display_bin ++;
+		refresh_image = 1;
+		refresh_winsize = true;
+	    }
 	}
 	else if ( cmd_id == CMD_CONT_RGB && ev_btn == 1 ) {
 	    contrast_rgb[0] ++;
 	    contrast_rgb[1] ++;
 	    contrast_rgb[2] ++;
-	    save_display_params("display_0.txt", contrast_rgb);
+	    save_display_params(conf_file_display, contrast_rgb);
 	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_CONT_RGB && ev_btn == 3 ) {
@@ -1147,43 +1157,43 @@ int main( int argc, char *argv[] )
 	        contrast_rgb[2] --;  changed = true;
 	    }
 	    if ( changed == true ) {
-		save_display_params("display_0.txt", contrast_rgb);
+		save_display_params(conf_file_display, contrast_rgb);
 		refresh_image = 1;
 	    }
 	}
 	else if ( cmd_id == CMD_CONT_R && ev_btn == 1 ) {
 	    contrast_rgb[0] ++;
-	    save_display_params("display_0.txt", contrast_rgb);
+	    save_display_params(conf_file_display, contrast_rgb);
 	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_CONT_R && ev_btn == 3 ) {
 	    if ( 0 < contrast_rgb[0] ) {
 	        contrast_rgb[0] --;
-		save_display_params("display_0.txt", contrast_rgb);
+		save_display_params(conf_file_display, contrast_rgb);
 		refresh_image = 1;
 	    }
 	}
 	else if ( cmd_id == CMD_CONT_G && ev_btn == 1 ) {
 	    contrast_rgb[1] ++;
-	    save_display_params("display_0.txt", contrast_rgb);
+	    save_display_params(conf_file_display, contrast_rgb);
 	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_CONT_G && ev_btn == 3 ) {
 	    if ( 0 < contrast_rgb[1] ) {
 	      contrast_rgb[1] --;
-	      save_display_params("display_0.txt", contrast_rgb);
+	      save_display_params(conf_file_display, contrast_rgb);
 	      refresh_image = 1;
 	    }
 	}
 	else if ( cmd_id == CMD_CONT_B && ev_btn == 1 ) {
 	    contrast_rgb[2] ++;
-	    save_display_params("display_0.txt", contrast_rgb);
+	    save_display_params(conf_file_display, contrast_rgb);
 	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_CONT_B && ev_btn == 3 ) {
 	    if ( 0 < contrast_rgb[2] ) {
 	        contrast_rgb[2] --;
-		save_display_params("display_0.txt", contrast_rgb);
+		save_display_params(conf_file_display, contrast_rgb);
 		refresh_image = 1;
 	    }
 	}
@@ -1445,8 +1455,8 @@ int main( int argc, char *argv[] )
 		    else if ( display_type == 4 ) img_display *= 4.0;
 		    else if ( display_type == 5 ) img_display *= 8.0;
 		}
-		display_image(win_image, img_display,
-			      display_bin, display_ch, contrast_rgb, &tmp_buf);
+		display_image(win_image, img_display, display_bin, display_ch,
+			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Residual [%s]  %s"
 			"channel = %s  zoom = 1/%d  "
 			"contrast = ( %d, %d, %d )  ",
@@ -1456,16 +1466,16 @@ int main( int argc, char *argv[] )
 			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    }
 	    else if ( display_type == 1 ) {	/* Sky */
-		display_image(win_image, sky_img_buf,
-			      display_bin, display_ch, contrast_rgb, &tmp_buf);
+		display_image(win_image, sky_img_buf, display_bin, display_ch,
+			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Pseudo Sky  channel = %s  zoom = 1/%d  "
 			"contrast = ( %d, %d, %d )  ",
 			names_ch[display_ch], display_bin, 
 			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    }
 	    else {				/* Target */
-		display_image(win_image, target_img_buf,
-			      display_bin, display_ch, contrast_rgb, &tmp_buf);
+		display_image(win_image, target_img_buf, display_bin,
+			  display_ch, contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Target  channel = %s  zoom = 1/%d  "
 			"contrast = ( %d, %d, %d )  ",
 			names_ch[display_ch], display_bin, 
