@@ -319,9 +319,9 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 	}
 
 	/* clear buffer for new result */
-	(*stacked_buf0_sum_ptr) = 0.0;
-	(*stacked_buf0_sum2_ptr) = 0.0;
-	(*count_buf0_ptr) = 0;
+	stacked_buf0_sum_ptr->clean();
+	stacked_buf0_sum2_ptr->clean();
+	count_buf0_ptr->clean();
 
 	/*
 	 *  main of sigma-clipping
@@ -357,7 +357,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 				   target_median[0], target_median[1], target_median[2]);
 		    }
 
-		    img_tmp_buf = 0.0;
+		    img_tmp_buf.clean();
 		    img_tmp_buf.add(img_buf, offset_x, offset_y, 0);
 		    size_t len_xy = img_tmp_buf.x_length() * img_tmp_buf.y_length();
 
@@ -365,7 +365,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 
 		    if ( comet_sigma_clip == true && final_loop == true && (int)i == ref_file_id ) {
 			/* Stack a reference image without sigma-clipping (when last loop) */
-			(*count_buf0_ptr) += (short)1;
+			(*count_buf0_ptr) += (int)1;
 		    }
 		    else {
 			for ( j=0 ; j < 3 ; j++ ) {
