@@ -821,6 +821,7 @@ int main( int argc, char *argv[] )
     
     /* image viewer */
 
+    sio.printf("Open: %s\n", target_filename.cstr());
     if ( read_tiff24or48_to_float(target_filename.cstr(), 65536.0,
 				  &target_img_buf, NULL, &icc_buf, NULL) < 0 ) {
         sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
@@ -833,7 +834,7 @@ int main( int argc, char *argv[] )
     }
 
     display_bin = get_bin_factor_for_display(target_img_buf.x_length(),
-					     target_img_buf.y_length());
+					     target_img_buf.y_length(), true);
     if ( display_bin < 0 ) {
         sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
 		    "bad display depth\n");
@@ -913,7 +914,8 @@ int main( int argc, char *argv[] )
     display_image(win_image, target_img_buf,
 		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
 
-    winname(win_image, "Imave Viewer  contrast = ( %d, %d, %d )  dither=%d",
+    winname(win_image, "Imave Viewer  "
+	"zoom = 1/%d  contrast = ( %d, %d, %d )  dither = %d", display_bin,
 	contrast_rgb[0], contrast_rgb[1], contrast_rgb[2], (int)flag_dither);
 
     /* allocate buffer */
@@ -1070,7 +1072,7 @@ int main( int argc, char *argv[] )
 	    double min_v;
 	    result_img_buf.resize(target_img_buf);
 	    result_img_buf.paste(target_img_buf);
-	    result_img_buf.subtract(sky_img_buf);
+	    result_img_buf -= sky_img_buf;
 	    /* save using float */
 	    make_output_filename(target_filename.cstr(),
 				 "pseudo-sky-subtracted",
@@ -1126,14 +1128,16 @@ int main( int argc, char *argv[] )
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
 	    if ( 1 < display_bin ) {
-		display_bin --;
+		if ( display_bin <= 4 ) display_bin --;
+		else display_bin -= 2;
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
 	    if ( display_bin < 10 ) {
-		display_bin ++;
+		if ( display_bin < 4 ) display_bin ++;
+		else display_bin += 2;
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
@@ -1436,7 +1440,7 @@ int main( int argc, char *argv[] )
 		if ( 1 < refresh_image ) {
 		    img_display.resize(target_img_buf);
 		    img_display.paste(target_img_buf);
-		    img_display.subtract(sky_img_buf);
+		    img_display -= sky_img_buf;
 		    if ( display_res_type == 0 ) {	/* abs */
 			img_display.abs();
 		    }

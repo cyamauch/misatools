@@ -105,6 +105,7 @@ int main( int argc, char *argv[] )
     sio.printf("'r' 'R' ... red contrast\n");
     sio.printf("'g' 'G' ... green contrast\n");
     sio.printf("'b' 'B' ... blue contrast\n");
+    sio.printf("'Backspace' ... back to previous step\n");
     sio.printf("'q' 'ESC' ... exit\n");
     sio.printf("\n");
     
@@ -118,6 +119,7 @@ int main( int argc, char *argv[] )
     }
     f_in.close();
 
+    sio.printf("Open: %s\n", filename.cstr());
     if ( read_tiff24or48_to_float( filename.cstr(), 65536.0,
 				   &image_buf, &sztype, &icc_buf, NULL ) < 0 ) {
 	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
@@ -135,7 +137,7 @@ int main( int argc, char *argv[] )
     width = image_buf.x_length();
     height = image_buf.y_length();
 
-    display_bin = get_bin_factor_for_display(width, height);
+    display_bin = get_bin_factor_for_display(width, height, true);
     if ( display_bin < 0 ) {
         sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
 		    "bad display depth\n");
@@ -153,7 +155,8 @@ int main( int argc, char *argv[] )
     
     display_image(win_image, image_buf,
 		  display_bin, 0, contrast_rgb, true, &tmp_buf);
-    winname(win_image, "RGB image");
+    winname(win_image, "Imave Viewer  zoom = 1/%d  contrast = ( %d, %d, %d )",
+	    display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 
     /* set drawing mode */
     newgcfunction(win_image, GXxor);
@@ -184,14 +187,16 @@ int main( int argc, char *argv[] )
 		}
 		else if ( ev_btn == '+' || ev_btn == ';' ) {	/* zoom-in */
 		    if ( 1 < display_bin ) {
-			display_bin --;
+			if ( display_bin <= 4 ) display_bin --;
+			else display_bin -= 2;
 			refresh_image = true;
 			refresh_winsize = true;
 		    }
 		}
 		else if ( ev_btn == '-' ) {		/* zoom-out */
 		    if ( display_bin < 10 ) {
-			display_bin ++;
+			if ( display_bin < 4 ) display_bin ++;
+			else display_bin += 2;
 			refresh_image = true;
 			refresh_winsize = true;
 		    }
@@ -252,6 +257,14 @@ int main( int argc, char *argv[] )
 		    }
 		    if ( changed == true ) {
 			save_display_params(conf_file_display, contrast_rgb);
+			refresh_image = true;
+		    }
+		}
+		else if ( ev_btn == 8 /* backspace */ ) {
+		    if ( 0 < step_count ) {
+			step_count --;
+			if ( step_count == 0 ) obj_r = 65535;
+			else if ( step_count == 1 ) sky_r = 65535;
 			refresh_image = true;
 		    }
 		}
@@ -319,11 +332,18 @@ int main( int argc, char *argv[] )
 	    display_image(win_image, image_buf, display_bin, 0, contrast_rgb,
 			  refresh_winsize, &tmp_buf);
 	    winname(win_image,
-		    "RGB image  zoom = 1/%d  contrast = ( %d, %d, %d )",
-		    display_bin,
-		    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
+	       "Imave Viewer  zoom = 1/%d  contrast = ( %d, %d, %d )",
+	       display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    newgcfunction(win_image, GXxor);
 	    flag_drawed = false;
+
+	    if ( 0 < step_count ) {
+		drawline(win_image, 0, obj_y, width, obj_y);
+		drawline(win_image, obj_x, 0, obj_x, height);
+	    }
+	    if ( 1 < step_count ) {
+		    drawcirc(win_image, obj_x, obj_y, obj_r, obj_r);
+	    }
 	}
 
     }

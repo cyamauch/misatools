@@ -259,6 +259,45 @@ static int display_image( int win_image, const mdarray &img_buf,
 			k += 4 * n_sse;
 			j_start = 8 * n_sse;
 		    }
+		    else if ( bin == 3 ) {
+			size_t n_sse = img_buf.x_length() / 12;
+			const float *p_src = img_buf_ptr_rgb + off1;
+			float *p_dst = lv_p + k;
+			uint32_t msk0[4] = {0xffffffffUL,0xffffffffUL,0xffffffffUL,0};
+			uint32_t msk1[4] = {0,0xffffffffUL,0xffffffffUL,0xffffffffUL};
+			__m128 msk_l = _mm_loadu_ps( (float *)msk0 );
+			__m128 msk_r = _mm_loadu_ps( (float *)msk1 );
+			for ( j=0 ; j < n_sse ; j++ ) {
+			    __m128 r0, r1, r2;
+			    /*
+			     *  p_src     abc  def   ghi  jkl
+			     *    V
+			     *   xmm      abc0 def0 0ghi 0jkl
+			     */
+			    r0 = _mm_loadu_ps( p_src );
+			    r0 = _mm_and_ps(r0, msk_l);
+			    p_src += 3;
+			    r1 = _mm_loadu_ps( p_src );
+			    r1 = _mm_and_ps(r1, msk_l);
+			    p_src += 3;
+			    r0 = _mm_hadd_ps( r0, r1 );	/* result */
+			    r1 = _mm_loadu_ps( p_src - 1 );
+			    r1 = _mm_and_ps(r1, msk_r);
+			    p_src += 3;
+			    r2 = _mm_loadu_ps( p_src - 1 );
+			    r2 = _mm_and_ps(r2, msk_r);
+			    p_src += 3;
+			    r1 = _mm_hadd_ps( r1, r2 );	/* result */
+			    /* */
+			    r0 = _mm_hadd_ps( r0, r1 );
+			    r1 = _mm_loadu_ps( p_dst );
+			    r0 = _mm_add_ps( r0, r1 );
+			    _mm_storeu_ps(p_dst, r0);
+			    p_dst += 4;
+			}
+			k += 4 * n_sse;
+			j_start = 12 * n_sse;
+		    }
 		    else if ( bin == 4 ) {
 			size_t n_sse = img_buf.x_length() / 16;
 			const float *p_src = img_buf_ptr_rgb + off1;
@@ -284,6 +323,74 @@ static int display_image( int win_image, const mdarray &img_buf,
 			}
 			k += 4 * n_sse;
 			j_start = 16 * n_sse;
+		    }
+		    else if ( bin == 6 ) {
+			size_t n_sse = img_buf.x_length() / 24;
+			const float *p_src = img_buf_ptr_rgb + off1;
+			float *p_dst = lv_p + k;
+			float tmp_work[12] __attribute__((aligned(16)));
+			//uint32_t msk0[4] = {0xffffffffUL,0xffffffffUL,0xffffffffUL,0};
+			//uint32_t msk1[4] = {0,0xffffffffUL,0xffffffffUL,0xffffffffUL};
+			//__m128 msk_l = _mm_loadu_ps( (float *)msk0 );
+			//__m128 msk_r = _mm_loadu_ps( (float *)msk1 );
+			for ( j=0 ; j < n_sse ; j++ ) {
+			    __m128 r0, r1, r2, r3;
+			    r0 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r2 = _mm_hadd_ps( r0, r1 );	/* result */
+			    r0 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r0 = _mm_hadd_ps( r0, r1 );	/* result */
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r3 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r3 = _mm_hadd_ps( r1, r3 );	/* result */
+			    /* result: r2,r3,r0 */
+			    _mm_store_ps(tmp_work + 0, r2);
+			    _mm_store_ps(tmp_work + 4, r0);
+			    _mm_store_ps(tmp_work + 8, r3);
+#if 1
+			    tmp_work[0] = tmp_work[0] + tmp_work[1] + tmp_work[2];
+			    tmp_work[1] = tmp_work[3] + tmp_work[4] + tmp_work[5];
+			    tmp_work[2] = tmp_work[6] + tmp_work[7] + tmp_work[8];
+			    tmp_work[3] = tmp_work[9] + tmp_work[10] + tmp_work[11];
+			    /* */
+			    r0 = _mm_load_ps( tmp_work );	/* result3 */
+#else
+			    /*
+			     *  This code is NOT fast!
+			     *
+			     *             |-r2-|       |-r3-|
+			     *  tmp_work   abc  def   ghi  jkl
+			     *     V
+			     *    xmm      abc0 def0 0ghi 0jkl
+			     *
+			     */
+			    //r2 = _mm_load_ps( tmp_work + 0 );
+			    r2 = _mm_and_ps(r2, msk_l);
+			    r1 = _mm_loadu_ps( tmp_work + 3 );
+			    r1 = _mm_and_ps(r1, msk_l);
+			    r0 = _mm_hadd_ps( r2, r1 );	/* result2 */
+			    r1 = _mm_loadu_ps( tmp_work + 5 );
+			    r1 = _mm_and_ps(r1, msk_r);
+			    //r3 = _mm_load_ps( tmp_work + 8 );
+			    r3 = _mm_and_ps(r3, msk_r);
+			    r1 = _mm_hadd_ps( r1, r3 );	/* result2 */
+			    r0 = _mm_hadd_ps( r0, r1 ); /* result3 */ 
+#endif
+			    /* */
+			    r1 = _mm_loadu_ps( p_dst );
+			    r0 = _mm_add_ps( r0, r1 );
+			    _mm_storeu_ps(p_dst, r0);
+			    p_dst += 4;
+			}
+			k += 4 * n_sse;
+			j_start = 24 * n_sse;
 		    }
 		    else if ( bin == 8 ) {
 			size_t n_sse = img_buf.x_length() / 32;
@@ -323,6 +430,63 @@ static int display_image( int win_image, const mdarray &img_buf,
 			}
 			k += 4 * n_sse;
 			j_start = 32 * n_sse;
+		    }
+		    else if ( bin == 10 ) {
+			size_t n_sse = img_buf.x_length() / 40;
+			const float *p_src = img_buf_ptr_rgb + off1;
+			float *p_dst = lv_p + k;
+			float tmp_work[20] __attribute__((aligned(16)));
+			for ( j=0 ; j < n_sse ; j++ ) {
+			    __m128 r0, r1, r2, r3;
+			    r0 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r2 = _mm_hadd_ps( r0, r1 );	/* result */
+			    r0 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r0 = _mm_hadd_ps( r0, r1 );	/* result */
+			    _mm_store_ps(tmp_work + 0, r2);
+			    _mm_store_ps(tmp_work + 4, r0);
+			    /* */
+			    r0 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r2 = _mm_hadd_ps( r0, r1 );	/* result */
+			    r0 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r3 = _mm_hadd_ps( r0, r1 );	/* result */
+			    r0 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r1 = _mm_loadu_ps( p_src );
+			    p_src += 4;
+			    r0 = _mm_hadd_ps( r0, r1 );	/* result */
+			    _mm_store_ps(tmp_work + 8, r2);
+			    _mm_store_ps(tmp_work + 12, r3);
+			    _mm_store_ps(tmp_work + 16, r0);
+			    /* */
+			    tmp_work[0] = tmp_work[0] + tmp_work[1]
+				     + tmp_work[2] + tmp_work[3] + tmp_work[4];
+			    tmp_work[1] = tmp_work[5] + tmp_work[6]
+				     + tmp_work[7] + tmp_work[8] + tmp_work[9];
+			    tmp_work[2] = tmp_work[10] + tmp_work[11]
+				     + tmp_work[12] + tmp_work[13] + tmp_work[14];
+			    tmp_work[3] = tmp_work[15] + tmp_work[16]
+				     + tmp_work[17]  + tmp_work[18] + tmp_work[19];
+			    /* */
+			    r0 = _mm_load_ps( tmp_work );
+			    r1 = _mm_loadu_ps( p_dst );
+			    r0 = _mm_add_ps( r0, r1 );
+			    _mm_storeu_ps(p_dst, r0);
+			    p_dst += 4;
+			}
+			k += 4 * n_sse;
+			j_start = 40 * n_sse;
 		    }
 #endif
 		    for ( j=j_start ; j < img_buf.x_length() ; j++ ) {

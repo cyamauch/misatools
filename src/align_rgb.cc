@@ -128,31 +128,33 @@ typedef struct _command_list {
 
 const command_list Cmd_list[] = {
 #define CMD_DISPLAY_TARGET 1
-        {CMD_DISPLAY_TARGET,    "Display Target (R and B) [1]"},
+        {CMD_DISPLAY_TARGET,    "Display Target (R and B)  [1]"},
 #define CMD_DISPLAY_REFERENCE 2
-        {CMD_DISPLAY_REFERENCE, "Display Reference (G)    [2]"},
+        {CMD_DISPLAY_REFERENCE, "Display Reference (G)     [2]"},
 #define CMD_DISPLAY_RESIDUAL1 3
-        {CMD_DISPLAY_RESIDUAL1, "Display Residual x1      [3]"},
+        {CMD_DISPLAY_RESIDUAL1, "Display Residual x1       [3]"},
 #define CMD_DISPLAY_RESIDUAL2 4
-        {CMD_DISPLAY_RESIDUAL2, "Display Residual x2      [4]"},
+        {CMD_DISPLAY_RESIDUAL2, "Display Residual x2       [4]"},
 #define CMD_DISPLAY_RESIDUAL4 5
-        {CMD_DISPLAY_RESIDUAL4, "Display Residual x4      [5]"},
+        {CMD_DISPLAY_RESIDUAL4, "Display Residual x4       [5]"},
 #define CMD_DISPLAY_RESIDUAL8 6
-        {CMD_DISPLAY_RESIDUAL8, "Display Residual x8      [6]"},
-#define CMD_ZOOM 7
-        {CMD_ZOOM,              "Zoom +/-                 [+][-]"},
-#define CMD_CONT_RGB 8
-        {CMD_CONT_RGB,          "RGB Contrast +/-         [<][>]"},
-#define CMD_CONT_R 9
-        {CMD_CONT_R,            "Red Contrast +/-         [r][R]"},
-#define CMD_CONT_G 10
-        {CMD_CONT_G,            "Green Contrast +/-       [g][G]"},
-#define CMD_CONT_B 11
-        {CMD_CONT_B,            "Blue Contrast +/-        [b][B]"},
-#define CMD_SAVE 12
-        {CMD_SAVE,              "Save Aligned Image       [Enter]"},
-#define CMD_EXIT 13
-        {CMD_EXIT,              "Exit                     [q]"}
+        {CMD_DISPLAY_RESIDUAL8, "Display Residual x8       [6]"},
+#define CMD_DISPLAY_TR_TOGGLE 7
+        {CMD_DISPLAY_TR_TOGGLE, "Display Target/Ref toggle [ ]"},
+#define CMD_ZOOM 8
+        {CMD_ZOOM,              "Zoom +/-                  [+][-]"},
+#define CMD_CONT_RGB 9
+        {CMD_CONT_RGB,          "RGB Contrast +/-          [<][>]"},
+#define CMD_CONT_R 10
+        {CMD_CONT_R,            "Red Contrast +/-          [r][R]"},
+#define CMD_CONT_G 11
+        {CMD_CONT_G,            "Green Contrast +/-        [g][G]"},
+#define CMD_CONT_B 12
+        {CMD_CONT_B,            "Blue Contrast +/-         [b][B]"},
+#define CMD_SAVE 13
+        {CMD_SAVE,              "Save Aligned Image        [Enter]"},
+#define CMD_EXIT 14
+        {CMD_EXIT,              "Exit                      [q]"}
 };
 
 const size_t N_cmd_list = sizeof(Cmd_list) / sizeof(Cmd_list[0]);
@@ -212,6 +214,7 @@ int main( int argc, char *argv[] )
     }
     f_in.close();
 
+    sio.printf("Open: %s\n", filename.cstr());
     if ( read_tiff24or48_separate_buffer( filename.cstr(),
 			  &in_image_r_buf, &in_image_g_buf, &in_image_b_buf,
 			  &tiff_szt, &icc_buf, NULL ) < 0 ) {
@@ -233,7 +236,7 @@ int main( int argc, char *argv[] )
     image_gb_buf.resize_2d(width,height);
 
     
-    display_bin = get_bin_factor_for_display(width * 2, height * 2);
+    display_bin = get_bin_factor_for_display(width * 2, height * 2, true);
     if ( display_bin < 0 ) {
         sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
 		    "bad display depth\n");
@@ -258,7 +261,7 @@ int main( int argc, char *argv[] )
     //		Fontsize, 0, Cmd_list[i].menu_string);
     //}
     {
-	const int w_width = 32 * (Fontsize/2) + Font_margin * 2;
+	const int w_width = 33 * (Fontsize/2) + Font_margin * 2;
 	const int c_height = (Fontsize + Font_margin * 2);
 	win_command = gopen(w_width, c_height * (N_cmd_list));
 	gsetbgcolor(win_command,"#606060");
@@ -342,6 +345,7 @@ int main( int argc, char *argv[] )
 	    else if ( ev_btn == '4' ) cmd_id = CMD_DISPLAY_RESIDUAL2;
 	    else if ( ev_btn == '5' ) cmd_id = CMD_DISPLAY_RESIDUAL4;
 	    else if ( ev_btn == '6' ) cmd_id = CMD_DISPLAY_RESIDUAL8;
+	    else if ( ev_btn == ' ' ) cmd_id = CMD_DISPLAY_TR_TOGGLE;
 	    else if ( ev_btn == '+' || ev_btn == ';' ) {
 		cmd_id = CMD_ZOOM;
 		ev_btn = 1;
@@ -385,10 +389,10 @@ int main( int argc, char *argv[] )
 	    else if ( ev_btn == 13 ) cmd_id = CMD_SAVE;
 	    /* ESC key or 'q' */
 	    else if ( ev_btn == 27 || ev_btn =='q' ) cmd_id = CMD_EXIT;
-	    else if ( ev_btn == ' ' ) {
-		if ( display_type == 0 ) cmd_id = CMD_DISPLAY_REFERENCE;
-		else cmd_id = CMD_DISPLAY_TARGET;
-	    }
+	    //else if ( ev_btn == ' ' ) {
+	    //if ( display_type == 0 ) cmd_id = CMD_DISPLAY_REFERENCE;
+	    //		else cmd_id = CMD_DISPLAY_TARGET;
+	    //}
 	}
 	
 	/*
@@ -446,16 +450,24 @@ int main( int argc, char *argv[] )
 	    refresh_gr = 2;
 	    refresh_gb = 2;
 	}
+	else if ( cmd_id == CMD_DISPLAY_TR_TOGGLE ) {
+	    if ( display_type == 0 ) display_type = 1;
+	    else display_type = 0;
+	    refresh_gr = 2;
+	    refresh_gb = 2;
+	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
 	    if ( 1 < display_bin ) {
-		display_bin --;
+		if ( display_bin <= 4 ) display_bin --;
+		else display_bin -= 2;
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
 	    if ( display_bin < 10 ) {
-		display_bin ++;
+		if ( display_bin < 4 ) display_bin ++;
+		else display_bin += 2;
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }

@@ -408,8 +408,8 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 		        }
 		    }
 
-		    stacked_buf0_sum_ptr->add(img_tmp_buf);		/* STACK! */
-		    stacked_buf0_sum2_ptr->add(img_tmp_buf * img_tmp_buf);
+		    (*stacked_buf0_sum_ptr) += img_tmp_buf;		/* STACK! */
+		    (*stacked_buf0_sum2_ptr) += (img_tmp_buf * img_tmp_buf);
 
 		    if ( flag_preview == true || ii == 1 + n_plus ) {
 			//max_val = md_max(stacked_buf0_sum);
@@ -706,6 +706,7 @@ int main( int argc, char *argv[] )
 
     /* image viewer */
 
+    sio.printf("Open: %s\n", filenames[ref_file_id].cstr());
     if ( read_tiff24or48_to_float(filenames[ref_file_id].cstr(), 65536.0,
 				  &ref_img_buf, NULL, NULL, NULL) < 0 ) {
         sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
@@ -713,7 +714,7 @@ int main( int argc, char *argv[] )
     }
 
     display_bin = get_bin_factor_for_display(ref_img_buf.x_length(),
-					     ref_img_buf.y_length());
+					     ref_img_buf.y_length(), true);
     if ( display_bin < 0 ) {
         sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
 		    "bad display depth\n");
@@ -728,9 +729,10 @@ int main( int argc, char *argv[] )
 		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
 
     winname(win_image, "Imave Viewer  "
-	    "contrast = ( %d, %d, %d )  "
+	    "zoom = 1/%d  contrast = ( %d, %d, %d )  "
 	    "sigma-clipping: [N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
-	    "dither=%d",
+	    "dither = %d",
+	    display_bin,
 	    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
 	    count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 	    (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
@@ -738,7 +740,7 @@ int main( int argc, char *argv[] )
     sio.printf("Initial Parameters:  "
 	    "contrast = ( %d, %d, %d )  "
 	    "sigma-clipping: [N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
-	    "dither=%d\n",
+	    "dither = %d\n",
 	    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
 	    count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 	    (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
@@ -957,14 +959,16 @@ int main( int argc, char *argv[] )
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
 	    if ( 1 < display_bin ) {
-		display_bin --;
+		if ( display_bin <= 4 ) display_bin --;
+		else display_bin -= 2;
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
 	    if ( display_bin < 10 ) {
-		display_bin ++;
+		if ( display_bin < 4 ) display_bin ++;
+		else display_bin += 2;
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
@@ -1212,7 +1216,7 @@ int main( int argc, char *argv[] )
 	if ( refresh_winname == true ) {
 	    winname(win_image, "Sigma-Clipping: "
 	        "[N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
-	    	"Dither=%d",
+	    	"dither = %d",
 		count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 		(int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
 	}

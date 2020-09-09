@@ -1,5 +1,6 @@
 
-static int get_bin_factor_for_display( size_t img_width, size_t img_height )
+static int get_bin_factor_for_display( size_t img_width, size_t img_height,
+				       bool fast_only )
 {
     int r_depth, r_width, r_height;
     int ret_val = -1;
@@ -19,6 +20,13 @@ static int get_bin_factor_for_display( size_t img_width, size_t img_height )
 	
 	if ( bin_x < bin_y ) ret_val = bin_y;
 	else ret_val = bin_x;
+
+	if ( fast_only == true ) {		/* SIMD-applied only */
+	    if ( 3 < ret_val ) {
+		if ( (ret_val % 2) != 0 ) ret_val ++;
+		if ( 10 < ret_val ) ret_val = 10;
+	    }
+	}
     }
  quit:
     return ret_val;

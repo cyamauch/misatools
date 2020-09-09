@@ -110,7 +110,8 @@ static int write_tiff24or48( const mdarray &img_buf_in, int sztype,
 		rgb_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,ch);
 
 		for ( j=0, jj=ch ; j < width ; j++, jj+=3 ) {
-		    strip_buf_ptr[jj] = rgb_img_in_ptr[pix_offset+j];
+		    double v = rgb_img_in_ptr[pix_offset+j];
+		    strip_buf_ptr[jj] = (uint16_t)(v + 0.5);
 		}
 	    }		
 	    
