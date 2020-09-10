@@ -163,6 +163,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     mdarray_uchar flag_buf(false);
     mdarray_float img_buf(false);
     mdarray_float img_tmp_buf(false);
+    mdarray_float img_tmp_buf_1d(false);
     mdarray_uchar icc_buf(false);
     size_t i, ii, n_plus;
     tstring appended_str;
@@ -210,11 +211,13 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 	stacked_buf0_sum2.resize(img_buf);
 	flag_buf.resize_2d(img_buf.x_length(), img_buf.y_length());
 	img_tmp_buf.resize(img_buf);
+	img_tmp_buf_1d.resize_2d(img_buf.x_length(), img_buf.y_length());
     }
 
     /* paste 1st image */
-    stacked_buf1_sum.paste(img_buf);
-    stacked_buf1_sum2.paste(img_buf * img_buf);
+    stacked_buf1_sum = img_buf;
+    stacked_buf1_sum2 = img_buf;
+    stacked_buf1_sum2 *= img_buf;
     
     winname(win_image, "Stacking ...");
     if ( flag_preview == true ) {
@@ -249,7 +252,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 		if ( flag_preview == true || ii == 1 + n_plus ) {
 		    //max_val = md_max(stacked_buf1_sum);
 		    //img_buf.paste(stacked_buf1_sum * (65535.0 / max_val));
-		    img_buf.paste(stacked_buf1_sum);
+		    img_buf = stacked_buf1_sum;
 		    img_buf *= (1.0/(double)ii);
 		    /* display stacked image */
 		    display_image(win_image, img_buf,
@@ -262,7 +265,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 	    }
 	}
     }
-    count_buf1 = (short)(1+n_plus);
+    count_buf1 = (int)(1+n_plus);
 
     stacked_buf_result_ptr = &stacked_buf1_sum;
     count_buf_result_ptr = &count_buf1;
@@ -310,10 +313,17 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 
 	if ( skylv_sigma_clip == true ) {
 	    /* get median(R,G,B) of averaged image */
-	    img_tmp_buf = (*stacked_buf1_sum_ptr) / (*count_buf1_ptr);
-	    av_median[0] = md_median( img_tmp_buf.sectionf("*,*,0") );
-	    av_median[1] = md_median( img_tmp_buf.sectionf("*,*,1") );
-	    av_median[2] = md_median( img_tmp_buf.sectionf("*,*,2") );
+	    img_tmp_buf = (*stacked_buf1_sum_ptr);
+	    img_tmp_buf /= (*count_buf1_ptr);
+	    img_tmp_buf.copy(&img_tmp_buf_1d,
+		0, img_tmp_buf.x_length(), 0, img_tmp_buf.y_length(), 0, 1);
+	    av_median[0] = md_median(img_tmp_buf_1d);
+	    img_tmp_buf.copy(&img_tmp_buf_1d,
+		0, img_tmp_buf.x_length(), 0, img_tmp_buf.y_length(), 1, 1);
+	    av_median[1] = md_median(img_tmp_buf_1d);
+	    img_tmp_buf.copy(&img_tmp_buf_1d,
+		0, img_tmp_buf.x_length(), 0, img_tmp_buf.y_length(), 2, 1);
+	    av_median[2] = md_median(img_tmp_buf_1d);
 	    sio.printf("Median of averaged image = (%g, %g, %g)\n",
 		       av_median[0], av_median[1], av_median[2]);
 	}
@@ -409,12 +419,13 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 		    }
 
 		    (*stacked_buf0_sum_ptr) += img_tmp_buf;		/* STACK! */
-		    (*stacked_buf0_sum2_ptr) += (img_tmp_buf * img_tmp_buf);
+		    img_tmp_buf *= img_tmp_buf;
+		    (*stacked_buf0_sum2_ptr) += img_tmp_buf; /* img_tmp_buf^2 */
 
 		    if ( flag_preview == true || ii == 1 + n_plus ) {
 			//max_val = md_max(stacked_buf0_sum);
 			//img_buf.paste(stacked_buf0_sum * (65535.0 / max_val));
-			img_buf.paste((*stacked_buf0_sum_ptr));
+			img_buf = (*stacked_buf0_sum_ptr);
 			img_buf /= (*count_buf0_ptr);
 			/* display stacked image */
 			display_image(win_image, img_buf,
@@ -437,6 +448,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     (*stacked_buf_result_ptr) /= (*count_buf_result_ptr);
 
     /* free memory */
+    img_tmp_buf_1d.init(false);
     img_tmp_buf.init(false);
     flag_buf.init(false);
     stacked_buf0_sum2.init(false);
