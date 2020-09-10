@@ -1453,7 +1453,7 @@ int main( int argc, char *argv[] )
 		    }
 		    else if ( display_res_type == 3 ) {	/* minus-only */
 			img_display -= fabs(img_display);
-			img_display *= (-8);
+			img_display *= (-8.0);
 		    }
 		    if ( display_type == 3 ) img_display *= 2.0;
 		    else if ( display_type == 4 ) img_display *= 4.0;
