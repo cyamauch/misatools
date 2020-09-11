@@ -5,6 +5,12 @@
 #include <pmmintrin.h>
 #endif
 
+#if defined(_SSSE3_IS_OK)
+#include <xmmintrin.h>
+#include <emmintrin.h>
+#include <tmmintrin.h>
+#endif
+
 
 static int display_image( int win_image, const mdarray &img_buf,
 			  int binning,		/* 1: original scale 2:1/2 */ 
@@ -181,38 +187,87 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    img_buf_ptr[2] = (const float *)img_buf.data_ptr();
 	}
 	if ( bin < 2 ) {
-	    float *lv_p = NULL;
-	    mdarray_float lv(false, &lv_p);
-	    lv.resize(img_buf.x_length() * n_img_buf_ch);
-	    lv.clean();
+	    /* assume unsigned 16-bit data */
+	    const double ftr = 1.0 / 256.0;
+#if defined(_SSSE3_IS_OK)
+	    const __m128i sfl_red_ix =
+	    /*                    right  to  left !                      */
+	    /*            B  G  R  A  B  G  R  A  B  G  R  A  B  G  R  A */
+	    _mm_set_epi8(-1,-1,12,-1,-1,-1, 8,-1,-1,-1, 4,-1,-1,-1, 0,-1);
+	    const __m128i sfl_green_ix =
+	    /*            B  G  R  A  B  G  R  A  B  G  R  A  B  G  R  A */
+	    _mm_set_epi8(-1,12,-1,-1,-1, 8,-1,-1,-1, 4,-1,-1,-1, 0,-1,-1);
+	    const __m128i sfl_blue_ix =
+	    /*            B  G  R  A  B  G  R  A  B  G  R  A  B  G  R  A */
+	    _mm_set_epi8(12,-1,-1,-1, 8,-1,-1,-1, 4,-1,-1,-1, 0,-1,-1,-1);
+	    const __m128 f0 = _mm_set1_ps((float)(ftr * ct[0]));
+	    const __m128 f1 = _mm_set1_ps((float)(ftr * ct[1]));
+	    const __m128 f2 = _mm_set1_ps((float)(ftr * ct[2]));
+	    const __m128 c255 = _mm_set1_ps((float)255.0);
+	    const __m128 c000 = _mm_set1_ps((float)0.0);
+	    const size_t step_sse16 = 16 / sizeof(float);	/* 4 */
+	    const size_t n_sse16 = img_buf.x_length() / step_sse16;
+	    const size_t nel_sse16 = step_sse16 * n_sse16;
+	    /* _mm_cvtps works as *pseudo* round() */
+	    const unsigned int mxcsr = _mm_getcsr();
+	    _mm_setcsr(mxcsr & 0xffff9fffU);
+#endif
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
-		/* assume unsigned 16-bit data */
-		const double ftr = 1.0 / 256.0;
 		double v;
-		size_t ii;
 #if 1
-		for ( ii=0 ; ii < n_img_buf_ch ; ii++ ) {
-		    /* use internal SIMD */
-		    lv.put_elements(img_buf_ptr[ii] + off1,	/* src */
-				    img_buf.x_length(),		/* len_src */
-				    ii * img_buf.x_length());	/* to... */
+		j = 0;	/* src */
+		k = 0;	/* dest */
+#if defined(_SSSE3_IS_OK)
+		__m128 ps0, m0;
+		__m128i si0, si1, si2;
+		for ( ; j < nel_sse16 ; j += step_sse16, k += 16 ) {
+		    /* red */
+		    ps0 = _mm_loadu_ps( img_buf_ptr[0] + off1 + j );
+		    ps0 = _mm_mul_ps(ps0, f0);
+		    m0 = _mm_or_ps(_mm_cmpgt_ps(ps0, c255),_mm_cmplt_ps(ps0, c000));
+		    si0 = _mm_cvtps_epi32(ps0);
+		    si0 = _mm_or_si128(si0, (__m128i)m0);
+		    si0 = _mm_shuffle_epi8(si0, sfl_red_ix);
+		    /* green */
+		    ps0 = _mm_loadu_ps( img_buf_ptr[1] + off1 + j );
+		    ps0 = _mm_mul_ps(ps0, f1);
+		    m0 = _mm_or_ps(_mm_cmpgt_ps(ps0, c255),_mm_cmplt_ps(ps0, c000));
+		    si1 = _mm_cvtps_epi32(ps0);
+		    si1 = _mm_or_si128(si1, (__m128i)m0);
+		    si1 = _mm_shuffle_epi8(si1, sfl_green_ix);
+		    si0 = _mm_or_si128(si0, si1);
+		    /* blue */
+		    ps0 = _mm_loadu_ps( img_buf_ptr[2] + off1 + j );
+		    ps0 = _mm_mul_ps(ps0, f2);
+		    m0 = _mm_or_ps(_mm_cmpgt_ps(ps0, c255),_mm_cmplt_ps(ps0, c000));
+		    si2 = _mm_cvtps_epi32(ps0);
+		    si2 = _mm_or_si128(si2, (__m128i)m0);
+		    si2 = _mm_shuffle_epi8(si2, sfl_blue_ix);
+		    si0 = _mm_or_si128(si0, si2);
+		    /* store! */
+		    _mm_storeu_si128((__m128i *)(tmp_buf_ptr + off4 + k), si0);
 		}
-		for ( ii=0 ; ii < 3 ; ii++ ) {
-		    float *p;
-		    if ( n_img_buf_ch == 3 ) {	/* RGB */
-			p = lv_p + ii * img_buf.x_length();
-		    }
-		    else {			/* MONO */
-			p = lv_p;
-		    }
-		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++, k+=4 ) {
-			v = p[j] * ftr * ct[ii] + 0.5;
-			if ( 255.0 < v ) v = 255.0;
-			else if ( v < 0 ) v = 255.0;
-			tmp_buf_ptr[off4 + k] = (unsigned char)v;
-		    }
+#endif
+		for ( ; j < img_buf.x_length() ; j++ ) {
+		    k++;
+		    v = img_buf_ptr[0][off1 + j] * ftr * ct[0] + 0.5;
+		    if ( 255.0 < v ) v = 255.0;
+		    else if ( v < 0 ) v = 255.0;
+		    tmp_buf_ptr[off4 + k] = (unsigned char)v;
+		    k++;
+		    v = img_buf_ptr[1][off1 + j] * ftr * ct[1] + 0.5;
+		    if ( 255.0 < v ) v = 255.0;
+		    else if ( v < 0 ) v = 255.0;
+		    tmp_buf_ptr[off4 + k] = (unsigned char)v;
+		    k++;
+		    v = img_buf_ptr[2][off1 + j] * ftr * ct[2] + 0.5;
+		    if ( 255.0 < v ) v = 255.0;
+		    else if ( v < 0 ) v = 255.0;
+		    tmp_buf_ptr[off4 + k] = (unsigned char)v;
+		    k++;
 		}
 #else
+		size_t ii;
 		for ( ii=0 ; ii < 3 ; ii++ ) {
 		    const float *img_buf_ptr_rgb = img_buf_ptr[ii];
 		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++, k+=4 ) {
@@ -226,6 +281,9 @@ static int display_image( int win_image, const mdarray &img_buf,
 		off4 += display_width * 4;
 		off1 += img_buf.x_length();
 	    }
+#if defined(_SSSE3_IS_OK)
+	    _mm_setcsr(mxcsr);
+#endif
 	}
 	else {
 	    float *lv_p = NULL;

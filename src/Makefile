@@ -14,7 +14,7 @@ all:: $(OBJS)
 clean::
 	rm -f $(OBJS) *.exe
 
-CMD = s++ -msse3 -DUSE_SIMD
+CMD = s++ -msse3 -mssse3 -DUSE_SIMD
 
 max_memory: max_memory.c
 	gcc -Wall -O max_memory.c -o max_memory

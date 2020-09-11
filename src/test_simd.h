@@ -16,5 +16,12 @@
 #endif
 #endif
 
+#if defined(USE_SIMD) && defined(__SSSE3__)
+#if (defined(__GNUC__) && __GNUC__ >= 4) || defined(__INTEL_COMPILER)
+#define _SSSE3_IS_OK 1
+// #warning "enabled sse3"
+#endif
+#endif
+
 
 #endif
