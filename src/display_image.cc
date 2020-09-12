@@ -11,6 +11,46 @@
 #include <tmmintrin.h>
 #endif
 
+static void convert_c2f( const unsigned char *src, size_t n, float *dst )
+{
+#if defined(_SSSE3_IS_OK)
+	    /*                    right  to  left !                      */
+    const __m128i sfl_ix0 =
+	    _mm_set_epi8(-1,-1,-1, 3,-1,-1,-1, 2,-1,-1,-1, 1,-1,-1,-1, 0);
+    const __m128i sfl_ix1 =
+	    _mm_set_epi8(-1,-1,-1, 7,-1,-1,-1, 6,-1,-1,-1, 5,-1,-1,-1, 4);
+    const __m128i sfl_ix2 =
+	    _mm_set_epi8(-1,-1,-1,11,-1,-1,-1,10,-1,-1,-1, 9,-1,-1,-1, 8);
+    const __m128i sfl_ix3 =
+	    _mm_set_epi8(-1,-1,-1,15,-1,-1,-1,14,-1,-1,-1,13,-1,-1,-1,12);
+    const size_t step_sse = 16;
+    const size_t n_sse = n / step_sse;
+    const size_t nel_sse = step_sse * n_sse;
+#endif
+    size_t i = 0;
+
+#if defined(_SSSE3_IS_OK)
+    __m128 ps0;
+    __m128i si0;
+    for ( ; i < nel_sse ; i += step_sse ) {
+	si0 = _mm_loadu_si128( (const __m128i *)(src + i) );
+	ps0 = _mm_cvtepi32_ps( _mm_shuffle_epi8(si0, sfl_ix0) );
+	_mm_storeu_ps(dst + i, ps0);
+	ps0 = _mm_cvtepi32_ps( _mm_shuffle_epi8(si0, sfl_ix1) );
+	_mm_storeu_ps(dst + i + 4, ps0);
+	ps0 = _mm_cvtepi32_ps( _mm_shuffle_epi8(si0, sfl_ix2) );
+	_mm_storeu_ps(dst + i + 8, ps0);
+	ps0 = _mm_cvtepi32_ps( _mm_shuffle_epi8(si0, sfl_ix3) );
+	_mm_storeu_ps(dst + i + 12, ps0);
+    }
+#endif
+
+    for ( ; i < n ; i ++ ) {
+	dst[i] = src[i];
+    }
+
+    return;
+}
 
 static int display_image( int win_image, const mdarray &img_buf,
 			  int binning,		/* 1: original scale 2:1/2 */ 
@@ -70,7 +110,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 
     //sio.eprintf("[DEBUG] n_img_buf_ch = %zd\n",n_img_buf_ch);
     
-    if ( img_buf.size_type() == UCHAR_ZT ) {
+    if ( 0 /* old code for UCHAR_ZT */ ) {
 	const unsigned char *img_buf_ptr[3];
 	size_t off1 = 0;
 	size_t off4 = 0;
@@ -172,24 +212,58 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    }
 	}
     }
-    else if ( img_buf.size_type() == FLOAT_ZT ) {
-	const float *img_buf_ptr[3];
-	const float *linebuf_ptr[3];
+    else if ( img_buf.size_type() == FLOAT_ZT || img_buf.size_type() == UCHAR_ZT ) {
+	/* for UCHAR_ZT */
+	mdarray_float linebuf_c2f(false);
+	const unsigned char *img_buf_c_ptr[3] = {NULL,NULL,NULL};
+	/* for FLOAT_ZT */
+	const float *img_buf_f_ptr[3] = {NULL,NULL,NULL};
+	/* common */
+	const float *linebuf_ptr[3] = {NULL,NULL,NULL};
 	size_t off1 = 0;
 	size_t off4 = 0;
-	if ( n_img_buf_ch == 3 ) {
-	    img_buf_ptr[0] = (const float *)img_buf.data_ptr(0,0,src_ch[0]);
-	    img_buf_ptr[1] = (const float *)img_buf.data_ptr(0,0,src_ch[1]);
-	    img_buf_ptr[2] = (const float *)img_buf.data_ptr(0,0,src_ch[2]);
+	double ftr;
+	if ( n_img_buf_ch == 3 ) {	/* RGB */
+	    if ( img_buf.size_type() == UCHAR_ZT ) {
+		img_buf_c_ptr[0] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[0]);
+		img_buf_c_ptr[1] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[1]);
+		img_buf_c_ptr[2] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[2]);
+		linebuf_c2f.resize(img_buf.x_length() * n_img_buf_ch);
+		linebuf_ptr[0] = linebuf_c2f.array_ptr();
+		linebuf_ptr[1] = linebuf_c2f.array_ptr() + img_buf.x_length();
+		linebuf_ptr[2] = linebuf_c2f.array_ptr() + 2 * img_buf.x_length();
+	    }
+	    else {
+		img_buf_f_ptr[0] = (const float *)img_buf.data_ptr(0,0,src_ch[0]);
+		img_buf_f_ptr[1] = (const float *)img_buf.data_ptr(0,0,src_ch[1]);
+		img_buf_f_ptr[2] = (const float *)img_buf.data_ptr(0,0,src_ch[2]);
+	    }
+	}
+	else {	/* MONO */
+	    if ( img_buf.size_type() == UCHAR_ZT ) {
+		img_buf_c_ptr[0] = (const unsigned char *)img_buf.data_ptr();
+		img_buf_c_ptr[1] = (const unsigned char *)img_buf.data_ptr();
+		img_buf_c_ptr[2] = (const unsigned char *)img_buf.data_ptr();
+		linebuf_c2f.resize(img_buf.x_length());
+		linebuf_ptr[0] = linebuf_c2f.array_ptr();
+		linebuf_ptr[1] = linebuf_c2f.array_ptr();
+		linebuf_ptr[2] = linebuf_c2f.array_ptr();
+	    }
+	    else {
+		img_buf_f_ptr[0] = (const float *)img_buf.data_ptr();
+		img_buf_f_ptr[1] = (const float *)img_buf.data_ptr();
+		img_buf_f_ptr[2] = (const float *)img_buf.data_ptr();
+	    }
+	}
+	/* set base range */
+	if ( img_buf.size_type() == UCHAR_ZT ) {
+	    ftr = 1.0 / (double)(bin * bin);
 	}
 	else {
-	    img_buf_ptr[0] = (const float *)img_buf.data_ptr();
-	    img_buf_ptr[1] = (const float *)img_buf.data_ptr();
-	    img_buf_ptr[2] = (const float *)img_buf.data_ptr();
+	    ftr = 1.0 / (double)(256 * bin * bin);
 	}
+	/* */
 	if ( bin < 2 ) {
-	    /* assume unsigned 16-bit data */
-	    const double ftr = 1.0 / 256.0;
 #if defined(_SSSE3_IS_OK)
 	    const __m128i sfl_red_ix =
 	    /*                    right  to  left !                      */
@@ -216,9 +290,18 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
 		double v;
 #if 1
-		linebuf_ptr[0] = img_buf_ptr[0] + off1;
-		linebuf_ptr[1] = img_buf_ptr[1] + off1;
-		linebuf_ptr[2] = img_buf_ptr[2] + off1;
+		if ( img_buf.size_type() == UCHAR_ZT ) {
+		    size_t ii;
+		    for ( ii=0 ; ii < 3 ; ii++ ) {
+			convert_c2f( img_buf_c_ptr[ii] + off1, img_buf.x_length(),
+				     linebuf_c2f.array_ptr() + ii * img_buf.x_length() );
+		    }
+		}
+		else {
+		    linebuf_ptr[0] = img_buf_f_ptr[0] + off1;
+		    linebuf_ptr[1] = img_buf_f_ptr[1] + off1;
+		    linebuf_ptr[2] = img_buf_f_ptr[2] + off1;
+		}
 		j = 0;	/* src */
 		k = 0;	/* dest */
 #if defined(_SSSE3_IS_OK)
@@ -296,9 +379,17 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    lv.clean();
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
 		size_t ii;
-		linebuf_ptr[0] = img_buf_ptr[0] + off1;
-		linebuf_ptr[1] = img_buf_ptr[1] + off1;
-		linebuf_ptr[2] = img_buf_ptr[2] + off1;
+		if ( img_buf.size_type() == UCHAR_ZT ) {
+		    for ( ii=0 ; ii < 3 ; ii++ ) {
+			convert_c2f( img_buf_c_ptr[ii] + off1, img_buf.x_length(),
+				     linebuf_c2f.array_ptr() + ii * img_buf.x_length() );
+		    }
+		}
+		else {
+		    linebuf_ptr[0] = img_buf_f_ptr[0] + off1;
+		    linebuf_ptr[1] = img_buf_f_ptr[1] + off1;
+		    linebuf_ptr[2] = img_buf_f_ptr[2] + off1;
+		}
 		for ( ii=0 ; ii < n_img_buf_ch ; ii++ ) {
 		    const float *linebuf_ptr_rgb = linebuf_ptr[ii];
 		    size_t j_start = 0;
@@ -560,12 +651,11 @@ static int display_image( int win_image, const mdarray &img_buf,
 		    }
 		}
 		if ( (i+1) % bin == 0 || (i+1) == img_buf.y_length() ) {
-		    const double ftr = 1.0 / (double)(256 * bin * bin);
-		    double v;
 		    if ( n_img_buf_ch == 3 ) {	/* RGB */
 			float *lv_p_r = lv_p + 0;
 			float *lv_p_g = lv_p + display_width;
 			float *lv_p_b = lv_p + 2 * display_width;
+			double v;
 			for ( j=0, l=0 ; j < display_width ; j++ ) {
 			          l++;
 			    v = lv_p_r[j] * ftr * ct[0] + 0.5;
@@ -589,6 +679,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 			}
 		    }
 		    else {			/* MONO */
+			double v;
 			for ( j=0, l=0 ; j < display_width ; j++ ) {
 			          l++;
 			    v = lv_p[j] * ftr * ct[0] + 0.5;
