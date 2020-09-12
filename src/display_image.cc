@@ -174,6 +174,7 @@ static int display_image( int win_image, const mdarray &img_buf,
     }
     else if ( img_buf.size_type() == FLOAT_ZT ) {
 	const float *img_buf_ptr[3];
+	const float *linebuf_ptr[3];
 	size_t off1 = 0;
 	size_t off4 = 0;
 	if ( n_img_buf_ch == 3 ) {
@@ -215,6 +216,9 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
 		double v;
 #if 1
+		linebuf_ptr[0] = img_buf_ptr[0] + off1;
+		linebuf_ptr[1] = img_buf_ptr[1] + off1;
+		linebuf_ptr[2] = img_buf_ptr[2] + off1;
 		j = 0;	/* src */
 		k = 0;	/* dest */
 #if defined(_SSSE3_IS_OK)
@@ -222,14 +226,14 @@ static int display_image( int win_image, const mdarray &img_buf,
 		__m128i si0, si1, si2;
 		for ( ; j < nel_sse16 ; j += step_sse16, k += 16 ) {
 		    /* red */
-		    ps0 = _mm_loadu_ps( img_buf_ptr[0] + off1 + j );
+		    ps0 = _mm_loadu_ps( linebuf_ptr[0] + j );
 		    ps0 = _mm_mul_ps(ps0, f0);
 		    m0 = _mm_or_ps(_mm_cmpgt_ps(ps0, c255),_mm_cmplt_ps(ps0, c000));
 		    si0 = _mm_cvtps_epi32(ps0);
 		    si0 = _mm_or_si128(si0, (__m128i)m0);
 		    si0 = _mm_shuffle_epi8(si0, sfl_red_ix);
 		    /* green */
-		    ps0 = _mm_loadu_ps( img_buf_ptr[1] + off1 + j );
+		    ps0 = _mm_loadu_ps( linebuf_ptr[1] + j );
 		    ps0 = _mm_mul_ps(ps0, f1);
 		    m0 = _mm_or_ps(_mm_cmpgt_ps(ps0, c255),_mm_cmplt_ps(ps0, c000));
 		    si1 = _mm_cvtps_epi32(ps0);
@@ -237,7 +241,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 		    si1 = _mm_shuffle_epi8(si1, sfl_green_ix);
 		    si0 = _mm_or_si128(si0, si1);
 		    /* blue */
-		    ps0 = _mm_loadu_ps( img_buf_ptr[2] + off1 + j );
+		    ps0 = _mm_loadu_ps( linebuf_ptr[2] + j );
 		    ps0 = _mm_mul_ps(ps0, f2);
 		    m0 = _mm_or_ps(_mm_cmpgt_ps(ps0, c255),_mm_cmplt_ps(ps0, c000));
 		    si2 = _mm_cvtps_epi32(ps0);
@@ -250,17 +254,17 @@ static int display_image( int win_image, const mdarray &img_buf,
 #endif
 		for ( ; j < img_buf.x_length() ; j++ ) {
 		    k++;
-		    v = img_buf_ptr[0][off1 + j] * ftr * ct[0] + 0.5;
+		    v = linebuf_ptr[0][j] * ftr * ct[0] + 0.5;
 		    if ( 255.0 < v ) v = 255.0;
 		    else if ( v < 0 ) v = 255.0;
 		    tmp_buf_ptr[off4 + k] = (unsigned char)v;
 		    k++;
-		    v = img_buf_ptr[1][off1 + j] * ftr * ct[1] + 0.5;
+		    v = linebuf_ptr[1][j] * ftr * ct[1] + 0.5;
 		    if ( 255.0 < v ) v = 255.0;
 		    else if ( v < 0 ) v = 255.0;
 		    tmp_buf_ptr[off4 + k] = (unsigned char)v;
 		    k++;
-		    v = img_buf_ptr[2][off1 + j] * ftr * ct[2] + 0.5;
+		    v = linebuf_ptr[2][j] * ftr * ct[2] + 0.5;
 		    if ( 255.0 < v ) v = 255.0;
 		    else if ( v < 0 ) v = 255.0;
 		    tmp_buf_ptr[off4 + k] = (unsigned char)v;
@@ -269,9 +273,9 @@ static int display_image( int win_image, const mdarray &img_buf,
 #else
 		size_t ii;
 		for ( ii=0 ; ii < 3 ; ii++ ) {
-		    const float *img_buf_ptr_rgb = img_buf_ptr[ii];
+		    const float *linebuf_ptr_rgb = linebuf_ptr[ii];
 		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++, k+=4 ) {
-			v = img_buf_ptr_rgb[off1 + j] * ftr * ct[ii] + 0.5;
+			v = linebuf_ptr_rgb[j] * ftr * ct[ii] + 0.5;
 			if ( 255.0 < v ) v = 255.0;
 			else if ( v < 0 ) v = 255.0;
 			tmp_buf_ptr[off4 + k] = (unsigned char)v;
@@ -292,14 +296,17 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    lv.clean();
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
 		size_t ii;
+		linebuf_ptr[0] = img_buf_ptr[0] + off1;
+		linebuf_ptr[1] = img_buf_ptr[1] + off1;
+		linebuf_ptr[2] = img_buf_ptr[2] + off1;
 		for ( ii=0 ; ii < n_img_buf_ch ; ii++ ) {
-		    const float *img_buf_ptr_rgb = img_buf_ptr[ii];
+		    const float *linebuf_ptr_rgb = linebuf_ptr[ii];
 		    size_t j_start = 0;
 		    k = ii * display_width;	/* offset */
 #if defined(_SSE3_IS_OK)
 		    if ( bin == 2 ) {
 			size_t n_sse = img_buf.x_length() / 8;
-			const float *p_src = img_buf_ptr_rgb + off1;
+			const float *p_src = linebuf_ptr_rgb;
 			float *p_dst = lv_p + k;
 			for ( j=0 ; j < n_sse ; j++ ) {
 			    __m128 r0, r1;
@@ -319,7 +326,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 		    }
 		    else if ( bin == 3 ) {
 			size_t n_sse = img_buf.x_length() / 12;
-			const float *p_src = img_buf_ptr_rgb + off1;
+			const float *p_src = linebuf_ptr_rgb;
 			float *p_dst = lv_p + k;
 			uint32_t msk0[4] = {0xffffffffUL,0xffffffffUL,0xffffffffUL,0};
 			uint32_t msk1[4] = {0,0xffffffffUL,0xffffffffUL,0xffffffffUL};
@@ -358,7 +365,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 		    }
 		    else if ( bin == 4 ) {
 			size_t n_sse = img_buf.x_length() / 16;
-			const float *p_src = img_buf_ptr_rgb + off1;
+			const float *p_src = linebuf_ptr_rgb;
 			float *p_dst = lv_p + k;
 			for ( j=0 ; j < n_sse ; j++ ) {
 			    __m128 r0, r1, r2;
@@ -384,7 +391,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 		    }
 		    else if ( bin == 6 ) {
 			size_t n_sse = img_buf.x_length() / 24;
-			const float *p_src = img_buf_ptr_rgb + off1;
+			const float *p_src = linebuf_ptr_rgb;
 			float *p_dst = lv_p + k;
 			float tmp_work[12] __attribute__((aligned(16)));
 			//uint32_t msk0[4] = {0xffffffffUL,0xffffffffUL,0xffffffffUL,0};
@@ -452,7 +459,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 		    }
 		    else if ( bin == 8 ) {
 			size_t n_sse = img_buf.x_length() / 32;
-			const float *p_src = img_buf_ptr_rgb + off1;
+			const float *p_src = linebuf_ptr_rgb;
 			float *p_dst = lv_p + k;
 			for ( j=0 ; j < n_sse ; j++ ) {
 			    __m128 r0, r1, r2, r3;
@@ -491,7 +498,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 		    }
 		    else if ( bin == 10 ) {
 			size_t n_sse = img_buf.x_length() / 40;
-			const float *p_src = img_buf_ptr_rgb + off1;
+			const float *p_src = linebuf_ptr_rgb;
 			float *p_dst = lv_p + k;
 			float tmp_work[20] __attribute__((aligned(16)));
 			for ( j=0 ; j < n_sse ; j++ ) {
@@ -548,7 +555,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 		    }
 #endif
 		    for ( j=j_start ; j < img_buf.x_length() ; j++ ) {
-			lv_p[k] += img_buf_ptr_rgb[off1 + j];
+			lv_p[k] += linebuf_ptr_rgb[j];
 			if ( (j+1) % bin == 0 ) k++;
 		    }
 		}
