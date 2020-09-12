@@ -349,8 +349,10 @@ int main( int argc, char *argv[] )
 		/* for float */
 		if ( tiff_sztype < 0 ) img_buf *= 65536.0;
 		
-		display_bin = get_bin_factor_for_display(img_buf.x_length(),
-					     img_buf.y_length(), true);
+		if ( flag_auto_zoom == true ) {
+		    display_bin = get_bin_factor_for_display(img_buf.x_length(),
+						     img_buf.y_length(), true);
+		}
 		if ( display_bin < 0 ) {
 		    sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
 				"bad display depth\n");
