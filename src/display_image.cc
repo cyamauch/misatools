@@ -1,10 +1,13 @@
 #include "test_simd.h"
 
+/* SSE3 is used for binning */
 #if defined(_SSE3_IS_OK)
 #include <xmmintrin.h>
 #include <pmmintrin.h>
 #endif
 
+/* SSSE3 is used for RRRRGGGGBBBB => ARGBARGBARGBARGB conversion */
+/* and 8bit-uint x 16 => 32bit-int x 16 conversions.             */
 #if defined(_SSSE3_IS_OK)
 #include <xmmintrin.h>
 #include <emmintrin.h>
@@ -110,7 +113,8 @@ static int display_image( int win_image, const mdarray &img_buf,
 
     //sio.eprintf("[DEBUG] n_img_buf_ch = %zd\n",n_img_buf_ch);
     
-    if ( 0 /* old code for UCHAR_ZT */ ) {
+#if 0	/* old code for UCHAR_ZT */
+    if ( img_buf.size_type() == UCHAR_ZT ) {
 	const unsigned char *img_buf_ptr[3];
 	size_t off1 = 0;
 	size_t off4 = 0;
@@ -212,7 +216,9 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    }
 	}
     }
-    else if ( img_buf.size_type() == FLOAT_ZT || img_buf.size_type() == UCHAR_ZT ) {
+#endif	/* #if 0 */
+
+    if ( img_buf.size_type() == FLOAT_ZT || img_buf.size_type() == UCHAR_ZT ) {
 	/* for UCHAR_ZT */
 	mdarray_float linebuf_c2f(false);
 	const unsigned char *img_buf_c_ptr[3] = {NULL,NULL,NULL};

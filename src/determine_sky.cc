@@ -31,7 +31,7 @@ const double Contrast_scale = 4.0;
 
 int main( int argc, char *argv[] )
 {
-    const char *conf_file_display = "display_1.txt";
+    const char *conf_file_display = "display_2.txt";
 
     stdstreamio sio, f_in;
     tstring filename;
@@ -282,7 +282,7 @@ int main( int argc, char *argv[] )
 		    drawline(win_image, obj_x, 0, obj_x, height);
 		    flag_drawed = true;
 		}
-		else if ( ev_type == ButtonPress ) {
+		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
 		    if ( 0 <= obj_x && obj_x < width &&
 			 0 <= obj_y && obj_y < height ) {
 			step_count ++;
@@ -301,7 +301,7 @@ int main( int argc, char *argv[] )
 		    drawcirc(win_image, obj_x, obj_y, obj_r, obj_r);
 		    flag_drawed = true;
 		}
-		else if ( ev_type == ButtonPress ) {
+		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
 		    if ( obj_r < width && obj_r < height ) {
 			step_count ++;
 		    }
@@ -319,7 +319,7 @@ int main( int argc, char *argv[] )
 		    drawcirc(win_image, obj_x, obj_y, sky_r, sky_r);
 		    flag_drawed = true;
 		}
-		else if ( ev_type == ButtonPress ) {
+		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
 		    if ( obj_r < sky_r && sky_r < width && sky_r < height ) {
 			break;
 		    }

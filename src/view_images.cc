@@ -15,7 +15,6 @@ const double Contrast_scale = 2.0;
 
 #include "read_tiff24or48.h"
 #include "get_bin_factor_for_display.c"
-#include "display_image.cc"
 #include "load_display_params.cc"
 #include "save_display_params.cc"
 //#include "make_output_filename.cc"
@@ -32,63 +31,8 @@ const int Font_margin = 2;
 static int Fontsize = 14;
 #include "set_fontsize.c"
 
-static int display_file_list( int win_filesel,
-			      const tarray_tstring &filenames,
-			      const bool flg_saved[],
-			      int ref_file_id,
-			      int sel_file_id, bool flag_loading )
-{
-    size_t i;
-    int xpos_filename;
-
-    if ( flg_saved != NULL ) xpos_filename = (Fontsize/2)*8;
-    else xpos_filename = (Fontsize/2)*1;
-    
-    gclr(win_filesel);
-    
-    /* displaying file list */
-    newcolor(win_filesel, "white");
-    
-    for ( i=0 ; i < filenames.length() ; i++ ) {
-        bool changed_color = false;
-	if ( 0 <= ref_file_id && i == (size_t)ref_file_id ) {
-	    newcolor(win_filesel, "red");
-	    changed_color = true;
-	    drawstr(win_filesel,
-		    (Fontsize/2)*2, Fontsize*(i+1) - Font_y_off, Fontsize, 0,
-		    "REF");
-	}
-	else if ( 0 <= sel_file_id && i == (size_t)sel_file_id ) {
-	    newcolor(win_filesel, "green");
-	    if ( flag_loading == true ) {
-		fillrect(win_filesel,
-			 xpos_filename, (int)(Fontsize*i)-1,
-			 (Fontsize/2) * (filenames[i].length() + 0),
-			 Fontsize+1);
-		newcolor(win_filesel, "black");
-	    }
-	    changed_color = true;
-	}
-
-	if ( flg_saved != NULL ) {
-	    if ( flg_saved[i] == true ) {
-		drawstr(win_filesel,
-		    (Fontsize/2)*2, Fontsize*(i+1) - Font_y_off, Fontsize, 0,
-		    "SAVED");
-	    }
-	}
-	
-        drawstr(win_filesel,
-		xpos_filename, Fontsize*(i+1) - Font_y_off, Fontsize, 0,
-		"%s",filenames[i].cstr());
-
-        if ( changed_color == true ) {
-	    newcolor(win_filesel, "white");
-	}
-    }
-
-    return 0;
-}
+#include "display_file_list.cc"
+#include "display_image.cc"
 
 
 typedef struct _command_list {
@@ -98,7 +42,7 @@ typedef struct _command_list {
 
 const command_list Cmd_list[] = {
 #define CMD_DISPLAY_TARGET 1
-        {CMD_DISPLAY_TARGET,    "Display Target            [1]"},
+        {CMD_DISPLAY_TARGET,    "Display Normal            [1]"},
 #define CMD_DISPLAY_INVERT 2
         {CMD_DISPLAY_INVERT,    "Display Invert            [2]"},
 #define CMD_DISPLAY_RGB 3
@@ -153,7 +97,7 @@ int main( int argc, char *argv[] )
     mdarray_uchar tmp_buf(false);	/* tmp buffer for displaying */
     int tiff_sztype = 0;
     
-    int display_type = 1;		/* flag to display image type */
+    int display_type = 0;		/* flag to display image type */
     int display_ch = 0;			/* 0=RGB 1=R 2=G 3=B */
     int display_bin = 1;		/* binning factor for display */
     int contrast_rgb[3] = {8, 8, 8};	/* contrast for display */
@@ -254,7 +198,7 @@ int main( int argc, char *argv[] )
     gclr(win_filesel);
     winname(win_filesel, "File Selector");
     
-    display_file_list(win_filesel, filenames, NULL, -1, sel_file_id, false);
+    display_file_list(win_filesel, filenames, sel_file_id, false, -1, NULL);
 
     /* image viewer */
 
@@ -315,7 +259,8 @@ int main( int argc, char *argv[] )
 	/*
 	 *  Check file selector
 	 */
-	if ( ev_type == ButtonPress && ev_win == win_filesel ) {
+	if ( ev_type == ButtonPress && ev_btn == 1 &&
+	     ev_win == win_filesel ) {
 	    flag_file_selector = true;
 	    f_id = ev_y / Fontsize;
 	}
@@ -331,8 +276,7 @@ int main( int argc, char *argv[] )
 	if ( f_id != sel_file_id &&
 	     0 <= f_id && (size_t)f_id < filenames.length() ) {
 
-	    display_file_list(win_filesel, filenames, NULL,
-			      -1, f_id, true);
+	    display_file_list(win_filesel, filenames, f_id, true, -1, NULL);
 	    
 	    sio.printf("Open: %s\n", filenames[f_id].cstr());
 		    
@@ -373,7 +317,8 @@ int main( int argc, char *argv[] )
 	if ( flag_file_selector == true ) {
 	    /* NOP */
 	}
-	else if ( ev_type == ButtonPress && ev_win == win_command ) {
+	else if ( ev_type == ButtonPress && 1 <= ev_btn && ev_btn <= 3 &&
+		  ev_win == win_command ) {
 	    cmd_id = 1 + ev_y / win_command_col_height;
 	}
 	else if ( ev_type == KeyPress ) {
@@ -565,16 +510,21 @@ int main( int argc, char *argv[] )
 	/* Update window */
 	    
 	if ( refresh_image != 0 ) {
-	    {
-		display_image(win_image, img_buf, display_bin, display_ch,
-			      contrast_rgb, refresh_winsize, &tmp_buf);
-		winname(win_image, "Image Viewer  "
+	    if ( display_type == 1 ) {
+		newgcfunction(win_image, GXcopyInverted);
+	    }
+	    else {
+		newgcfunction(win_image, GXcopy);
+	    }
+	    //
+	    display_image(win_image, img_buf, display_bin, display_ch,
+			  contrast_rgb, refresh_winsize, &tmp_buf);
+	    winname(win_image, "Image Viewer  "
 		    "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  "
 		    "auto_zoom = %d  dither = %d  ",
 		    names_ch[display_ch], display_bin,
 		    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
 		    (int)flag_auto_zoom, (int)flag_dither);
-	    }
 	}
 
 	if ( refresh_winname == true ) {
@@ -588,8 +538,8 @@ int main( int argc, char *argv[] )
 
 	if ( refresh_list == true ) {
 
-	    display_file_list(win_filesel, filenames, NULL,
-			      -1, sel_file_id, false);
+	    display_file_list(win_filesel, filenames, sel_file_id, false,
+			      -1, NULL);
 
 	}
 

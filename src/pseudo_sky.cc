@@ -736,7 +736,7 @@ const size_t N_cmd_list = sizeof(Cmd_list) / sizeof(Cmd_list[0]);
 
 int main( int argc, char *argv[] )
 {
-    const char *conf_file_display = "display_1.txt";
+    const char *conf_file_display = "display_2.txt";
 
     stdstreamio sio, f_in;
     tstring target_filename;
@@ -948,7 +948,8 @@ int main( int argc, char *argv[] )
         /* waiting an event */
         ev_win = eggx_ggetxpress(&ev_type,&ev_btn,&ev_x,&ev_y);
 
-	if ( ev_type == ButtonPress && ev_win == win_command ) {
+	if ( ev_type == ButtonPress && 1 <= ev_btn && ev_btn <= 3 &&
+	     ev_win == win_command ) {
 	    cmd_id = 1 + ev_y / win_command_col_height;
 	}
 
