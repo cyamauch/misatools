@@ -7,6 +7,8 @@ static int display_file_list( int win_filesel,
     int xpos_filename = (Fontsize/2)*1;
 
     if ( flg_saved != NULL ) xpos_filename = (Fontsize/2)*8;
+
+    layer(win_filesel, 0, 1);
     
     gclr(win_filesel);
     
@@ -55,5 +57,7 @@ static int display_file_list( int win_filesel,
 	}
     }
 
+    copylayer(win_filesel, 1, 0);
+    
     return 0;
 }
