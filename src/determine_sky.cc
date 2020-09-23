@@ -13,7 +13,7 @@ using namespace sli;
 
 const double Contrast_scale = 4.0;
 
-#include "read_tiff24or48_to_float.h"
+#include "read_tiff24or48.h"
 #include "write_float_to_tiff48.h"
 #include "write_float_to_tiff.h"
 #include "load_display_params.cc"
@@ -38,7 +38,7 @@ int main( int argc, char *argv[] )
     tstring out_filename;
     tstring tmp_str;
 
-    mdarray_float image_buf(false);
+    mdarray image_buf(UCHAR_ZT,false);
     mdarray_uchar icc_buf(false);
     mdarray_uchar tmp_buf(false);	/* tmp buffer for displaying */
     mdarray_float stat_buf(false);
@@ -49,7 +49,7 @@ int main( int argc, char *argv[] )
     
     int display_bin = 1;		/* binning factor for display */
     int contrast_rgb[3] = {8, 8, 8};
-    int step_count, tiff_szt;
+    int step_count, tiff_szt = 0;
     double obj_x, obj_y, obj_r, sky_r;
     bool flag_drawed = false;
     double sky_lv[3]; 
@@ -120,9 +120,9 @@ int main( int argc, char *argv[] )
     f_in.close();
 
     sio.printf("Open: %s\n", filename.cstr());
-    if ( read_tiff24or48_to_float( filename.cstr(), 65536.0,
-				&image_buf, &tiff_szt, &icc_buf, NULL ) < 0 ) {
-	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+    if ( read_tiff24or48( filename.cstr(), 
+			  &image_buf, &tiff_szt, &icc_buf, NULL ) < 0 ) {
+	sio.eprintf("[ERROR] read_tiff24or48() failed\n");
 	goto quit;
     }
     if ( tiff_szt == 1 ) {
@@ -153,7 +153,7 @@ int main( int argc, char *argv[] )
     
     win_image = gopen(width/display_bin, height/display_bin);
     
-    display_image(win_image, image_buf, 2, 
+    display_image(win_image, image_buf, tiff_szt, 
 		  display_bin, 0, contrast_rgb, true, &tmp_buf);
     winname(win_image, "Imave Viewer  zoom = 1/%d  contrast = ( %d, %d, %d )",
 	    display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
@@ -329,7 +329,7 @@ int main( int argc, char *argv[] )
 
 	if ( refresh_image == true ) {
 	    newgcfunction(win_image, GXcopy);	/* set normal mode */
-	    display_image(win_image, image_buf, 2,
+	    display_image(win_image, image_buf, tiff_szt,
 			  display_bin, 0, contrast_rgb,
 			  refresh_winsize, &tmp_buf);
 	    winname(win_image,
@@ -349,6 +349,8 @@ int main( int argc, char *argv[] )
 
     }
 
+    image_buf.convert(FLOAT_ZT);
+    
     //image_buf.crop(0, obj_x - sky_r, 2 * sky_r);
     //image_buf.crop(1, obj_y - sky_r, 2 * sky_r);
     
@@ -391,14 +393,29 @@ int main( int argc, char *argv[] )
     sky_lv[0] = md_median(stat_buf.sectionf("*,*,0"));
     sky_lv[1] = md_median(stat_buf.sectionf("*,*,1"));
     sky_lv[2] = md_median(stat_buf.sectionf("*,*,2"));
-    sio.printf("sky_level(r,g,b) = %g,%g,%g\n",
+    sio.printf("sky_level(r,g,b) = %g,%g,%g ",
 	       sky_lv[0],sky_lv[1],sky_lv[2]);
 
+    if ( tiff_szt == UCHAR_ZT ) {
+	image_buf *= (float)256.0;
+	sky_lv[0] *= 256.0;
+	sky_lv[1] *= 256.0;
+	sky_lv[2] *= 256.0;
+    }
+    else if ( tiff_szt == FLOAT_ZT ) {
+	image_buf *= (float)65536.0;
+	sky_lv[0] *= 65536.0;
+	sky_lv[1] *= 65536.0;
+	sky_lv[2] *= 65536.0;
+    }
+
+    sio.printf("[%g,%g,%g]\n",sky_lv[0],sky_lv[1],sky_lv[2]);
+    
     /* subract sky */
     {
 	float *const *const *image_buf_ptr;
 	/* get 3-d array ptr */
-	image_buf_ptr = image_buf.array_ptr_3d(true);
+	image_buf_ptr = (float *const *const *)image_buf.data_ptr_3d(true);
 
 	for ( k=0 ; k < image_buf.z_length() ; k++ ) {
 	    for ( i=0 ; i < image_buf.y_length() ; i++ ) {
@@ -450,6 +467,6 @@ int main( int argc, char *argv[] )
 }
 
 
-#include "read_tiff24or48_to_float.cc"
+#include "read_tiff24or48.cc"
 #include "write_float_to_tiff48.cc"
 #include "write_float_to_tiff.cc"

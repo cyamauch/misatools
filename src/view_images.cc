@@ -384,7 +384,7 @@ int main( int argc, char *argv[] )
     int win_command, win_filesel, win_image;
     int win_command_col_height;
     
-    mdarray img_buf(false);		/* buffer for target */
+    mdarray img_buf(UCHAR_ZT,false);	/* buffer for target */
     mdarray_uchar tmp_buf(false);	/* tmp buffer for displaying */
     int tiff_szt = 0;
     

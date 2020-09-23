@@ -2,7 +2,7 @@
 
 #include "MT.h"
 
-static int write_float_to_tiff48( const mdarray_float &img_buf_in,
+static int write_float_to_tiff48( const mdarray &img_buf_in,
 				  const mdarray_uchar &icc_buf_in,
 				  const float camera_calibration1[],
 				  double min_val, double max_val,
@@ -21,6 +21,11 @@ static int write_float_to_tiff48( const mdarray_float &img_buf_in,
     
     int ret_status = -1;
     
+    if ( img_buf_in.size_type() != FLOAT_ZT ) {
+	sio.eprintf("[ERROR] write_float_to_tiff48() only support FLOAT_ZT\n");
+	goto quit;
+    }
+
     if ( filename_out == NULL ) return 0;
 
     if ( max_val <= min_val ) {
