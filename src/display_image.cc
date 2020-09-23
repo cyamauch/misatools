@@ -56,6 +56,7 @@ static void convert_c2f( const unsigned char *src, size_t n, float *dst )
 }
 
 static int display_image( int win_image, const mdarray &img_buf,
+			  int tiff_sztype,
 			  int binning,		/* 1: original scale 2:1/2 */ 
 			  int display_ch,	/* 0:RGB 1:R 2:G 3:B */
 			  const int contrast_rgb[],
@@ -266,7 +267,12 @@ static int display_image( int win_image, const mdarray &img_buf,
 	    ftr = 1.0 / (double)(bin * bin);
 	}
 	else {
-	    ftr = 1.0 / (double)(256 * bin * bin);
+	    if ( tiff_sztype < 0 ) {	/* float */
+		ftr = 256.0 / (double)(bin * bin);
+	    }
+	    else {			/* 16-bit */
+		ftr = 1.0 / (double)(256 * bin * bin);
+	    }
 	}
 	/* */
 	if ( bin < 2 ) {

@@ -171,7 +171,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     
     winname(win_image, "Stacking ...");
     if ( flag_preview == true ) {
-        display_image(win_image, img_buf,
+        display_image(win_image, img_buf, 2,
 		      display_bin, display_ch, contrast_rgb, false, tmp_buf);
     }
 
@@ -205,7 +205,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 		    img_buf = stacked_buf1_sum;
 		    img_buf *= (1.0/(double)ii);
 		    /* display stacked image */
-		    display_image(win_image, img_buf,
+		    display_image(win_image, img_buf, 2,
 			display_bin, display_ch, contrast_rgb, false, tmp_buf);
 		}
 
@@ -378,7 +378,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 			img_buf = (*stacked_buf0_sum_ptr);
 			img_buf /= (*count_buf0_ptr);
 			/* display stacked image */
-			display_image(win_image, img_buf,
+			display_image(win_image, img_buf, 2,
 		         display_bin, display_ch, contrast_rgb, false, tmp_buf);
 		    }
 
@@ -687,7 +687,7 @@ int main( int argc, char *argv[] )
 		      ref_img_buf.y_length() / display_bin);
     
     /* display reference image */
-    display_image(win_image, ref_img_buf,
+    display_image(win_image, ref_img_buf, 2,
 		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
 
     winname(win_image, "Imave Viewer  "
@@ -1139,7 +1139,8 @@ int main( int argc, char *argv[] )
 		    else if ( display_type == 4 ) img_display *= 4.0;
 		    else if ( display_type == 5 ) img_display *= 8.0;
 		}
-		display_image(win_image, img_display, display_bin, display_ch,
+		display_image(win_image, img_display, 2,
+			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Residual  offset = ( %ld, %ld )  "
 		       "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  ",
@@ -1149,7 +1150,8 @@ int main( int argc, char *argv[] )
 		//img_display.init(false);
 	    }
 	    else if ( display_type == 1 ) {	/* Reference */
-		display_image(win_image, ref_img_buf, display_bin, display_ch,
+		display_image(win_image, ref_img_buf, 2,
+			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Reference  "
 		       "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  ",
@@ -1163,7 +1165,8 @@ int main( int argc, char *argv[] )
 		    img_display.clean();
 		    img_display.paste(img_buf, offset_x, offset_y, 0);
 		}
-		display_image(win_image, img_display, display_bin, display_ch,
+		display_image(win_image, img_display, 2,
+			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Target  offset = ( %ld, %ld )  "
 		      "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  ",

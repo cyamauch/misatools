@@ -49,7 +49,7 @@ int main( int argc, char *argv[] )
     
     int display_bin = 1;		/* binning factor for display */
     int contrast_rgb[3] = {8, 8, 8};
-    int step_count, sztype;
+    int step_count, tiff_szt;
     double obj_x, obj_y, obj_r, sky_r;
     bool flag_drawed = false;
     double sky_lv[3]; 
@@ -121,14 +121,14 @@ int main( int argc, char *argv[] )
 
     sio.printf("Open: %s\n", filename.cstr());
     if ( read_tiff24or48_to_float( filename.cstr(), 65536.0,
-				   &image_buf, &sztype, &icc_buf, NULL ) < 0 ) {
+				&image_buf, &tiff_szt, &icc_buf, NULL ) < 0 ) {
 	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
 	goto quit;
     }
-    if ( sztype == 1 ) {
+    if ( tiff_szt == 1 ) {
 	sio.printf("found 8-bit RGB image.\n");
     }
-    else if ( sztype == 2 ) {
+    else if ( tiff_szt == 2 ) {
 	sio.printf("found 16-bit RGB image.\n");
     }
     else {
@@ -153,7 +153,7 @@ int main( int argc, char *argv[] )
     
     win_image = gopen(width/display_bin, height/display_bin);
     
-    display_image(win_image, image_buf,
+    display_image(win_image, image_buf, 2, 
 		  display_bin, 0, contrast_rgb, true, &tmp_buf);
     winname(win_image, "Imave Viewer  zoom = 1/%d  contrast = ( %d, %d, %d )",
 	    display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
@@ -329,7 +329,8 @@ int main( int argc, char *argv[] )
 
 	if ( refresh_image == true ) {
 	    newgcfunction(win_image, GXcopy);	/* set normal mode */
-	    display_image(win_image, image_buf, display_bin, 0, contrast_rgb,
+	    display_image(win_image, image_buf, 2,
+			  display_bin, 0, contrast_rgb,
 			  refresh_winsize, &tmp_buf);
 	    winname(win_image,
 	       "Imave Viewer  zoom = 1/%d  contrast = ( %d, %d, %d )",
@@ -358,7 +359,7 @@ int main( int argc, char *argv[] )
 
 #if 0	/* test! */
     newgcfunction(win_image, GXcopy);
-    display_image(win_image, stat_buf,
+    display_image(win_image, stat_buf, 2,
 		  display_bin, 0, contrast_rgb, &tmp_buf);
     winname(win_image, "TEST!");
     ggetch();
@@ -381,7 +382,7 @@ int main( int argc, char *argv[] )
 
 #if 0	/* test! */
     newgcfunction(win_image, GXcopy);
-    display_image(win_image, stat_buf,
+    display_image(win_image, stat_buf, 2,
 		  display_bin, 0, contrast_rgb, &tmp_buf);
     winname(win_image, "TEST!");
     ggetch();

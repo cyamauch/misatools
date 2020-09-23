@@ -297,16 +297,16 @@ int main( int argc, char *argv[] )
 		      in_image_r_buf, in_image_g_buf, in_image_b_buf, tiff_szt,
 		      &image_rgb_buf, &image_gr_buf, &image_gb_buf );
 
-    display_image( win_rgb, image_rgb_buf, display_bin, 0,
+    display_image( win_rgb, image_rgb_buf, 2, display_bin, 0,
 		   contrast_rgb, true, &tmp_buf );
     winname(win_rgb, "RGB  zoom = 1/%d  contrast = ( %d, %d, %d )",
 	    display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 
-    display_image( win_gr, image_gr_buf, display_bin, 2,
+    display_image( win_gr, image_gr_buf, 2, display_bin, 2,
 		   contrast_rgb, true, &tmp_buf );
     winname(win_gr, "Display for G and R [Residual]");
     
-    display_image( win_gb, image_gb_buf, display_bin, 2,
+    display_image( win_gb, image_gb_buf, 2, display_bin, 2,
 		   contrast_rgb, true, &tmp_buf );
     winname(win_gb, "Display for G and B [Residual]");
 
@@ -601,7 +601,7 @@ int main( int argc, char *argv[] )
 				tiff_szt,
 				&image_rgb_buf, &image_gr_buf, &image_gb_buf );
 	    }
-	    display_image( win_rgb, image_rgb_buf, display_bin, 0,
+	    display_image( win_rgb, image_rgb_buf, 2, display_bin, 0,
 			   contrast_rgb, refresh_winsize, &tmp_buf );
 	    winname(win_rgb,
 	       "RGB  zoom = 1/%d  contrast = ( %d, %d, %d )",
@@ -620,12 +620,12 @@ int main( int argc, char *argv[] )
 				tiff_szt, NULL, &image_gr_buf, NULL );
 	    }
 	    if ( display_type == 0 ) {
-		display_image(win_gr, image_gr_buf, display_bin, 1,
+		display_image(win_gr, image_gr_buf, 2, display_bin, 1,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		im_str = "Red";
 	    }
 	    else {
-		display_image(win_gr, image_gr_buf, display_bin, 2,
+		display_image(win_gr, image_gr_buf, 2, display_bin, 2,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		if ( display_type == 1 ) im_str = "Green";
 	    }
@@ -643,12 +643,12 @@ int main( int argc, char *argv[] )
 				 tiff_szt, NULL, NULL, &image_gb_buf );
 	    }
 	    if ( display_type == 0 ) {
-		display_image(win_gb, image_gb_buf, display_bin, 3,
+		display_image(win_gb, image_gb_buf, 2, display_bin, 3,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		im_str = "Blue";
 	    }
 	    else {
-		display_image(win_gb, image_gb_buf, display_bin, 2,
+		display_image(win_gb, image_gb_buf, 2, display_bin, 2,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		if ( display_type == 1 ) im_str = "Green";
 	    }

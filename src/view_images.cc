@@ -88,7 +88,7 @@ static int get_dirname( const char *filename, tstring *ret_dir )
     return ret;
 }
 
-static int perform_aphoto( int win_image, const mdarray &img_buf,
+static int perform_aphoto( int win_image, const mdarray &img_buf, int tiff_szt,
 			   int display_bin, int display_ch, int display_type,
 			   const int contrast_rgb[], mdarray_uchar *tmp_buf )
 {
@@ -203,8 +203,8 @@ static int perform_aphoto( int win_image, const mdarray &img_buf,
 	    else {
 		newgcfunction(win_image, GXcopy);
 	    }
-	    display_image(win_image, img_buf, display_bin, display_ch,
-			  contrast_rgb, false, tmp_buf);
+	    display_image(win_image, img_buf, tiff_szt,
+			display_bin, display_ch, contrast_rgb, false, tmp_buf);
 	    newgcfunction(win_image, GXxor);
 	    flag_drawed = false;
 
@@ -277,7 +277,7 @@ static int perform_aphoto( int win_image, const mdarray &img_buf,
 
 #if 0	/* test! */
     newgcfunction(win_image, GXcopy);
-    display_image(win_image, stat_buf, display_bin, display_ch,
+    display_image(win_image, stat_buf, tiff_szt, display_bin, display_ch,
 		  contrast_rgb, false, tmp_buf);
     winname(win_image, "TEST!");
     ggetch();
@@ -386,7 +386,7 @@ int main( int argc, char *argv[] )
     
     mdarray img_buf(false);		/* buffer for target */
     mdarray_uchar tmp_buf(false);	/* tmp buffer for displaying */
-    int tiff_sztype = 0;
+    int tiff_szt = 0;
     
     int display_type = 0;		/* flag to display image type */
     int display_ch = 0;			/* 0=RGB 1=R 2=G 3=B */
@@ -524,13 +524,13 @@ int main( int argc, char *argv[] )
 
     sio.printf("Open: %s\n", filenames[sel_file_id].cstr());
     if ( read_tiff24or48(filenames[sel_file_id].cstr(),
-			 &img_buf, &tiff_sztype, NULL, NULL) < 0 ) {
+			 &img_buf, &tiff_szt, NULL, NULL) < 0 ) {
         sio.eprintf("[ERROR] read_tiff24or48() failed\n");
 	goto quit;
     }
 
     /* for float */
-    if ( tiff_sztype < 0 ) img_buf *= 65536.0;
+    //if ( tiff_szt < 0 ) img_buf *= 65536.0;
 
     display_bin = get_bin_factor_for_display(img_buf.x_length(),
 					     img_buf.y_length(), true);
@@ -544,7 +544,7 @@ int main( int argc, char *argv[] )
 		      img_buf.y_length() / display_bin);
     
     /* display reference image */
-    display_image(win_image, img_buf,
+    display_image(win_image, img_buf, tiff_szt,
 		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
 
     winname(win_image, "Imave Viewer  "
@@ -601,7 +601,7 @@ int main( int argc, char *argv[] )
 	    sio.printf("Open: %s\n", filenames[f_id].cstr());
 		    
 	    if ( read_tiff24or48(filenames[f_id].cstr(), 
-				 &img_buf, &tiff_sztype, NULL, NULL) < 0 ) {
+				 &img_buf, &tiff_szt, NULL, NULL) < 0 ) {
 	        sio.eprintf("[ERROR] read_tiff24or48() failed\n");
 		sel_file_id = -1;
 	    }
@@ -611,7 +611,7 @@ int main( int argc, char *argv[] )
 		//sio.printf("%ld\n", sel_file_id);
 
 		/* for float */
-		if ( tiff_sztype < 0 ) img_buf *= 65536.0;
+		//if ( tiff_szt < 0 ) img_buf *= 65536.0;
 		
 		if ( flag_auto_zoom == true ) {
 		    display_bin = get_bin_factor_for_display(img_buf.x_length(),
@@ -825,7 +825,7 @@ int main( int argc, char *argv[] )
 		size_t ch;
 		tmpim.resize_2d(img_buf.x_length(), img_buf.y_length());
 		sio.printf("*** Image Statistics ***\n");
-		sio.printf("bps     = %d\n",tiff_sztype);
+		sio.printf("bps     = %d\n",tiff_szt);
 		sio.printf("width   = %zu\n",img_buf.x_length());
 		sio.printf("height  = %zu\n",img_buf.y_length());
 		for ( ch=0 ; ch < 3 ; ch++ ) {
@@ -851,7 +851,8 @@ int main( int argc, char *argv[] )
 		sio.printf("-------------------------\n");
 	    }
 	    else if ( cmd_id == CMD_APHOTO ) {
-		perform_aphoto( win_image, img_buf, display_bin, display_ch,
+		perform_aphoto( win_image, img_buf, tiff_szt,
+				display_bin, display_ch,
 				display_type, contrast_rgb, &tmp_buf );
 		refresh_image = 1;
 	    }
@@ -875,8 +876,9 @@ int main( int argc, char *argv[] )
 		newgcfunction(win_image, GXcopy);
 	    }
 	    //
-	    display_image(win_image, img_buf, display_bin, display_ch,
-			  contrast_rgb, refresh_winsize, &tmp_buf);
+	    display_image(win_image, img_buf, tiff_szt,
+			  display_bin, display_ch, contrast_rgb,
+			  refresh_winsize, &tmp_buf);
 	    winname(win_image, "Image Viewer  "
 		    "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  "
 		    "auto_zoom = %d  dither = %d  ",

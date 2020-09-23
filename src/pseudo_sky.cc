@@ -911,7 +911,7 @@ int main( int argc, char *argv[] )
 		      target_img_buf.y_length() / display_bin);
 
     /* display reference image */
-    display_image(win_image, target_img_buf,
+    display_image(win_image, target_img_buf, 2,
 		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
 
     winname(win_image, "Imave Viewer  "
@@ -1460,7 +1460,8 @@ int main( int argc, char *argv[] )
 		    else if ( display_type == 4 ) img_display *= 4.0;
 		    else if ( display_type == 5 ) img_display *= 8.0;
 		}
-		display_image(win_image, img_display, display_bin, display_ch,
+		display_image(win_image, img_display, 2,
+			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Residual [%s]  %s"
 			"channel = %s  zoom = 1/%d  "
@@ -1471,7 +1472,8 @@ int main( int argc, char *argv[] )
 			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    }
 	    else if ( display_type == 1 ) {	/* Sky */
-		display_image(win_image, sky_img_buf, display_bin, display_ch,
+		display_image(win_image, sky_img_buf, 2,
+			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Pseudo Sky  channel = %s  zoom = 1/%d  "
 			"contrast = ( %d, %d, %d )  ",
@@ -1479,8 +1481,9 @@ int main( int argc, char *argv[] )
 			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    }
 	    else {				/* Target */
-		display_image(win_image, target_img_buf, display_bin,
-			  display_ch, contrast_rgb, refresh_winsize, &tmp_buf);
+		display_image(win_image, target_img_buf, 2,
+			      display_bin, display_ch,
+			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Target  channel = %s  zoom = 1/%d  "
 			"contrast = ( %d, %d, %d )  ",
 			names_ch[display_ch], display_bin, 
