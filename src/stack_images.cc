@@ -36,7 +36,7 @@ const int Font_y_off = 3;
 const int Font_margin = 2;
 static int Fontsize = 14;
 #include "set_fontsize.c"
-
+#include "command_window.c"
 #include "display_file_list.cc"
 #include "display_image.cc"
 
@@ -171,7 +171,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     
     winname(win_image, "Stacking ...");
     if ( flag_preview == true ) {
-        display_image(win_image, img_buf, 2,
+        display_image(win_image, 0, 0, img_buf, 2,
 		      display_bin, display_ch, contrast_rgb, false, tmp_buf);
     }
 
@@ -205,7 +205,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 		    img_buf = stacked_buf1_sum;
 		    img_buf *= (1.0/(double)ii);
 		    /* display stacked image */
-		    display_image(win_image, img_buf, 2,
+		    display_image(win_image, 0, 0, img_buf, 2,
 			display_bin, display_ch, contrast_rgb, false, tmp_buf);
 		}
 
@@ -378,7 +378,7 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 			img_buf = (*stacked_buf0_sum_ptr);
 			img_buf /= (*count_buf0_ptr);
 			/* display stacked image */
-			display_image(win_image, img_buf, 2,
+			display_image(win_image, 0, 0, img_buf, 2,
 		         display_bin, display_ch, contrast_rgb, false, tmp_buf);
 		    }
 
@@ -444,11 +444,6 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 }
 
 
-typedef struct _command_list {
-    int id;
-    const char *menu_string;
-} command_list;
-
 const command_list Cmd_list[] = {
 #define CMD_DISPLAY_TARGET 1
         {CMD_DISPLAY_TARGET,    "Display Target            [1]"},
@@ -501,10 +496,9 @@ const command_list Cmd_list[] = {
 #define CMD_STACK_SILENT 25
         {CMD_STACK_SILENT,      "Start Stacking without preview"},
 #define CMD_EXIT 26
-        {CMD_EXIT,              "Exit                      [q]"}
+        {CMD_EXIT,              "Exit                      [q]"},
+        {0, NULL}		/* EOL */
 };
-
-const size_t N_cmd_list = sizeof(Cmd_list) / sizeof(Cmd_list[0]);
 
 int main( int argc, char *argv[] )
 {
@@ -518,8 +512,8 @@ int main( int argc, char *argv[] )
     int ref_file_id = -1;
     int sel_file_id = -1;
     
-    int win_command, win_filesel, win_image;
-    int win_command_col_height;
+    command_win command_win_rec;
+    int win_filesel, win_image;
     
     mdarray_float ref_img_buf(false);	/* buffer for reference image */
     mdarray_float img_buf(false);	/* buffer for target */
@@ -631,29 +625,7 @@ int main( int argc, char *argv[] )
     
     /* command window */
 
-    {
-	const int w_width = 33 * (Fontsize/2) + Font_margin * 2;
-	const int c_height = (Fontsize + Font_margin * 2);
-	win_command = gopen(w_width, c_height * (N_cmd_list));
-	gsetbgcolor(win_command,"#606060");
-	gclr(win_command);
-	winname(win_command, "Command Window");
-	for ( i=0 ; i < N_cmd_list ; i++ ) {
-	    newrgbcolor(win_command,0x80,0x80,0x80);
-	    drawline(win_command,
-		     0, c_height * (Cmd_list[i].id - 1),
-		     w_width, c_height * (Cmd_list[i].id - 1));
-	    newrgbcolor(win_command,0x40,0x40,0x40);
-	    drawline(win_command,
-		     0, c_height * (Cmd_list[i].id) - 1,
-		     w_width, c_height * (Cmd_list[i].id) - 1);
-	    newrgbcolor(win_command,0xff,0xff,0xff);
-	    drawstr(win_command,
-		    Font_margin, c_height * Cmd_list[i].id - Font_y_off,
-		    Fontsize, 0, Cmd_list[i].menu_string);
-	}
-	win_command_col_height = c_height;
-    }
+    command_win_rec = gopen_command_window( Cmd_list, 0 );
     
     /* file selector */
     
@@ -687,7 +659,7 @@ int main( int argc, char *argv[] )
 		      ref_img_buf.y_length() / display_bin);
     
     /* display reference image */
-    display_image(win_image, ref_img_buf, 2,
+    display_image(win_image, 0, 0, ref_img_buf, 2,
 		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
 
     winname(win_image, "Imave Viewer  "
@@ -790,8 +762,8 @@ int main( int argc, char *argv[] )
 	    /* NOP */
 	}
 	else if ( ev_type == ButtonPress && 1 <= ev_btn && ev_btn <= 3 &&
-		  ev_win == win_command ) {
-	    cmd_id = 1 + ev_y / win_command_col_height;
+		  ev_win == command_win_rec.win_id ) {
+	    cmd_id = 1 + ev_y / command_win_rec.cell_height;
 	}
 	else if ( ev_type == KeyPress ) {
 	    //sio.printf("[%d]\n", ev_btn);
@@ -1139,7 +1111,7 @@ int main( int argc, char *argv[] )
 		    else if ( display_type == 4 ) img_display *= 4.0;
 		    else if ( display_type == 5 ) img_display *= 8.0;
 		}
-		display_image(win_image, img_display, 2,
+		display_image(win_image, 0, 0, img_display, 2,
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Residual  offset = ( %ld, %ld )  "
@@ -1150,7 +1122,7 @@ int main( int argc, char *argv[] )
 		//img_display.init(false);
 	    }
 	    else if ( display_type == 1 ) {	/* Reference */
-		display_image(win_image, ref_img_buf, 2,
+		display_image(win_image, 0, 0, ref_img_buf, 2,
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Reference  "
@@ -1165,7 +1137,7 @@ int main( int argc, char *argv[] )
 		    img_display.clean();
 		    img_display.paste(img_buf, offset_x, offset_y, 0);
 		}
-		display_image(win_image, img_display, 2,
+		display_image(win_image, 0, 0, img_display, 2,
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Target  offset = ( %ld, %ld )  "

@@ -34,6 +34,7 @@ const int Font_y_off = 3;
 const int Font_margin = 2;
 static int Fontsize = 14;
 #include "set_fontsize.c"
+#include "command_window.c"
 
 const int Max_skypoint_box_size = 255;
 static int Skypoint_box_size = 31;
@@ -669,12 +670,6 @@ static int get_params_filename( const char *target_filename,
 }
 
 
-
-typedef struct _command_list {
-    int id;
-    const char *menu_string;
-} command_list;
-
 const command_list Cmd_list[] = {
 #define CMD_DISPLAY_TARGET 1
         {CMD_DISPLAY_TARGET,    "Display Target            [1]"},
@@ -729,10 +724,9 @@ const command_list Cmd_list[] = {
 #define CMD_SAVE_IMAGE 26
         {CMD_SAVE_IMAGE,        "Save Pseudo-Sky-Subtracted image"},
 #define CMD_EXIT 27
-        {CMD_EXIT,              "Exit                      [q]"}
+        {CMD_EXIT,              "Exit                      [q]"},
+        {0, NULL}		/* EOL */
 };
-
-const size_t N_cmd_list = sizeof(Cmd_list) / sizeof(Cmd_list[0]);
 
 int main( int argc, char *argv[] )
 {
@@ -741,8 +735,8 @@ int main( int argc, char *argv[] )
     stdstreamio sio, f_in;
     tstring target_filename;
     
-    int win_command, win_image;
-    int win_command_col_height;
+    command_win command_win_rec;
+    int win_image;
 
     mdarray_float target_img_buf(false);	/* buffer for target image */
     mdarray_float sky_img_buf(false);		/* buffer for pseudo sky */
@@ -771,8 +765,6 @@ int main( int argc, char *argv[] )
 
     long selected_point_idx = -1;
     
-    size_t i;
-    
     int return_status = -1;
 
     if ( argc < 2 ) {
@@ -795,29 +787,7 @@ int main( int argc, char *argv[] )
 
     /* command window */
 
-    {
-	const int w_width = 33 * (Fontsize/2) + Font_margin * 2;
-	const int c_height = (Fontsize + Font_margin * 2);
-	win_command = gopen(w_width, c_height * (N_cmd_list));
-	gsetbgcolor(win_command,"#606060");
-	gclr(win_command);
-	winname(win_command, "Command Window");
-	for ( i=0 ; i < N_cmd_list ; i++ ) {
-	    newrgbcolor(win_command,0x80,0x80,0x80);
-	    drawline(win_command,
-		     0, c_height * (Cmd_list[i].id - 1),
-		     w_width, c_height * (Cmd_list[i].id - 1));
-	    newrgbcolor(win_command,0x40,0x40,0x40);
-	    drawline(win_command,
-		     0, c_height * (Cmd_list[i].id) - 1,
-		     w_width, c_height * (Cmd_list[i].id) - 1);
-	    newrgbcolor(win_command,0xff,0xff,0xff);
-	    drawstr(win_command,
-		    Font_margin, c_height * Cmd_list[i].id - Font_y_off,
-		    Fontsize, 0, Cmd_list[i].menu_string);
-	}
-	win_command_col_height = c_height;
-    }
+    command_win_rec = gopen_command_window( Cmd_list, 0 );
     
     /* image viewer */
 
@@ -911,7 +881,7 @@ int main( int argc, char *argv[] )
 		      target_img_buf.y_length() / display_bin);
 
     /* display reference image */
-    display_image(win_image, target_img_buf, 2,
+    display_image(win_image, 0, 0, target_img_buf, 2,
 		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
 
     winname(win_image, "Imave Viewer  "
@@ -949,8 +919,8 @@ int main( int argc, char *argv[] )
         ev_win = eggx_ggetxpress(&ev_type,&ev_btn,&ev_x,&ev_y);
 
 	if ( ev_type == ButtonPress && 1 <= ev_btn && ev_btn <= 3 &&
-	     ev_win == win_command ) {
-	    cmd_id = 1 + ev_y / win_command_col_height;
+	     ev_win == command_win_rec.win_id ) {
+	    cmd_id = 1 + ev_y / command_win_rec.cell_height;
 	}
 
 	if ( ev_type == KeyPress ) {
@@ -1460,7 +1430,7 @@ int main( int argc, char *argv[] )
 		    else if ( display_type == 4 ) img_display *= 4.0;
 		    else if ( display_type == 5 ) img_display *= 8.0;
 		}
-		display_image(win_image, img_display, 2,
+		display_image(win_image, 0, 0, img_display, 2,
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Residual [%s]  %s"
@@ -1472,7 +1442,7 @@ int main( int argc, char *argv[] )
 			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    }
 	    else if ( display_type == 1 ) {	/* Sky */
-		display_image(win_image, sky_img_buf, 2,
+		display_image(win_image, 0, 0, sky_img_buf, 2,
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Pseudo Sky  channel = %s  zoom = 1/%d  "
@@ -1481,7 +1451,7 @@ int main( int argc, char *argv[] )
 			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    }
 	    else {				/* Target */
-		display_image(win_image, target_img_buf, 2,
+		display_image(win_image, 0, 0, target_img_buf, 2,
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Target  channel = %s  zoom = 1/%d  "

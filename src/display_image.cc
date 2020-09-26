@@ -55,7 +55,8 @@ static void convert_c2f( const unsigned char *src, size_t n, float *dst )
     return;
 }
 
-static int display_image( int win_image, const mdarray &img_buf,
+static int display_image( int win_image, double disp_x, double disp_y,
+			  const mdarray &img_buf,
 			  int tiff_sztype,
 			  int binning,		/* 1: original scale 2:1/2 */ 
 			  int display_ch,	/* 0:RGB 1:R 2:G 3:B */
@@ -728,7 +729,7 @@ static int display_image( int win_image, const mdarray &img_buf,
 	coordinate(win_image, 0,0, 0.0, 0.0, 1.0/binning, 1.0/binning);
     }
 
-    gputimage(win_image, 0,0,
+    gputimage(win_image, disp_x, disp_y,
 	      tmp_buf_ptr, display_width, display_height, 0);
     
     return 0;

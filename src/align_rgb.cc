@@ -33,6 +33,7 @@ const int Font_y_off = 3;
 const int Font_margin = 2;
 static int Fontsize = 14;
 #include "set_fontsize.c"
+#include "command_window.c"
 
 static int get_result_rgb_image( 
     long off_r_x, long off_r_y, long off_b_x, long off_b_y,
@@ -121,11 +122,6 @@ static void update_display_gain_rb( const int contrast_rgb[],
 }
 
 
-typedef struct _command_list {
-    int id;
-    const char *menu_string;
-} command_list;
-
 const command_list Cmd_list[] = {
 #define CMD_DISPLAY_TARGET 1
         {CMD_DISPLAY_TARGET,    "Display Target (R and B)  [1]"},
@@ -154,10 +150,9 @@ const command_list Cmd_list[] = {
 #define CMD_SAVE 13
         {CMD_SAVE,              "Save Aligned Image        [Enter]"},
 #define CMD_EXIT 14
-        {CMD_EXIT,              "Exit                      [q]"}
+        {CMD_EXIT,              "Exit                      [q]"},
+        {0, NULL}		/* EOL */
 };
-
-const size_t N_cmd_list = sizeof(Cmd_list) / sizeof(Cmd_list[0]);
 
 int main( int argc, char *argv[] )
 {
@@ -176,8 +171,8 @@ int main( int argc, char *argv[] )
     size_t width = 0, height = 0;
     int tiff_szt = 0;
     
-    int win_rgb, win_gr, win_gb, win_command;
-    int win_command_col_height;
+    command_win command_win_rec;
+    int win_rgb, win_gr, win_gb;
 
     int display_type = 2 /* residual */;	/* flag to display image type */
     int display_bin = 1;		/* binning factor for display */
@@ -189,8 +184,6 @@ int main( int argc, char *argv[] )
     long offset_b_y = 0;
     long display_gain_r = 100;
     long display_gain_b = 100;
-    
-    size_t i;
     
     int return_status = -1;
 
@@ -254,36 +247,9 @@ int main( int argc, char *argv[] )
 
     /* command window */
 
-    //win_command = gopen((Fontsize/2) * 32, Fontsize * (N_cmd_list + 1));
-    //winname(win_command, "Command Window");
-    //for ( i=0 ; i < N_cmd_list ; i++ ) {
-    //    drawstr(win_command, 0, Fontsize*Cmd_list[i].id - Font_y_off,
-    //		Fontsize, 0, Cmd_list[i].menu_string);
-    //}
-    {
-	const int w_width = 33 * (Fontsize/2) + Font_margin * 2;
-	const int c_height = (Fontsize + Font_margin * 2);
-	win_command = gopen(w_width, c_height * (N_cmd_list));
-	gsetbgcolor(win_command,"#606060");
-	gclr(win_command);
-	winname(win_command, "Command Window");
-	for ( i=0 ; i < N_cmd_list ; i++ ) {
-	    newrgbcolor(win_command,0x80,0x80,0x80);
-	    drawline(win_command,
-		     0, c_height * (Cmd_list[i].id - 1),
-		     w_width, c_height * (Cmd_list[i].id - 1));
-	    newrgbcolor(win_command,0x40,0x40,0x40);
-	    drawline(win_command,
-		     0, c_height * (Cmd_list[i].id) - 1,
-		     w_width, c_height * (Cmd_list[i].id) - 1);
-	    newrgbcolor(win_command,0xff,0xff,0xff);
-	    drawstr(win_command,
-		    Font_margin, c_height * Cmd_list[i].id - Font_y_off,
-		    Fontsize, 0, Cmd_list[i].menu_string);
-	}
-	win_command_col_height = c_height;
-    }
+    command_win_rec = gopen_command_window( Cmd_list, 0 );
 
+    /* RGB, G-R and G-B window */
     win_rgb = gopen(width/display_bin, height/display_bin);
     
     win_gr = gopen(width/display_bin, height/display_bin);
@@ -297,16 +263,16 @@ int main( int argc, char *argv[] )
 		      in_image_r_buf, in_image_g_buf, in_image_b_buf, tiff_szt,
 		      &image_rgb_buf, &image_gr_buf, &image_gb_buf );
 
-    display_image( win_rgb, image_rgb_buf, 2, display_bin, 0,
+    display_image( win_rgb, 0, 0, image_rgb_buf, 2, display_bin, 0,
 		   contrast_rgb, true, &tmp_buf );
     winname(win_rgb, "RGB  zoom = 1/%d  contrast = ( %d, %d, %d )",
 	    display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 
-    display_image( win_gr, image_gr_buf, 2, display_bin, 2,
+    display_image( win_gr, 0, 0, image_gr_buf, 2, display_bin, 2,
 		   contrast_rgb, true, &tmp_buf );
     winname(win_gr, "Display for G and R [Residual]");
     
-    display_image( win_gb, image_gb_buf, 2, display_bin, 2,
+    display_image( win_gb, 0, 0, image_gb_buf, 2, display_bin, 2,
 		   contrast_rgb, true, &tmp_buf );
     winname(win_gb, "Display for G and B [Residual]");
 
@@ -335,8 +301,8 @@ int main( int argc, char *argv[] )
 	 */
 
 	if ( ev_type == ButtonPress && 1 <= ev_btn && ev_btn <= 3 &&
-	     ev_win == win_command ) {
-	    cmd_id = 1 + ev_y / win_command_col_height;
+	     ev_win == command_win_rec.win_id ) {
+	    cmd_id = 1 + ev_y / command_win_rec.cell_height;
 	}
 	else if ( ev_type == KeyPress ) {
 	    //sio.printf("[%d]\n", ev_btn);
@@ -601,7 +567,7 @@ int main( int argc, char *argv[] )
 				tiff_szt,
 				&image_rgb_buf, &image_gr_buf, &image_gb_buf );
 	    }
-	    display_image( win_rgb, image_rgb_buf, 2, display_bin, 0,
+	    display_image( win_rgb, 0, 0, image_rgb_buf, 2, display_bin, 0,
 			   contrast_rgb, refresh_winsize, &tmp_buf );
 	    winname(win_rgb,
 	       "RGB  zoom = 1/%d  contrast = ( %d, %d, %d )",
@@ -620,12 +586,12 @@ int main( int argc, char *argv[] )
 				tiff_szt, NULL, &image_gr_buf, NULL );
 	    }
 	    if ( display_type == 0 ) {
-		display_image(win_gr, image_gr_buf, 2, display_bin, 1,
+		display_image(win_gr, 0, 0, image_gr_buf, 2, display_bin, 1,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		im_str = "Red";
 	    }
 	    else {
-		display_image(win_gr, image_gr_buf, 2, display_bin, 2,
+		display_image(win_gr, 0, 0, image_gr_buf, 2, display_bin, 2,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		if ( display_type == 1 ) im_str = "Green";
 	    }
@@ -643,12 +609,12 @@ int main( int argc, char *argv[] )
 				 tiff_szt, NULL, NULL, &image_gb_buf );
 	    }
 	    if ( display_type == 0 ) {
-		display_image(win_gb, image_gb_buf, 2, display_bin, 3,
+		display_image(win_gb, 0, 0, image_gb_buf, 2, display_bin, 3,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		im_str = "Blue";
 	    }
 	    else {
-		display_image(win_gb, image_gb_buf, 2, display_bin, 2,
+		display_image(win_gb, 0, 0, image_gb_buf, 2, display_bin, 2,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		if ( display_type == 1 ) im_str = "Green";
 	    }

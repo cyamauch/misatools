@@ -153,7 +153,7 @@ int main( int argc, char *argv[] )
     
     win_image = gopen(width/display_bin, height/display_bin);
     
-    display_image(win_image, image_buf, tiff_szt, 
+    display_image(win_image, 0, 0, image_buf, tiff_szt, 
 		  display_bin, 0, contrast_rgb, true, &tmp_buf);
     winname(win_image, "Imave Viewer  zoom = 1/%d  contrast = ( %d, %d, %d )",
 	    display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
@@ -329,7 +329,7 @@ int main( int argc, char *argv[] )
 
 	if ( refresh_image == true ) {
 	    newgcfunction(win_image, GXcopy);	/* set normal mode */
-	    display_image(win_image, image_buf, tiff_szt,
+	    display_image(win_image, 0, 0, image_buf, tiff_szt,
 			  display_bin, 0, contrast_rgb,
 			  refresh_winsize, &tmp_buf);
 	    winname(win_image,
@@ -361,7 +361,7 @@ int main( int argc, char *argv[] )
 
 #if 0	/* test! */
     newgcfunction(win_image, GXcopy);
-    display_image(win_image, stat_buf, 2,
+    display_image(win_image, 0, 0, stat_buf, 2,
 		  display_bin, 0, contrast_rgb, &tmp_buf);
     winname(win_image, "TEST!");
     ggetch();
@@ -384,7 +384,7 @@ int main( int argc, char *argv[] )
 
 #if 0	/* test! */
     newgcfunction(win_image, GXcopy);
-    display_image(win_image, stat_buf, 2,
+    display_image(win_image, 0, 0, stat_buf, 2,
 		  display_bin, 0, contrast_rgb, &tmp_buf);
     winname(win_image, "TEST!");
     ggetch();

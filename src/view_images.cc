@@ -30,7 +30,7 @@ const int Font_y_off = 3;
 const int Font_margin = 2;
 static int Fontsize = 14;
 #include "set_fontsize.c"
-
+#include "command_window.c"
 #include "display_file_list.cc"
 #include "display_image.cc"
 
@@ -203,7 +203,7 @@ static int perform_aphoto( int win_image, const mdarray &img_buf, int tiff_szt,
 	    else {
 		newgcfunction(win_image, GXcopy);
 	    }
-	    display_image(win_image, img_buf, tiff_szt,
+	    display_image(win_image, 0, 0, img_buf, tiff_szt,
 			display_bin, display_ch, contrast_rgb, false, tmp_buf);
 	    newgcfunction(win_image, GXxor);
 	    flag_drawed = false;
@@ -277,7 +277,7 @@ static int perform_aphoto( int win_image, const mdarray &img_buf, int tiff_szt,
 
 #if 0	/* test! */
     newgcfunction(win_image, GXcopy);
-    display_image(win_image, stat_buf, tiff_szt, display_bin, display_ch,
+    display_image(win_image, 0, 0, stat_buf, tiff_szt, display_bin, display_ch,
 		  contrast_rgb, false, tmp_buf);
     winname(win_image, "TEST!");
     ggetch();
@@ -320,12 +320,6 @@ static int perform_aphoto( int win_image, const mdarray &img_buf, int tiff_szt,
     return ret_status;
 }
 
-
-typedef struct _command_list {
-    int id;
-    const char *menu_string;
-} command_list;
-
 const command_list Cmd_list[] = {
 #define CMD_DISPLAY_TARGET 1
         {CMD_DISPLAY_TARGET,    "Display Normal            [1]"},
@@ -364,10 +358,9 @@ const command_list Cmd_list[] = {
 #define CMD_SAVE_FLOAT 18
         {CMD_SAVE_FLOAT,        "Save as 32-bit float TIFF"},
 #define CMD_EXIT 19
-        {CMD_EXIT,              "Exit                      [q]"}
+        {CMD_EXIT,              "Exit                      [q]"},
+        {0, NULL}		/* EOL */
 };
-
-const size_t N_cmd_list = sizeof(Cmd_list) / sizeof(Cmd_list[0]);
 
 int main( int argc, char *argv[] )
 {
@@ -380,10 +373,10 @@ int main( int argc, char *argv[] )
     tstring dirname;
     size_t maxlen_filename;
     int sel_file_id = 0;
-    
-    int win_command, win_filesel, win_image;
-    int win_command_col_height;
-    
+   
+    command_win command_win_rec;
+    int win_filesel, win_image;
+
     mdarray img_buf(UCHAR_ZT,false);	/* buffer for target */
     mdarray_uchar tmp_buf(false);	/* tmp buffer for displaying */
     int tiff_szt = 0;
@@ -485,30 +478,9 @@ int main( int argc, char *argv[] )
     set_fontsize();
     
     /* command window */
+    
+    command_win_rec = gopen_command_window( Cmd_list, 0 );
 
-    {
-	const int w_width = 33 * (Fontsize/2) + Font_margin * 2;
-	const int c_height = (Fontsize + Font_margin * 2);
-	win_command = gopen(w_width, c_height * (N_cmd_list));
-	gsetbgcolor(win_command,"#606060");
-	gclr(win_command);
-	winname(win_command, "Command Window");
-	for ( i=0 ; i < N_cmd_list ; i++ ) {
-	    newrgbcolor(win_command,0x80,0x80,0x80);
-	    drawline(win_command,
-		     0, c_height * (Cmd_list[i].id - 1),
-		     w_width, c_height * (Cmd_list[i].id - 1));
-	    newrgbcolor(win_command,0x40,0x40,0x40);
-	    drawline(win_command,
-		     0, c_height * (Cmd_list[i].id) - 1,
-		     w_width, c_height * (Cmd_list[i].id) - 1);
-	    newrgbcolor(win_command,0xff,0xff,0xff);
-	    drawstr(win_command,
-		    Font_margin, c_height * Cmd_list[i].id - Font_y_off,
-		    Fontsize, 0, Cmd_list[i].menu_string);
-	}
-	win_command_col_height = c_height;
-    }
     
     /* file selector */
     
@@ -529,9 +501,6 @@ int main( int argc, char *argv[] )
 	goto quit;
     }
 
-    /* for float */
-    //if ( tiff_szt < 0 ) img_buf *= 65536.0;
-
     display_bin = get_bin_factor_for_display(img_buf.x_length(),
 					     img_buf.y_length(), true);
     if ( display_bin < 0 ) {
@@ -544,7 +513,7 @@ int main( int argc, char *argv[] )
 		      img_buf.y_length() / display_bin);
     
     /* display reference image */
-    display_image(win_image, img_buf, tiff_szt,
+    display_image(win_image, 0, 0, img_buf, tiff_szt,
 		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
 
     winname(win_image, "Imave Viewer  "
@@ -574,7 +543,7 @@ int main( int argc, char *argv[] )
 	bool flag_file_selector = false;
 	
         /* waiting an event */
-        ev_win = ggetxpress(&ev_type,&ev_btn,&ev_x,&ev_y);
+        ev_win = ggetevent(&ev_type,&ev_btn,&ev_x,&ev_y);
 
 	/*
 	 *  Check file selector
@@ -610,9 +579,6 @@ int main( int argc, char *argv[] )
 		sel_file_id = f_id;
 		//sio.printf("%ld\n", sel_file_id);
 
-		/* for float */
-		//if ( tiff_szt < 0 ) img_buf *= 65536.0;
-		
 		if ( flag_auto_zoom == true ) {
 		    display_bin = get_bin_factor_for_display(img_buf.x_length(),
 						     img_buf.y_length(), true);
@@ -638,8 +604,8 @@ int main( int argc, char *argv[] )
 	    /* NOP */
 	}
 	else if ( ev_type == ButtonPress && 1 <= ev_btn && ev_btn <= 3 &&
-		  ev_win == win_command ) {
-	    cmd_id = 1 + ev_y / win_command_col_height;
+		  ev_win == command_win_rec.win_id ) {
+	    cmd_id = 1 + ev_y / command_win_rec.cell_height;
 	}
 	else if ( ev_type == KeyPress ) {
 	    //sio.printf("[%d]\n", ev_btn);
@@ -876,7 +842,7 @@ int main( int argc, char *argv[] )
 		newgcfunction(win_image, GXcopy);
 	    }
 	    //
-	    display_image(win_image, img_buf, tiff_szt,
+	    display_image(win_image, 0, 0, img_buf, tiff_szt,
 			  display_bin, display_ch, contrast_rgb,
 			  refresh_winsize, &tmp_buf);
 	    winname(win_image, "Image Viewer  "
