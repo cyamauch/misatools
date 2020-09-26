@@ -33,6 +33,7 @@ static int Fontsize = 14;
 #include "command_window.c"
 #include "display_file_list.cc"
 #include "display_image.cc"
+const int Loupe_width = 200;
 
 static bool test_file( const char *file )
 {
@@ -479,7 +480,8 @@ int main( int argc, char *argv[] )
     
     /* command window */
     
-    command_win_rec = gopen_command_window( Cmd_list, 0 );
+    command_win_rec = gopen_command_window( Cmd_list,
+	   Font_margin + 2*Fontsize + Font_margin + Loupe_width + Font_margin);
 
     
     /* file selector */
@@ -535,6 +537,7 @@ int main( int argc, char *argv[] )
 
         bool refresh_list = false;
         int refresh_image = 0;		/* 1:display only  2:both */
+	bool refresh_loupe = false;
 	bool refresh_winsize = false;
         bool refresh_winname = false;
 
@@ -823,6 +826,30 @@ int main( int argc, char *argv[] )
 		refresh_image = 1;
 	    }
 	    /* */
+	    else if ( ev_win == win_image &&
+		      ( ev_type == MotionNotify || 
+			ev_type == EnterNotify || ev_type == LeaveNotify ) ) {
+                if ( ev_type == LeaveNotify ) {
+                    ev_x = -32000;  ev_y = -32000;
+                }
+		layer(command_win_rec.win_id, 0, 2);
+		copylayer(command_win_rec.win_id, 1, 2);
+		if ( 0 <= ev_x && 0 <= ev_y ) {
+		    drawstr(command_win_rec.win_id,
+			Font_margin,
+			command_win_rec.reserved_y0 + Font_margin + Fontsize,
+			Fontsize, 0, "x=%g y=%g", ev_x, ev_y);
+		    drawstr(command_win_rec.win_id,
+			Font_margin,
+			command_win_rec.reserved_y0 + Font_margin + 2*Fontsize,
+			Fontsize, 0, "RGB=%5g %5g %5g",
+			img_buf.dvalue((ssize_t)ev_x, (ssize_t)ev_y, 0),
+			img_buf.dvalue((ssize_t)ev_x, (ssize_t)ev_y, 1),
+			img_buf.dvalue((ssize_t)ev_x, (ssize_t)ev_y, 2) );
+		}
+		copylayer(command_win_rec.win_id, 2, 0);
+		refresh_loupe = true;
+	    }
 	    else if ( ev_type == KeyPress ) {
 		if ( ev_btn == ' ' ) {
 		    if ( display_type == 0 ) display_type = 1;

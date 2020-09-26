@@ -37,6 +37,9 @@ static command_win gopen_command_window( const command_list cmd_list[],
     w_height = res_begin + reserved_height;
     
     win_command = gopen(w_width, w_height);
+
+    layer(win_command, 0, 1);
+
     gsetbgcolor(win_command,"#202020");
     gclr(win_command);
 
@@ -59,6 +62,8 @@ static command_win gopen_command_window( const command_list cmd_list[],
 		Fontsize, 0, cmd_list[i].menu_string);
     }
 
+    copylayer(win_command, 1, 0);
+    layer(win_command, 0, 0);
     
     cmd_win_ret.win_id = win_command;
     cmd_win_ret.width = w_width;
