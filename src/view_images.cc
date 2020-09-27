@@ -33,7 +33,7 @@ static int Fontsize = 14;
 #include "command_window.c"
 #include "display_file_list.cc"
 #include "display_image.cc"
-const int Loupe_width = 200;
+const int Loupe_height = 220;
 
 static bool test_file( const char *file )
 {
@@ -107,7 +107,7 @@ static int perform_aphoto( int win_image, const mdarray &img_buf, int tiff_szt,
     int ret_status = -1;
 
     newgcfunction(win_image, GXxor);
-    newcolor(win_image, "green");
+    newrgbcolor(win_image, 0x00,0xff,0x00);
 
     width = img_buf.x_length();
     height = img_buf.y_length();
@@ -220,7 +220,7 @@ static int perform_aphoto( int win_image, const mdarray &img_buf, int tiff_szt,
     }
 
     newgcfunction(win_image, GXcopy);
-    newcolor(win_image, "white");
+    newrgbcolor(win_image, 0xff,0xff,0xff);
 
     /*
      * start statistics
@@ -321,6 +321,96 @@ static int perform_aphoto( int win_image, const mdarray &img_buf, int tiff_szt,
     return ret_status;
 }
 
+static int update_loupe_x5( const mdarray &src_img_buf,
+			    int cen_x, int cen_y,
+			    mdarray *dest_loupe_buf )
+{
+    const int zoom_factor = 5;
+    const size_t src_width = src_img_buf.x_length();
+    const size_t src_height = src_img_buf.y_length();
+    size_t dest_width, dest_height;
+    size_t i;
+    int szt = src_img_buf.size_type();
+    int ret_status = -1;
+
+    if ( dest_loupe_buf == NULL ) goto quit;
+    
+    dest_width = dest_loupe_buf->x_length();
+    dest_height = dest_loupe_buf->y_length();
+
+    if ( dest_loupe_buf->size_type() != szt ) {
+	dest_loupe_buf->convert(szt);
+    }
+
+    if ( szt == FLOAT_ZT ) {
+	for ( i=0 ; i < 3 ; i++ ) {
+	    size_t j;
+	    const float *src_p = (const float *)src_img_buf.data_ptr(0,0,i);
+	    for ( j=0 ; j < dest_height ; j++ ) {
+		float *dest_p = (float *)dest_loupe_buf->data_ptr(0,j,i);
+		int src_y;
+		int j_adj = (int)j - (int)dest_height / 2;
+		if ( 0 < j_adj ) j_adj += zoom_factor/2;
+		else if ( j_adj < 0 ) j_adj -= zoom_factor/2;
+		src_y = cen_y + j_adj / zoom_factor;
+		size_t k;
+		if ( 0 <= src_y && src_y < (int)src_height ) {
+		    for ( k=0 ; k < dest_width ; k++ ) {
+			int src_x;
+			int k_adj = (int)k - (int)dest_width / 2;
+			if ( 0 < k_adj ) k_adj += zoom_factor/2;
+			else if ( k_adj < 0 ) k_adj -= zoom_factor/2;
+			src_x = cen_x + k_adj / zoom_factor;
+			if ( 0 <= src_x && src_x < (int)src_width ) 
+			    dest_p[k] = src_p[src_width * src_y + src_x];
+			else 
+			    dest_p[k] = 0;
+		    }
+		}
+		else {
+		    for ( k=0 ; k < dest_width ; k++ ) dest_p[k] = 0;
+		}
+	    }
+	}
+    }
+    else if ( szt == UCHAR_ZT ) {
+	for ( i=0 ; i < 3 ; i++ ) {
+	    size_t j;
+	    const unsigned char *src_p = (const unsigned char *)src_img_buf.data_ptr(0,0,i);
+	    for ( j=0 ; j < dest_height ; j++ ) {
+		unsigned char *dest_p = (unsigned char *)dest_loupe_buf->data_ptr(0,j,i);
+		int src_y;
+		int j_adj = (int)j - (int)dest_height / 2;
+		if ( 0 < j_adj ) j_adj += zoom_factor/2;
+		else if ( j_adj < 0 ) j_adj -= zoom_factor/2;
+		src_y = cen_y + j_adj / zoom_factor;
+		size_t k;
+		if ( 0 <= src_y && src_y < (int)src_height ) {
+		    for ( k=0 ; k < dest_width ; k++ ) {
+			int src_x;
+			int k_adj = (int)k - (int)dest_width / 2;
+			if ( 0 < k_adj ) k_adj += zoom_factor/2;
+			else if ( k_adj < 0 ) k_adj -= zoom_factor/2;
+			src_x = cen_x + k_adj / zoom_factor;
+			if ( 0 <= src_x && src_x < (int)src_width ) 
+			    dest_p[k] = src_p[src_width * src_y + src_x];
+			else 
+			    dest_p[k] = 0;
+		    }
+		}
+		else {
+		    for ( k=0 ; k < dest_width ; k++ ) dest_p[k] = 0;
+		}
+	    }
+	}
+    }
+
+    ret_status = 0;
+ quit:
+    return ret_status;
+}
+
+
 const command_list Cmd_list[] = {
 #define CMD_DISPLAY_TARGET 1
         {CMD_DISPLAY_TARGET,    "Display Normal            [1]"},
@@ -379,7 +469,9 @@ int main( int argc, char *argv[] )
     int win_filesel, win_image;
 
     mdarray img_buf(UCHAR_ZT,false);	/* buffer for target */
-    mdarray_uchar tmp_buf(false);	/* tmp buffer for displaying */
+    mdarray loupe_buf(UCHAR_ZT,false);	/* buffer for loupe */
+    mdarray_uchar tmp_buf_img(false);	/* tmp buffer for displaying */
+    mdarray_uchar tmp_buf_loupe(false);	/* tmp buffer for displaying */
     int tiff_szt = 0;
     
     int display_type = 0;		/* flag to display image type */
@@ -481,8 +573,12 @@ int main( int argc, char *argv[] )
     /* command window */
     
     command_win_rec = gopen_command_window( Cmd_list,
-	   Font_margin + 2*Fontsize + Font_margin + Loupe_width + Font_margin);
+	  Font_margin + 2*Fontsize + Font_margin + Loupe_height);
 
+    loupe_buf.resize_3d(command_win_rec.width, Loupe_height, 3);
+    sio.eprintf("[DEBUG] command_win_rec.width, Loupe_height = %d %d [%d %d]\n",
+		(int)command_win_rec.width, (int)Loupe_height,
+		(int)command_win_rec.width % 5, (int)Loupe_height % 5);
     
     /* file selector */
     
@@ -516,7 +612,7 @@ int main( int argc, char *argv[] )
     
     /* display reference image */
     display_image(win_image, 0, 0, img_buf, tiff_szt,
-		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
+		  display_bin, display_ch, contrast_rgb, true, &tmp_buf_img);
 
     winname(win_image, "Imave Viewer  "
 	    "zoom = 1/%d  contrast = ( %d, %d, %d )  "
@@ -822,7 +918,7 @@ int main( int argc, char *argv[] )
 	    else if ( cmd_id == CMD_APHOTO ) {
 		perform_aphoto( win_image, img_buf, tiff_szt,
 				display_bin, display_ch,
-				display_type, contrast_rgb, &tmp_buf );
+				display_type, contrast_rgb, &tmp_buf_img );
 		refresh_image = 1;
 	    }
 	    /* */
@@ -832,22 +928,6 @@ int main( int argc, char *argv[] )
                 if ( ev_type == LeaveNotify ) {
                     ev_x = -32000;  ev_y = -32000;
                 }
-		layer(command_win_rec.win_id, 0, 2);
-		copylayer(command_win_rec.win_id, 1, 2);
-		if ( 0 <= ev_x && 0 <= ev_y ) {
-		    drawstr(command_win_rec.win_id,
-			Font_margin,
-			command_win_rec.reserved_y0 + Font_margin + Fontsize,
-			Fontsize, 0, "x=%g y=%g", ev_x, ev_y);
-		    drawstr(command_win_rec.win_id,
-			Font_margin,
-			command_win_rec.reserved_y0 + Font_margin + 2*Fontsize,
-			Fontsize, 0, "RGB=%5g %5g %5g",
-			img_buf.dvalue((ssize_t)ev_x, (ssize_t)ev_y, 0),
-			img_buf.dvalue((ssize_t)ev_x, (ssize_t)ev_y, 1),
-			img_buf.dvalue((ssize_t)ev_x, (ssize_t)ev_y, 2) );
-		}
-		copylayer(command_win_rec.win_id, 2, 0);
 		refresh_loupe = true;
 	    }
 	    else if ( ev_type == KeyPress ) {
@@ -860,7 +940,51 @@ int main( int argc, char *argv[] )
 	}
 
 	/* Update window */
-	    
+
+	if ( refresh_loupe == true ) {
+	    const int this_y0 = command_win_rec.reserved_y0;
+	    const int win_cmd = command_win_rec.win_id;
+	    const int digit_y_pos = Font_margin + Fontsize - Font_y_off + 1;
+	    const int loupe_y_pos = Font_margin + 2*Fontsize + Font_margin - 1;
+	    const int cross_x = loupe_buf.x_length() / 2;
+	    const int cross_y = loupe_buf.y_length() / 2;
+	    const int hole = 4;	/* center hole of loupe */
+	    layer(win_cmd, 0, 2);
+	    copylayer(win_cmd, 1, 2);
+	    if ( 0 <= ev_x && 0 <= ev_y ) {
+		drawstr(win_cmd,
+			Font_margin,
+			this_y0 + digit_y_pos,
+			Fontsize, 0, "x=%g y=%g", ev_x, ev_y);
+		drawstr(win_cmd,
+			Font_margin,
+			this_y0 + digit_y_pos + Fontsize,
+			Fontsize, 0, "RGB=%5g %5g %5g",
+			img_buf.dvalue((ssize_t)ev_x, (ssize_t)ev_y, 0),
+			img_buf.dvalue((ssize_t)ev_x, (ssize_t)ev_y, 1),
+			img_buf.dvalue((ssize_t)ev_x, (ssize_t)ev_y, 2) );
+	    }
+	    update_loupe_x5(img_buf, ev_x, ev_y, &loupe_buf);
+	    display_image(win_cmd,
+			  0, this_y0 + loupe_y_pos,
+			  loupe_buf, tiff_szt,
+			  1, display_ch, contrast_rgb,
+			  false, &tmp_buf_loupe);
+	    newgcfunction(win_cmd, GXxor);
+	    newrgbcolor(win_cmd, 0x00,0xff,0x00);
+	    drawline(win_cmd, 0, this_y0 + loupe_y_pos + cross_y,
+		     cross_x - hole, this_y0 + loupe_y_pos + cross_y);
+	    drawline(win_cmd, cross_x + hole, this_y0 + loupe_y_pos + cross_y,
+		     loupe_buf.x_length() - 1, this_y0 + loupe_y_pos + cross_y);
+	    drawline(win_cmd, cross_x, this_y0 + loupe_y_pos + 0,
+		     cross_x, this_y0 + loupe_y_pos + cross_y - hole);
+	    drawline(win_cmd, cross_x, this_y0 + loupe_y_pos + cross_y + hole,
+		     cross_x, this_y0 + loupe_y_pos + loupe_buf.y_length() - 1);
+	    newgcfunction(win_cmd, GXcopy);
+	    newrgbcolor(win_cmd, 0xff,0xff,0xff);
+	    copylayer(win_cmd, 2, 0);
+	}
+	
 	if ( refresh_image != 0 ) {
 	    if ( display_type == 1 ) {
 		newgcfunction(win_image, GXcopyInverted);
@@ -871,7 +995,7 @@ int main( int argc, char *argv[] )
 	    //
 	    display_image(win_image, 0, 0, img_buf, tiff_szt,
 			  display_bin, display_ch, contrast_rgb,
-			  refresh_winsize, &tmp_buf);
+			  refresh_winsize, &tmp_buf_img);
 	    winname(win_image, "Image Viewer  "
 		    "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  "
 		    "auto_zoom = %d  dither = %d  ",
