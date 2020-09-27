@@ -344,17 +344,19 @@ const command_list Cmd_list[] = {
         {CMD_IMSTAT,            "Image statistics          [s]"},
 #define CMD_APHOTO 13
         {CMD_APHOTO,            "Aperture Photometry       [p]"},
-#define CMD_AUTO_ZOOM 14
+#define CMD_SAVE_SLOG 14
+        {CMD_SAVE_SLOG,         "Save Log of Statistics    [l]"},
+#define CMD_AUTO_ZOOM 15
         {CMD_AUTO_ZOOM,         "Auto zoom on/off for loading [z]"},
-#define CMD_DITHER 15
+#define CMD_DITHER 16
         {CMD_DITHER,            "Dither on/off for saving  [d]"},
-#define CMD_SAVE_8BIT 16
+#define CMD_SAVE_8BIT 17
         {CMD_SAVE_8BIT,         "Save as 8-bit TIFF"},
-#define CMD_SAVE_16BIT 17
+#define CMD_SAVE_16BIT 18
         {CMD_SAVE_16BIT,        "Save as 16-bit TIFF"},
-#define CMD_SAVE_FLOAT 18
+#define CMD_SAVE_FLOAT 19
         {CMD_SAVE_FLOAT,        "Save as 32-bit float TIFF"},
-#define CMD_EXIT 19
+#define CMD_EXIT 20
         {CMD_EXIT,              "Exit                      [q]"},
         {0, NULL}		/* EOL */
 };
@@ -363,7 +365,7 @@ int main( int argc, char *argv[] )
 {
     const char *conf_file_display = "display_0.txt";
 
-    stdstreamio sio, f_in;
+    stdstreamio sio, f_in, f_out;
     pipestreamio p_in;
     tarray_tstring filenames;
     tstring filename_1st;
@@ -388,6 +390,7 @@ int main( int argc, char *argv[] )
     bool flag_drawed;
     int aphoto_step;
     aphoto aphoto_rec;
+    tarray_tstring aphoto_log;
     
     bool flag_auto_zoom = true;
     bool flag_dither = true;
@@ -618,6 +621,7 @@ int main( int argc, char *argv[] )
 	    }
 	    else if ( ev_btn == 's' ) cmd_id = CMD_IMSTAT;
 	    else if ( ev_btn == 'p' ) cmd_id = CMD_APHOTO;
+	    else if ( ev_btn == 'l' ) cmd_id = CMD_SAVE_SLOG;
 	    else if ( ev_btn == 'z' ) cmd_id = CMD_AUTO_ZOOM;
 	    else if ( ev_btn == 'd' ) cmd_id = CMD_DITHER;
 	    /* ESC key or 'q' */
@@ -784,6 +788,33 @@ int main( int argc, char *argv[] )
 		init_aphoto( &aphoto_rec );
 		aphoto_step = 1;
 	    }
+	    else if ( cmd_id == CMD_SAVE_SLOG ) {
+		if ( 0 < aphoto_log.length() ) {
+		    tstring log_filename;
+		    size_t ix = 0;
+		    while ( 1 ) {
+			log_filename.printf("statistics-log_%zu.csv",ix);
+			if ( f_in.open("r", log_filename.cstr()) < 0 ) break;
+			else f_in.close();
+			ix ++;
+		    }
+		    sio.printf("Saved: '%s'\n",log_filename.cstr());
+		    if ( f_out.open("w", log_filename.cstr()) < 0 ) {
+			sio.eprintf("[ERROR] cannot write: '%s'\n",
+				    log_filename.cstr());
+		    }
+		    else {
+			f_out.printf("#Aperture-Photometry\r\n");
+			f_out.printf("#filename,obj_x,obj_y,obj_r,sky_r,"
+				 "sky_lv[R],sky_lv[G],sky_lv[B],"
+				 "obj_cnt[R],obj_cnt[G],obj_cnt[B]\r\n");
+			for ( ix=0 ; ix < aphoto_log.length() ; ix++ ) {
+			    f_out.printf("%s\r\n", aphoto_log[ix].cstr());
+			}
+			f_out.close();
+		    }
+		}
+	    }
 	    /* */
 	    else if ( ev_win == win_image &&
 		      ( ev_type == MotionNotify || 
@@ -900,9 +931,21 @@ int main( int argc, char *argv[] )
 		    if ( aphoto_rec.obj_r < aphoto_rec.sky_r &&
 			 aphoto_rec.sky_r < img_buf.x_length() &&
 			 aphoto_rec.sky_r < img_buf.y_length() ) {
+			tstring log;
 			aphoto_step = 0;
 			/* perform */
 			perform_aphoto(img_buf, tiff_szt, &aphoto_rec);
+			log.printf("%s,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g",
+				   filenames[sel_file_id].cstr(),
+				   aphoto_rec.obj_x, aphoto_rec.obj_y,
+				   aphoto_rec.obj_r, aphoto_rec.sky_r,
+				   aphoto_rec.sky_lv[0],
+				   aphoto_rec.sky_lv[1],
+				   aphoto_rec.sky_lv[2],
+				   aphoto_rec.obj_cnt[0],
+				   aphoto_rec.obj_cnt[1],
+				   aphoto_rec.obj_cnt[2]);
+			aphoto_log.append(log, 1);
 			refresh_image = 1;
 		    }
 		}
