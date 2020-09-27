@@ -89,143 +89,50 @@ static int get_dirname( const char *filename, tstring *ret_dir )
     return ret;
 }
 
-static int perform_aphoto( int win_image, const mdarray &img_buf, int tiff_szt,
-			   int display_bin, int display_ch, int display_type,
-			   const int contrast_rgb[], mdarray_uchar *tmp_buf )
+typedef struct _aphoto {
+    double obj_x;
+    double obj_y;
+    double obj_r;
+    double sky_r;
+    double sky_lv[3];
+    double obj_cnt[3];
+} aphoto;
+
+static int init_aphoto( aphoto *rec_p )
+{
+    rec_p->obj_x = -32000;
+    rec_p->obj_y = -32000;
+    rec_p->obj_r = 65535;
+    rec_p->sky_r = 65535;
+    rec_p->sky_lv[0] = NAN;
+    rec_p->sky_lv[1] = NAN;
+    rec_p->sky_lv[2] = NAN;
+    rec_p->obj_cnt[0] = NAN;
+    rec_p->obj_cnt[1] = NAN;
+    rec_p->obj_cnt[2] = NAN;
+
+    return 0;
+}
+
+static int perform_aphoto( const mdarray &img_buf, int tiff_szt,
+			   aphoto *rec_p )
 {
     stdstreamio sio;
     mdarray_float stat_buf(false);
     float *const *const *stat_buf_ptr;
     mdarray_float stat_buf_1d(false);
-    size_t width, height, cnt_obj_pixels, cnt_sky_pixels;
-    double obj_x, obj_y, obj_r, sky_r;
-    int step_count;
-    bool flag_drawed = false;
+    size_t cnt_obj_pixels, cnt_sky_pixels;
+    double obj_x = rec_p->obj_x;
+    double obj_y = rec_p->obj_y;
+    double obj_r = rec_p->obj_r;
+    double sky_r = rec_p->sky_r;
     size_t i, j;
-    double sky_lv[3];
-    double obj_cnt[3];
     int ret_status = -1;
-
-    newgcfunction(win_image, GXxor);
-    newrgbcolor(win_image, 0x00,0xff,0x00);
-
-    width = img_buf.x_length();
-    height = img_buf.y_length();
-
-    obj_x = -32000;
-    obj_y = -32000;
-    obj_r = 65535;
-    sky_r = 65535;
-    step_count = 0;
-
-    while ( 1 ) {
-
-	int ev_win, ev_type, ev_btn;	/* for event handling */
-	double ev_x, ev_y;
-	bool refresh_image = false;
-
-	ev_win = ggetevent(&ev_type,&ev_btn,&ev_x,&ev_y);
-	if ( ev_win == win_image ) {
-	    if ( ev_type == KeyPress ) {
-		if ( ev_btn == 27 || ev_btn == 'q' ) {
-		    goto quit;
-		}
-		else if ( ev_btn == 8 /* backspace */ ) {
-		    if ( 0 < step_count ) {
-			step_count --;
-			if ( step_count == 0 ) obj_r = 65535;
-			else if ( step_count == 1 ) sky_r = 65535;
-			refresh_image = true;
-		    }
-		}
-	    }
-	    else if ( step_count == 0 ) {
-		if ( ev_type == MotionNotify ) {
-		    /* draw large cross */
-		    if ( flag_drawed == true ) {
-			drawline(win_image, 0, obj_y, width, obj_y);
-			drawline(win_image, obj_x, 0, obj_x, height);
-		    }
-		    obj_x = ev_x;
-		    obj_y = ev_y;
-		    drawline(win_image, 0, obj_y, width, obj_y);
-		    drawline(win_image, obj_x, 0, obj_x, height);
-		    flag_drawed = true;
-		}
-		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
-		    if ( 0 <= obj_x && obj_x < width &&
-			 0 <= obj_y && obj_y < height ) {
-			step_count ++;
-		    }
-		}
-	    }
-	    else if ( step_count == 1 ) {
-		if ( ev_type == MotionNotify ) {
-		    double ev_r;
-		    /* draw object circle */
-		    ev_r = sqrt(pow(obj_x-ev_x,2) + pow(obj_y-ev_y,2));
-		    if ( flag_drawed == true ) {
-			drawcirc(win_image, obj_x, obj_y, obj_r, obj_r);
-		    }
-		    obj_r = ev_r;
-		    drawcirc(win_image, obj_x, obj_y, obj_r, obj_r);
-		    flag_drawed = true;
-		}
-		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
-		    if ( obj_r < width && obj_r < height ) {
-			step_count ++;
-		    }
-		}
-	    }
-	    else if ( step_count == 2 ) {
-		if ( ev_type == MotionNotify ) {
-		    double ev_r;
-		    /* draw object circle */
-		    ev_r = sqrt(pow(obj_x-ev_x,2) + pow(obj_y-ev_y,2));
-		    if ( flag_drawed == true ) {
-			drawcirc(win_image, obj_x, obj_y, sky_r, sky_r);
-		    }
-		    sky_r = ev_r;
-		    drawcirc(win_image, obj_x, obj_y, sky_r, sky_r);
-		    flag_drawed = true;
-		}
-		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
-		    if ( obj_r < sky_r && sky_r < width && sky_r < height ) {
-			break;
-		    }
-		}
-	    }
-	}
-
-	if ( refresh_image == true ) {
-	    if ( display_type == 1 ) {
-		newgcfunction(win_image, GXcopyInverted);
-	    }
-	    else {
-		newgcfunction(win_image, GXcopy);
-	    }
-	    display_image(win_image, 0, 0, img_buf, tiff_szt,
-			display_bin, display_ch, contrast_rgb, false, tmp_buf);
-	    newgcfunction(win_image, GXxor);
-	    flag_drawed = false;
-
-	    if ( 0 < step_count ) {
-		drawline(win_image, 0, obj_y, width, obj_y);
-		drawline(win_image, obj_x, 0, obj_x, height);
-	    }
-	    if ( 1 < step_count ) {
-		    drawcirc(win_image, obj_x, obj_y, obj_r, obj_r);
-	    }
-	}
-    }
-
-    newgcfunction(win_image, GXcopy);
-    newrgbcolor(win_image, 0xff,0xff,0xff);
 
     /*
      * start statistics
      */
-    stat_buf.resize_3d(sky_r * 2, sky_r *2, 3);
+    stat_buf.resize_3d(sky_r * 2, sky_r * 2, 3);
     stat_buf_1d.resize_2d(stat_buf.x_length(), stat_buf.y_length());
     /* get 3-d array ptr */
     stat_buf_ptr = stat_buf.array_ptr_3d(true);
@@ -253,7 +160,7 @@ static int perform_aphoto( int win_image, const mdarray &img_buf, int tiff_szt,
     for ( i=0 ; i < 3 ; i++ ) {
 	stat_buf.copy(&stat_buf_1d,
 		      0, stat_buf.x_length(), 0, stat_buf.y_length(), i, 1);
-	sky_lv[i] = md_median(stat_buf_1d);
+	rec_p->sky_lv[i] = md_median(stat_buf_1d);
     }
 
     /* object */
@@ -287,7 +194,7 @@ static int perform_aphoto( int win_image, const mdarray &img_buf, int tiff_szt,
     for ( i=0 ; i < 3 ; i++ ) {
 	stat_buf.copy(&stat_buf_1d,
 		      0, stat_buf.x_length(), 0, stat_buf.y_length(), i, 1);
-	obj_cnt[i] = md_total(stat_buf_1d);
+	rec_p->obj_cnt[i] = md_total(stat_buf_1d);
     }
 
     /* display */
@@ -299,25 +206,24 @@ static int perform_aphoto( int win_image, const mdarray &img_buf, int tiff_szt,
     sio.printf("sky_area                  = %zu pixels\n",cnt_sky_pixels);
     sio.printf("obj_area                  = %zu pixels\n",cnt_obj_pixels);
     sio.printf("[Red]\n");
-    sio.printf("sky_median                = %g\n",sky_lv[0]);
-    sio.printf("obj-area_count            = %g\n",obj_cnt[0]);
+    sio.printf("sky_median                = %g\n",rec_p->sky_lv[0]);
+    sio.printf("obj-area_count            = %g\n",rec_p->obj_cnt[0]);
     sio.printf("obj_count(sky-subtracted) = %g\n",
-	       obj_cnt[0] - (cnt_obj_pixels * sky_lv[0]));
+	       rec_p->obj_cnt[0] - (cnt_obj_pixels * rec_p->sky_lv[0]));
     sio.printf("[Green]\n");
-    sio.printf("sky_median                = %g\n",sky_lv[1]);
-    sio.printf("obj-area_count            = %g\n",obj_cnt[1]);
+    sio.printf("sky_median                = %g\n",rec_p->sky_lv[1]);
+    sio.printf("obj-area_count            = %g\n",rec_p->obj_cnt[1]);
     sio.printf("obj_count(sky-subtracted) = %g\n",
-	       obj_cnt[1] - (cnt_obj_pixels * sky_lv[1]));
+	       rec_p->obj_cnt[1] - (cnt_obj_pixels * rec_p->sky_lv[1]));
     sio.printf("[Blue]\n");
-    sio.printf("sky_median                = %g\n",sky_lv[2]);
-    sio.printf("obj-area_count            = %g\n",obj_cnt[2]);
+    sio.printf("sky_median                = %g\n",rec_p->sky_lv[2]);
+    sio.printf("obj-area_count            = %g\n",rec_p->obj_cnt[2]);
     sio.printf("obj_count(sky-subtracted) = %g\n",
-	       obj_cnt[2] - (cnt_obj_pixels * sky_lv[2]));
+	       rec_p->obj_cnt[2] - (cnt_obj_pixels * rec_p->sky_lv[2]));
     sio.printf("-------------------------\n");
 
     ret_status = 0;
 
- quit:
     return ret_status;
 }
 
@@ -479,6 +385,10 @@ int main( int argc, char *argv[] )
     int display_bin = 1;		/* binning factor for display */
     int contrast_rgb[3] = {8, 8, 8};	/* contrast for display */
 
+    bool flag_drawed;
+    int aphoto_step;
+    aphoto aphoto_rec;
+    
     bool flag_auto_zoom = true;
     bool flag_dither = true;
 
@@ -626,6 +536,10 @@ int main( int argc, char *argv[] )
      * MAIN EVENT LOOP
      */
 
+    init_aphoto( &aphoto_rec );
+    flag_drawed = false;
+    aphoto_step = 0;
+
     while ( 1 ) {
 
 	int ev_win, ev_type, ev_btn;	/* for event handling */
@@ -636,73 +550,18 @@ int main( int argc, char *argv[] )
 	bool refresh_loupe = false;
 	bool refresh_winsize = false;
         bool refresh_winname = false;
-
+	
 	int f_id = -1;
 	int cmd_id = -1;
-	bool flag_file_selector = false;
 	
         /* waiting an event */
         ev_win = ggetevent(&ev_type,&ev_btn,&ev_x,&ev_y);
 
 	/*
-	 *  Check file selector
-	 */
-	if ( ev_type == ButtonPress && ev_btn == 1 &&
-	     ev_win == win_filesel ) {
-	    flag_file_selector = true;
-	    f_id = ev_y / Fontsize;
-	}
-	else if ( ev_type == KeyPress && ev_btn == 6 /* PageDown */ ) {
-	    flag_file_selector = true;
-	    f_id = sel_file_id + 1;
-	}
-	else if ( ev_type == KeyPress && ev_btn == 2 /* PageUp */ ) {
-	    flag_file_selector = true;
-	    f_id = sel_file_id - 1;
-	}
-	
-	if ( f_id != sel_file_id &&
-	     0 <= f_id && (size_t)f_id < filenames.length() ) {
-
-	    display_file_list(win_filesel, filenames, f_id, true, -1, NULL);
-	    
-	    sio.printf("Open: %s\n", filenames[f_id].cstr());
-		    
-	    if ( read_tiff24or48(filenames[f_id].cstr(), 
-				 &img_buf, &tiff_szt, NULL, NULL) < 0 ) {
-	        sio.eprintf("[ERROR] read_tiff24or48() failed\n");
-		sel_file_id = -1;
-	    }
-	    else {
-
-		sel_file_id = f_id;
-		//sio.printf("%ld\n", sel_file_id);
-
-		if ( flag_auto_zoom == true ) {
-		    display_bin = get_bin_factor_for_display(img_buf.x_length(),
-						     img_buf.y_length(), true);
-		}
-		if ( display_bin < 0 ) {
-		    sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
-				"bad display depth\n");
-		    goto quit;
-		}
-
-		refresh_image = 2;
-		refresh_winsize = true;
-		refresh_list = true;
-
-	    }
-	}
-
-	/*
 	 *  Check command window
 	 */
 	
-	if ( flag_file_selector == true ) {
-	    /* NOP */
-	}
-	else if ( ev_type == ButtonPress && 1 <= ev_btn && ev_btn <= 3 &&
+	if ( ev_type == ButtonPress && 1 <= ev_btn && ev_btn <= 3 &&
 		  ev_win == command_win_rec.win_id ) {
 	    cmd_id = 1 + ev_y / command_win_rec.cell_height;
 	}
@@ -916,10 +775,14 @@ int main( int argc, char *argv[] )
 		sio.printf("-------------------------\n");
 	    }
 	    else if ( cmd_id == CMD_APHOTO ) {
+		/*
 		perform_aphoto( win_image, img_buf, tiff_szt,
 				display_bin, display_ch,
 				display_type, contrast_rgb, &tmp_buf_img );
-		refresh_image = 1;
+		*/
+		//refresh_image = 1;
+		init_aphoto( &aphoto_rec );
+		aphoto_step = 1;
 	    }
 	    /* */
 	    else if ( ev_win == win_image &&
@@ -928,14 +791,173 @@ int main( int argc, char *argv[] )
                 if ( ev_type == LeaveNotify ) {
                     ev_x = -32000;  ev_y = -32000;
                 }
+		cmd_id = 0;
 		refresh_loupe = true;
 	    }
 	    else if ( ev_type == KeyPress ) {
 		if ( ev_btn == ' ' ) {
 		    if ( display_type == 0 ) display_type = 1;
 		    else display_type = 0;
+		    cmd_id = 0;
 		    refresh_image = 2;
 		}
+	    }
+
+	    /* Aperture Photometry */
+	    if ( 1 <= cmd_id ) {
+		/* NOP */
+	    }
+	    else if ( 0 < aphoto_step &&
+		      ev_type == KeyPress && ev_btn == 8 /* backspace */ ) {
+		/* cancel */
+		aphoto_step = 0;
+		cmd_id = 0;
+		refresh_image = 1;
+	    }
+	    else if ( 0 < aphoto_step &&
+		      ev_type == ButtonPress && ev_btn == 3 /* right btn */ ) {
+		/* cancel */
+		aphoto_step = 0;
+		cmd_id = 0;
+		refresh_image = 1;
+	    }
+	    else if ( aphoto_step == 1 ) {
+		cmd_id = 0;
+		if ( ev_type == MotionNotify ) {
+		    newgcfunction(win_image, GXxor);
+		    newrgbcolor(win_image, 0x00,0xff,0x00);
+		    /* draw large cross */
+		    if ( flag_drawed == true ) {
+			drawline(win_image, 0, aphoto_rec.obj_y,
+				 img_buf.x_length(), aphoto_rec.obj_y);
+			drawline(win_image, aphoto_rec.obj_x, 0,
+				 aphoto_rec.obj_x, img_buf.y_length());
+		    }
+		    aphoto_rec.obj_x = ev_x;
+		    aphoto_rec.obj_y = ev_y;
+		    drawline(win_image, 0, aphoto_rec.obj_y,
+			     img_buf.x_length(), aphoto_rec.obj_y);
+		    drawline(win_image, aphoto_rec.obj_x, 0,
+			     aphoto_rec.obj_x, img_buf.y_length());
+		    newgcfunction(win_image, GXcopy);
+		    flag_drawed = true;
+		}
+		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
+		    if ( 0 <= aphoto_rec.obj_x &&
+			 aphoto_rec.obj_x < img_buf.x_length() &&
+			 0 <= aphoto_rec.obj_y &&
+			 aphoto_rec.obj_y < img_buf.y_length() ) {
+			aphoto_step ++;
+		    }
+		}
+	    }
+	    else if ( aphoto_step == 2 ) {
+		cmd_id = 0;
+		if ( ev_type == MotionNotify ) {
+		    double ev_r;
+		    newgcfunction(win_image, GXxor);
+		    newrgbcolor(win_image, 0x00,0xff,0x00);
+		    /* draw object circle */
+		    ev_r = sqrt(pow(aphoto_rec.obj_x-ev_x,2) +
+				pow(aphoto_rec.obj_y-ev_y,2));
+		    if ( flag_drawed == true ) {
+			drawcirc(win_image, aphoto_rec.obj_x, aphoto_rec.obj_y,
+				 aphoto_rec.obj_r, aphoto_rec.obj_r);
+		    }
+		    aphoto_rec.obj_r = ev_r;
+		    drawcirc(win_image, aphoto_rec.obj_x, aphoto_rec.obj_y,
+			     aphoto_rec.obj_r, aphoto_rec.obj_r);
+		    newgcfunction(win_image, GXcopy);
+		    flag_drawed = true;
+		}
+		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
+		    if ( aphoto_rec.obj_r < img_buf.x_length() &&
+			 aphoto_rec.obj_r < img_buf.y_length() ) {
+			aphoto_step ++;
+		    }
+		}
+	    }
+	    else if ( aphoto_step == 3 ) {
+		cmd_id = 0;
+		if ( ev_type == MotionNotify ) {
+		    double ev_r;
+		    newgcfunction(win_image, GXxor);
+		    newrgbcolor(win_image, 0x00,0xff,0x00);
+		    /* draw object circle */
+		    ev_r = sqrt(pow(aphoto_rec.obj_x-ev_x,2) +
+				pow(aphoto_rec.obj_y-ev_y,2));
+		    if ( flag_drawed == true ) {
+			drawcirc(win_image, aphoto_rec.obj_x, aphoto_rec.obj_y,
+				 aphoto_rec.sky_r, aphoto_rec.sky_r);
+		    }
+		    aphoto_rec.sky_r = ev_r;
+		    drawcirc(win_image, aphoto_rec.obj_x, aphoto_rec.obj_y,
+			     aphoto_rec.sky_r, aphoto_rec.sky_r);
+		    newgcfunction(win_image, GXcopy);
+		    flag_drawed = true;
+		}
+		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
+		    if ( aphoto_rec.obj_r < aphoto_rec.sky_r &&
+			 aphoto_rec.sky_r < img_buf.x_length() &&
+			 aphoto_rec.sky_r < img_buf.y_length() ) {
+			aphoto_step = 0;
+			/* perform */
+			perform_aphoto(img_buf, tiff_szt, &aphoto_rec);
+			refresh_image = 1;
+		    }
+		}
+	    }
+
+	}
+
+	/*
+	 *  Check file selector
+	 */
+	if ( 0 <= cmd_id ) {
+	    /* NOP */
+	}
+	else if ( ev_type == ButtonPress && ev_btn == 1 &&
+	     ev_win == win_filesel ) {
+	    f_id = ev_y / Fontsize;
+	}
+	else if ( ev_type == KeyPress && ev_btn == 6 /* PageDown */ ) {
+	    f_id = sel_file_id + 1;
+	}
+	else if ( ev_type == KeyPress && ev_btn == 2 /* PageUp */ ) {
+	    f_id = sel_file_id - 1;
+	}
+	
+	if ( f_id != sel_file_id &&
+	     0 <= f_id && (size_t)f_id < filenames.length() ) {
+
+	    display_file_list(win_filesel, filenames, f_id, true, -1, NULL);
+	    
+	    sio.printf("Open: %s\n", filenames[f_id].cstr());
+		    
+	    if ( read_tiff24or48(filenames[f_id].cstr(), 
+				 &img_buf, &tiff_szt, NULL, NULL) < 0 ) {
+	        sio.eprintf("[ERROR] read_tiff24or48() failed\n");
+		sel_file_id = -1;
+	    }
+	    else {
+
+		sel_file_id = f_id;
+		//sio.printf("%ld\n", sel_file_id);
+
+		if ( flag_auto_zoom == true ) {
+		    display_bin = get_bin_factor_for_display(img_buf.x_length(),
+						     img_buf.y_length(), true);
+		}
+		if ( display_bin < 0 ) {
+		    sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
+				"bad display depth\n");
+		    goto quit;
+		}
+
+		refresh_image = 2;
+		refresh_winsize = true;
+		refresh_list = true;
+
 	    }
 	}
 
@@ -1002,6 +1024,7 @@ int main( int argc, char *argv[] )
 		    names_ch[display_ch], display_bin,
 		    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
 		    (int)flag_auto_zoom, (int)flag_dither);
+	    flag_drawed = false;
 	}
 
 	if ( refresh_winname == true ) {

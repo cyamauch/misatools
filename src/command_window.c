@@ -1,6 +1,6 @@
 
 typedef struct _command_list {
-    int id;
+    int id;			/* do not set 0 in the list */
     const char *menu_string;
 } command_list;
 
