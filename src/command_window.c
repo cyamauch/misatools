@@ -12,16 +12,14 @@ typedef struct _command_win {
     int reserved_y0;
 } command_win;
 
-static command_win gopen_command_window( const command_list cmd_list[],
-					 int reserved_height )
+static int get_command_list_info( const command_list cmd_list[],
+				  size_t *ret_max_len_menu_string )
 {
-    command_win cmd_win_ret = {0};
-    size_t n_cmd_list;
-    int win_command;
-    int w_width, w_height;
-    int cl_height, res_begin;
+    size_t n_cmd_list = 0;
     size_t i, max_c;
-    
+
+    if ( cmd_list == NULL ) goto quit;
+	
     max_c = 0;
     for ( i=0 ; cmd_list[i].menu_string != NULL ; i++ ) {
 	size_t j = 0;
@@ -29,6 +27,24 @@ static command_win gopen_command_window( const command_list cmd_list[],
 	if ( max_c < j ) max_c = j;
     }
     n_cmd_list = i;
+
+    if ( ret_max_len_menu_string != NULL ) *ret_max_len_menu_string = max_c;
+    
+ quit:
+    return n_cmd_list;
+}
+
+static command_win gopen_command_window( const command_list cmd_list[],
+					 int reserved_height )
+{
+    command_win cmd_win_ret = {0};
+    size_t n_cmd_list, max_c = 0;
+    int win_command;
+    int w_width, w_height;
+    int cl_height, res_begin;
+    size_t i;
+    
+    n_cmd_list = get_command_list_info(cmd_list, &max_c);
     
     w_width = max_c * (Fontsize/2) + Font_margin * 2;
     cl_height = (Fontsize + Font_margin * 2);

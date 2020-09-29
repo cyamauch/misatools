@@ -33,10 +33,10 @@ static int Fontsize = 14;
 #include "command_window.c"
 #include "display_file_list.cc"
 #include "display_image.cc"
-const int Loupe_height = 220;
 const int Loupe_pos_out = -32000;
 
-static bool test_file( const char *file )
+/* test suffix of filename and try opening file with readonly */
+static bool test_tiff_file( const char *file )
 {
     stdstreamio f_in;
     tstring filename = file;
@@ -62,6 +62,31 @@ static bool test_file( const char *file )
     return ret_value;
 }
 
+/* e.g. ././boo//foo => boo/foo */
+static int remove_redundancy_in_path( tstring *path_p )
+{
+    ssize_t ix;
+    int ret = -1;
+
+    if ( path_p == NULL ) goto quit;
+    
+    while ( (*path_p).find("./") == 0 ) {
+	(*path_p).erase(0,2);
+    }
+    while ( 0 < (ix=(*path_p).find("/./")) ) {
+	(*path_p).erase(ix,2);
+    }
+    while ( 0 < (ix=(*path_p).find("//")) ) {
+	(*path_p).erase(ix,1);
+    }
+    
+    ret = 0;
+
+ quit:
+    return ret;
+}
+
+/* 'dirname' command */
 static int get_dirname( const char *filename, tstring *ret_dir )
 {
     ssize_t ix;
@@ -78,6 +103,9 @@ static int get_dirname( const char *filename, tstring *ret_dir )
 	ret_dir->resize(ix);
 	if ( ret_dir->length() == 0 ) {
 	    ret_dir->assign(".");
+	}
+	else {
+	    remove_redundancy_in_path(ret_dir);
 	}
     }
     else {
@@ -237,11 +265,10 @@ static int perform_aphoto( const mdarray &img_buf, int tiff_szt,
     return ret_status;
 }
 
-static int update_loupe_x5( const mdarray &src_img_buf,
-			    int cen_x, int cen_y,
-			    mdarray *dest_loupe_buf )
+static int update_loupe_buf( const mdarray &src_img_buf,
+			     int cen_x, int cen_y, int zoom_factor,
+			     mdarray *dest_loupe_buf )
 {
-    const int zoom_factor = 5;
     const size_t src_width = src_img_buf.x_length();
     const size_t src_height = src_img_buf.y_length();
     size_t dest_width, dest_height;
@@ -250,6 +277,10 @@ static int update_loupe_x5( const mdarray &src_img_buf,
     int ret_status = -1;
 
     if ( dest_loupe_buf == NULL ) goto quit;
+
+    if ( zoom_factor < 3 ) zoom_factor = 3;
+    else if ( 127 < zoom_factor ) zoom_factor = 127;
+    if ( (zoom_factor % 2) == 0 ) zoom_factor ++;
     
     dest_width = dest_loupe_buf->x_length();
     dest_height = dest_loupe_buf->y_length();
@@ -350,23 +381,25 @@ const command_list Cmd_list[] = {
         {CMD_CONT_G,            "Green Contrast +/-        [g][G]"},
 #define CMD_CONT_B 11
         {CMD_CONT_B,            "Blue Contrast +/-         [b][B]"},
-#define CMD_IMSTAT 12
+#define CMD_LOUPE_ZOOM 12
+        {CMD_LOUPE_ZOOM,        "Zoom factor of loupe +/-  [l][L]"},
+#define CMD_IMSTAT 13
         {CMD_IMSTAT,            "Image statistics          [s]"},
-#define CMD_APHOTO 13
+#define CMD_APHOTO 14
         {CMD_APHOTO,            "Aperture Photometry       [p]"},
-#define CMD_SAVE_SLOG 14
-        {CMD_SAVE_SLOG,         "Save Log of Statistics    [l]"},
-#define CMD_AUTO_ZOOM 15
+#define CMD_SAVE_SLOG 15
+        {CMD_SAVE_SLOG,         "Save Log of Statistics    [Enter]"},
+#define CMD_AUTO_ZOOM 16
         {CMD_AUTO_ZOOM,         "Auto zoom on/off for loading [z]"},
-#define CMD_DITHER 16
+#define CMD_DITHER 17
         {CMD_DITHER,            "Dither on/off for saving  [d]"},
-#define CMD_SAVE_8BIT 17
+#define CMD_SAVE_8BIT 18
         {CMD_SAVE_8BIT,         "Save as 8-bit TIFF"},
-#define CMD_SAVE_16BIT 18
+#define CMD_SAVE_16BIT 19
         {CMD_SAVE_16BIT,        "Save as 16-bit TIFF"},
-#define CMD_SAVE_FLOAT 19
+#define CMD_SAVE_FLOAT 20
         {CMD_SAVE_FLOAT,        "Save as 32-bit float TIFF"},
-#define CMD_EXIT 20
+#define CMD_EXIT 21
         {CMD_EXIT,              "Exit                      [q]"},
         {0, NULL}		/* EOL */
 };
@@ -384,6 +417,7 @@ int main( int argc, char *argv[] )
     int sel_file_id = 0;
    
     command_win command_win_rec;
+    size_t max_len_menu_string;
     int win_filesel, win_image;
 
     mdarray img_buf(UCHAR_ZT,false);	/* buffer for target */
@@ -396,6 +430,9 @@ int main( int argc, char *argv[] )
     int display_ch = 0;			/* 0=RGB 1=R 2=G 3=B */
     int display_bin = 1;		/* binning factor for display */
     int contrast_rgb[3] = {8, 8, 8};	/* contrast for display */
+
+    int loupe_height = 220;
+    int loupe_zoom = 5;
     int loupe_x = Loupe_pos_out;
     int loupe_y = Loupe_pos_out;
 
@@ -429,15 +466,9 @@ int main( int argc, char *argv[] )
 	    /* NOP */
 	}
 	else {
-	    if ( test_file( argv[arg_cnt] ) == true ) {
-		ssize_t ix;
+	    if ( test_tiff_file( argv[arg_cnt] ) == true ) {
 		filenames[i] = argv[arg_cnt];
-		while ( filenames[i].find("./") == 0 ) {
-		    filenames[i].erase(0,2);
-		}
-		while ( 0 < (ix=filenames[i].find("/./")) ) {
-		    filenames[i].erase(ix,2);
-		}
+		remove_redundancy_in_path(&(filenames[i]));
 		if ( filename_1st.length() == 0 ) {
 		    filename_1st = filenames[i];
 		}
@@ -499,16 +530,16 @@ int main( int argc, char *argv[] )
 
     /* Font selector */
     set_fontsize();
-    
+
     /* command window */
     
-    command_win_rec = gopen_command_window( Cmd_list,
-	  Font_margin + 2*Fontsize + Font_margin + Loupe_height);
+    get_command_list_info(Cmd_list, &max_len_menu_string);
+    loupe_height = (Fontsize / 2) * max_len_menu_string;
 
-    loupe_buf.resize_3d(command_win_rec.width, Loupe_height, 3);
-    sio.eprintf("[DEBUG] command_win_rec.width, Loupe_height = %d %d [%d %d]\n",
-		(int)command_win_rec.width, (int)Loupe_height,
-		(int)command_win_rec.width % 5, (int)Loupe_height % 5);
+    command_win_rec = gopen_command_window( Cmd_list,
+			Font_margin + 2*Fontsize + Font_margin + loupe_height);
+
+    loupe_buf.resize_3d(command_win_rec.width, loupe_height, 3);
     
     /* file selector */
     
@@ -567,7 +598,7 @@ int main( int argc, char *argv[] )
 
         bool refresh_list = false;
         int refresh_image = 0;		/* 1:display only  2:both */
-	bool refresh_loupe = false;
+	int refresh_loupe = 0;
 	bool refresh_winsize = false;
         bool refresh_winname = false;
 	
@@ -636,9 +667,17 @@ int main( int argc, char *argv[] )
 		cmd_id = CMD_CONT_B;
 		ev_btn = 3;
 	    }
+	    else if ( ev_btn == 'l' ) {
+		cmd_id = CMD_LOUPE_ZOOM;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'L' ) {
+		cmd_id = CMD_LOUPE_ZOOM;
+		ev_btn = 3;
+	    }
 	    else if ( ev_btn == 's' ) cmd_id = CMD_IMSTAT;
 	    else if ( ev_btn == 'p' ) cmd_id = CMD_APHOTO;
-	    else if ( ev_btn == 'l' ) cmd_id = CMD_SAVE_SLOG;
+	    else if ( ev_btn == 13 /* Enter */ ) cmd_id = CMD_SAVE_SLOG;
 	    else if ( ev_btn == 'z' ) cmd_id = CMD_AUTO_ZOOM;
 	    else if ( ev_btn == 'd' ) cmd_id = CMD_DITHER;
 	    /* ESC key or 'q' */
@@ -741,6 +780,18 @@ int main( int argc, char *argv[] )
 		contrast_rgb[2] --;
 		save_display_params(conf_file_display, contrast_rgb);
 		refresh_image = 1;
+	    }
+	}
+	else if ( cmd_id == CMD_LOUPE_ZOOM && ev_btn == 1 ) {
+	    if ( loupe_zoom < loupe_height / 2 ) {
+		loupe_zoom += 2;
+		refresh_loupe = 1;
+	    }
+	}
+	else if ( cmd_id == CMD_LOUPE_ZOOM && ev_btn == 3 ) {
+	    if ( 4 < loupe_zoom ) {
+		loupe_zoom -= 2;
+		refresh_loupe = 1;
 	    }
 	}
 	else if ( cmd_id == CMD_AUTO_ZOOM ) {
@@ -882,7 +933,7 @@ int main( int argc, char *argv[] )
 		    ev_y = Loupe_pos_out;
                 }
 		cmd_id = 0;
-		refresh_loupe = true;
+		refresh_loupe = 2;
 	    }
 	    else if ( ev_type == KeyPress ) {
 		if ( ev_btn == ' ' ) {
@@ -1072,7 +1123,7 @@ int main( int argc, char *argv[] )
 
 	/* Update window */
 
-	if ( refresh_loupe == true || refresh_image != 0 ) {
+	if ( refresh_loupe != 0 || refresh_image != 0 ) {
 	    const int this_y0 = command_win_rec.reserved_y0;
 	    const int win_cmd = command_win_rec.win_id;
 	    const int digit_y_pos = Font_margin + Fontsize - Font_y_off + 1;
@@ -1080,17 +1131,18 @@ int main( int argc, char *argv[] )
 	    const int cross_x = loupe_buf.x_length() / 2;
 	    const int cross_y = loupe_buf.y_length() / 2;
 	    const int hole = 4;	/* center hole of loupe */
-	    if ( refresh_loupe == true ) {
+	    if ( refresh_loupe == 2 ) {
 		loupe_x = (int)ev_x;
 		loupe_y = (int)ev_y;
 	    }
 	    layer(win_cmd, 0, 2);
 	    copylayer(win_cmd, 1, 2);
+	    drawstr(win_cmd, Font_margin, this_y0 + digit_y_pos,
+		    Fontsize, 0, "zoom=%d", loupe_zoom);
 	    if ( loupe_x != Loupe_pos_out ) {
 		drawstr(win_cmd,
-			Font_margin,
-			this_y0 + digit_y_pos,
-			Fontsize, 0, "x=%g y=%g", loupe_x, loupe_y);
+			Font_margin + 9 * (Fontsize/2), this_y0 + digit_y_pos,
+			Fontsize, 0, "x=%d y=%d", loupe_x, loupe_y);
 		drawstr(win_cmd,
 			Font_margin,
 			this_y0 + digit_y_pos + Fontsize,
@@ -1098,7 +1150,8 @@ int main( int argc, char *argv[] )
 			img_buf.dvalue(loupe_x, loupe_y, 0),
 			img_buf.dvalue(loupe_x, loupe_y, 1),
 			img_buf.dvalue(loupe_x, loupe_y, 2) );
-		update_loupe_x5(img_buf, loupe_x, loupe_y, &loupe_buf);
+		update_loupe_buf(img_buf, loupe_x, loupe_y, loupe_zoom,
+				 &loupe_buf);
 		if (display_type == 1) newgcfunction(win_cmd, GXcopyInverted);
 		else newgcfunction(win_cmd, GXcopy);
 		display_image(win_cmd,
