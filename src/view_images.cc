@@ -34,6 +34,7 @@ static int Fontsize = 14;
 #include "display_file_list.cc"
 #include "display_image.cc"
 const int Loupe_height = 220;
+const int Loupe_pos_out = -32000;
 
 static bool test_file( const char *file )
 {
@@ -88,6 +89,15 @@ static int get_dirname( const char *filename, tstring *ret_dir )
  quit:
     return ret;
 }
+
+typedef struct _imstat {
+    double total[3];
+    double median[3];
+    double mean[3];
+    double stddev[3];
+    double min[3];
+    double max[3];
+} imstat;
 
 typedef struct _aphoto {
     double obj_x;
@@ -386,12 +396,19 @@ int main( int argc, char *argv[] )
     int display_ch = 0;			/* 0=RGB 1=R 2=G 3=B */
     int display_bin = 1;		/* binning factor for display */
     int contrast_rgb[3] = {8, 8, 8};	/* contrast for display */
+    int loupe_x = Loupe_pos_out;
+    int loupe_y = Loupe_pos_out;
+
+    imstat imstat_rec;
+    tarray_tstring imstat_log;
 
     bool flag_drawed;
     int aphoto_step;
     aphoto aphoto_rec;
     tarray_tstring aphoto_log;
-    
+
+    tstring log_filename;
+
     bool flag_auto_zoom = true;
     bool flag_dither = true;
 
@@ -750,6 +767,7 @@ int main( int argc, char *argv[] )
 	    }
 	    else if ( cmd_id == CMD_IMSTAT ) {
 		mdarray tmpim(img_buf.size_type(),false);
+		tstring log;
 		size_t ch;
 		tmpim.resize_2d(img_buf.x_length(), img_buf.y_length());
 		sio.printf("*** Image Statistics ***\n");
@@ -757,26 +775,59 @@ int main( int argc, char *argv[] )
 		sio.printf("width   = %zu\n",img_buf.x_length());
 		sio.printf("height  = %zu\n",img_buf.y_length());
 		for ( ch=0 ; ch < 3 ; ch++ ) {
-		    double v;
 		    if ( ch==0 ) sio.printf("[Red]\n");
 		    else if ( ch==1 ) sio.printf("[Green]\n");
 		    else sio.printf("[Blue]\n");
 		    img_buf.copy(&tmpim,
-			  0, img_buf.x_length(), 0, img_buf.y_length(), 0, ch);
-		    v = md_total(tmpim);
-		    sio.printf("total   = %g\n",v);
-		    v = md_median(tmpim);
-		    sio.printf("median  = %g\n",v);
-		    v = md_mean(tmpim);
-		    sio.printf("mean    = %g\n",v);
-		    v = md_stddev(tmpim);
-		    sio.printf("stddev  = %g\n",v);
-		    v = md_min(tmpim);
-		    sio.printf("min     = %g\n",v);
-		    v = md_max(tmpim);
-		    sio.printf("max     = %g\n",v);
+			  0, img_buf.x_length(), 0, img_buf.y_length(), ch, 1);
+		    imstat_rec.total[ch] = md_total(tmpim);
+		    sio.printf("total   = %g\n",imstat_rec.total[ch]);
+		    imstat_rec.median[ch] = md_median(tmpim);
+		    sio.printf("median  = %g\n",imstat_rec.median[ch]);
+		    imstat_rec.mean[ch] = md_mean(tmpim);
+		    sio.printf("mean    = %g\n",imstat_rec.mean[ch]);
+		    imstat_rec.stddev[ch] = md_stddev(tmpim);
+		    sio.printf("stddev  = %g\n",imstat_rec.stddev[ch]);
+		    imstat_rec.min[ch] = md_min(tmpim);
+		    sio.printf("min     = %g\n",imstat_rec.min[ch]);
+		    imstat_rec.max[ch] = md_max(tmpim);
+		    sio.printf("max     = %g\n",imstat_rec.max[ch]);
 		}
 		sio.printf("-------------------------\n");
+		/* */
+		if ( imstat_log.length() < 1 ) {
+		    log.printf("#filename,bps,width,height,"
+			       "total[R],total[G],total[B],"
+			       "median[R],median[G],median[B],"
+			       "mean[R],mean[G],mean[B],"
+			       "stddev[R],stddev[G],stddev[B],"
+			       "min[R],min[G],min[B],"
+			       "max[R],max[G],max[B]");
+		    imstat_log.append(log, 1);
+		}
+		log.printf("%s,%d,%zu,%zu,%g,%g,%g,%g,%g,%g,%g,%g,%g,"
+			   "%g,%g,%g,%g,%g,%g,%g,%g,%g",
+			   filenames[sel_file_id].cstr(), tiff_szt,
+			   img_buf.x_length(), img_buf.y_length(),
+			   imstat_rec.total[0],
+			   imstat_rec.total[1],
+			   imstat_rec.total[2],
+			   imstat_rec.median[0],
+			   imstat_rec.median[1],
+			   imstat_rec.median[2],
+			   imstat_rec.mean[0],
+			   imstat_rec.mean[1],
+			   imstat_rec.mean[2],
+			   imstat_rec.stddev[0],
+			   imstat_rec.stddev[1],
+			   imstat_rec.stddev[2],
+			   imstat_rec.min[0],
+			   imstat_rec.min[1],
+			   imstat_rec.min[2],
+			   imstat_rec.max[0],
+			   imstat_rec.max[1],
+			   imstat_rec.max[2]);
+		imstat_log.append(log, 1);
 	    }
 	    else if ( cmd_id == CMD_APHOTO ) {
 		/*
@@ -789,14 +840,16 @@ int main( int argc, char *argv[] )
 		aphoto_step = 1;
 	    }
 	    else if ( cmd_id == CMD_SAVE_SLOG ) {
-		if ( 0 < aphoto_log.length() ) {
-		    tstring log_filename;
+		if ( 0 < imstat_log.length() ||
+		     0 < aphoto_log.length() ) {
 		    size_t ix = 0;
-		    while ( 1 ) {
-			log_filename.printf("statistics-log_%zu.csv",ix);
-			if ( f_in.open("r", log_filename.cstr()) < 0 ) break;
-			else f_in.close();
-			ix ++;
+		    if ( log_filename.length() < 1 ) {
+			while ( 1 ) {
+			    log_filename.printf("statistics-log_%zu.csv",ix);
+			    if ( f_in.open("r", log_filename.cstr()) < 0 ) break;
+			    else f_in.close();
+			    ix ++;
+			}
 		    }
 		    sio.printf("Saved: '%s'\n",log_filename.cstr());
 		    if ( f_out.open("w", log_filename.cstr()) < 0 ) {
@@ -804,12 +857,17 @@ int main( int argc, char *argv[] )
 				    log_filename.cstr());
 		    }
 		    else {
-			f_out.printf("#Aperture-Photometry\r\n");
-			f_out.printf("#filename,obj_x,obj_y,obj_r,sky_r,"
-				 "sky_lv[R],sky_lv[G],sky_lv[B],"
-				 "obj_cnt[R],obj_cnt[G],obj_cnt[B]\r\n");
-			for ( ix=0 ; ix < aphoto_log.length() ; ix++ ) {
-			    f_out.printf("%s\r\n", aphoto_log[ix].cstr());
+			if ( 0 < imstat_log.length() ) {
+			    f_out.printf("#Image-Statistics\r\n");
+			    for ( ix=0 ; ix < imstat_log.length() ; ix++ ) {
+				f_out.printf("%s\r\n", imstat_log[ix].cstr());
+			    }
+			}
+			if ( 0 < aphoto_log.length() ) {
+			    f_out.printf("#Aperture-Photometry\r\n");
+			    for ( ix=0 ; ix < aphoto_log.length() ; ix++ ) {
+				f_out.printf("%s\r\n", aphoto_log[ix].cstr());
+			    }
 			}
 			f_out.close();
 		    }
@@ -820,7 +878,8 @@ int main( int argc, char *argv[] )
 		      ( ev_type == MotionNotify || 
 			ev_type == EnterNotify || ev_type == LeaveNotify ) ) {
                 if ( ev_type == LeaveNotify ) {
-                    ev_x = -32000;  ev_y = -32000;
+                    ev_x = Loupe_pos_out;
+		    ev_y = Loupe_pos_out;
                 }
 		cmd_id = 0;
 		refresh_loupe = true;
@@ -935,8 +994,15 @@ int main( int argc, char *argv[] )
 			aphoto_step = 0;
 			/* perform */
 			perform_aphoto(img_buf, tiff_szt, &aphoto_rec);
-			log.printf("%s,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g",
-				   filenames[sel_file_id].cstr(),
+			if ( aphoto_log.length() < 1 ) {
+			    log.printf("#filename,bps,"
+				       "obj_x,obj_y,obj_r,sky_r,"
+				       "sky_lv[R],sky_lv[G],sky_lv[B],"
+				       "obj_cnt[R],obj_cnt[G],obj_cnt[B]");
+			    aphoto_log.append(log, 1);
+			}
+			log.printf("%s,%d,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g",
+				   filenames[sel_file_id].cstr(), tiff_szt,
 				   aphoto_rec.obj_x, aphoto_rec.obj_y,
 				   aphoto_rec.obj_r, aphoto_rec.sky_r,
 				   aphoto_rec.sky_lv[0],
@@ -1006,7 +1072,7 @@ int main( int argc, char *argv[] )
 
 	/* Update window */
 
-	if ( refresh_loupe == true ) {
+	if ( refresh_loupe == true || refresh_image != 0 ) {
 	    const int this_y0 = command_win_rec.reserved_y0;
 	    const int win_cmd = command_win_rec.win_id;
 	    const int digit_y_pos = Font_margin + Fontsize - Font_y_off + 1;
@@ -1014,49 +1080,51 @@ int main( int argc, char *argv[] )
 	    const int cross_x = loupe_buf.x_length() / 2;
 	    const int cross_y = loupe_buf.y_length() / 2;
 	    const int hole = 4;	/* center hole of loupe */
+	    if ( refresh_loupe == true ) {
+		loupe_x = (int)ev_x;
+		loupe_y = (int)ev_y;
+	    }
 	    layer(win_cmd, 0, 2);
 	    copylayer(win_cmd, 1, 2);
-	    if ( 0 <= ev_x && 0 <= ev_y ) {
+	    if ( loupe_x != Loupe_pos_out ) {
 		drawstr(win_cmd,
 			Font_margin,
 			this_y0 + digit_y_pos,
-			Fontsize, 0, "x=%g y=%g", ev_x, ev_y);
+			Fontsize, 0, "x=%g y=%g", loupe_x, loupe_y);
 		drawstr(win_cmd,
 			Font_margin,
 			this_y0 + digit_y_pos + Fontsize,
 			Fontsize, 0, "RGB=%5g %5g %5g",
-			img_buf.dvalue((ssize_t)ev_x, (ssize_t)ev_y, 0),
-			img_buf.dvalue((ssize_t)ev_x, (ssize_t)ev_y, 1),
-			img_buf.dvalue((ssize_t)ev_x, (ssize_t)ev_y, 2) );
-	    }
-	    update_loupe_x5(img_buf, ev_x, ev_y, &loupe_buf);
-	    display_image(win_cmd,
-			  0, this_y0 + loupe_y_pos,
-			  loupe_buf, tiff_szt,
-			  1, display_ch, contrast_rgb,
-			  false, &tmp_buf_loupe);
-	    newgcfunction(win_cmd, GXxor);
-	    newrgbcolor(win_cmd, 0x00,0xff,0x00);
-	    drawline(win_cmd, 0, this_y0 + loupe_y_pos + cross_y,
+			img_buf.dvalue(loupe_x, loupe_y, 0),
+			img_buf.dvalue(loupe_x, loupe_y, 1),
+			img_buf.dvalue(loupe_x, loupe_y, 2) );
+		update_loupe_x5(img_buf, loupe_x, loupe_y, &loupe_buf);
+		if (display_type == 1) newgcfunction(win_cmd, GXcopyInverted);
+		else newgcfunction(win_cmd, GXcopy);
+		display_image(win_cmd,
+			      0, this_y0 + loupe_y_pos,
+			      loupe_buf, tiff_szt,
+			      1, display_ch, contrast_rgb,
+			      false, &tmp_buf_loupe);
+		newgcfunction(win_cmd, GXxor);
+		newrgbcolor(win_cmd, 0x00,0xff,0x00);
+		drawline(win_cmd, 0, this_y0 + loupe_y_pos + cross_y,
 		     cross_x - hole, this_y0 + loupe_y_pos + cross_y);
-	    drawline(win_cmd, cross_x + hole, this_y0 + loupe_y_pos + cross_y,
+		drawline(win_cmd, cross_x + hole, this_y0 + loupe_y_pos + cross_y,
 		     loupe_buf.x_length() - 1, this_y0 + loupe_y_pos + cross_y);
-	    drawline(win_cmd, cross_x, this_y0 + loupe_y_pos + 0,
+		drawline(win_cmd, cross_x, this_y0 + loupe_y_pos + 0,
 		     cross_x, this_y0 + loupe_y_pos + cross_y - hole);
-	    drawline(win_cmd, cross_x, this_y0 + loupe_y_pos + cross_y + hole,
+		drawline(win_cmd, cross_x, this_y0 + loupe_y_pos + cross_y + hole,
 		     cross_x, this_y0 + loupe_y_pos + loupe_buf.y_length() - 1);
-	    newgcfunction(win_cmd, GXcopy);
-	    newrgbcolor(win_cmd, 0xff,0xff,0xff);
+		newgcfunction(win_cmd, GXcopy);
+		newrgbcolor(win_cmd, 0xff,0xff,0xff);
+	    }
 	    copylayer(win_cmd, 2, 0);
 	}
 	
 	if ( refresh_image != 0 ) {
-	    if ( display_type == 1 ) {
-		newgcfunction(win_image, GXcopyInverted);
-	    }
-	    else {
-		newgcfunction(win_image, GXcopy);
-	    }
+	    if ( display_type == 1 ) newgcfunction(win_image, GXcopyInverted);
+	    else newgcfunction(win_image, GXcopy);
 	    //
 	    display_image(win_image, 0, 0, img_buf, tiff_szt,
 			  display_bin, display_ch, contrast_rgb,
