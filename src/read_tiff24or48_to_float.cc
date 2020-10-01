@@ -61,7 +61,7 @@ static int read_tiff24or48_to_float( const char *filename_in, double scale,
 	sio.eprintf("[ERROR] TIFFGetField() failed [spp]\n");
 	goto quit;
     }
-    if ( spp != 3 ) {
+    if ( spp != 3 && spp != 1 ) {
 	sio.eprintf("[ERROR] unsupported SAMPLESPERPIXEL: %d\n",(int)spp);
 	goto quit;
     }
@@ -89,8 +89,9 @@ static int read_tiff24or48_to_float( const char *filename_in, double scale,
 	sio.eprintf("[ERROR] TIFFGetField() failed [photom]\n");
 	goto quit;
     }
-    if ( photom != PHOTOMETRIC_RGB ) {
-	sio.eprintf("[ERROR] Unsupported PHOTOMETRIC value\n");
+    if ( (spp == 3 && photom != PHOTOMETRIC_RGB) ||
+	 (spp == 1 && photom != PHOTOMETRIC_MINISBLACK) ) {
+	sio.eprintf("[ERROR] Unsupported PHOTOMETRIC value: %d\n",(int)photom);
 	goto quit;
     }
 
@@ -156,7 +157,9 @@ static int read_tiff24or48_to_float( const char *filename_in, double scale,
 		for ( ch=0 ; ch < 3 ; ch++ ) {
 		    /* get array ptr of each ch */
 		    ret_rgb_img_ptr = ret_img_buf->array_ptr(0,0,ch);
-		    for ( j=0, jj=ch ; j < len_pix ; j++, jj+=3 ) {
+		    if ( spp == 3 ) jj = ch;
+		    else jj = 0;
+		    for ( j=0 ; j < len_pix ; j++, jj+=spp ) {
 			ret_rgb_img_ptr[pix_offset+j] 
 			    = strip_buf_ptr[jj] * scl;
 		    }
@@ -202,7 +205,9 @@ static int read_tiff24or48_to_float( const char *filename_in, double scale,
 		for ( ch=0 ; ch < 3 ; ch++ ) {
 		    /* get array ptr of each ch */
 		    ret_rgb_img_ptr = ret_img_buf->array_ptr(0,0,ch);
-		    for ( j=0, jj=ch ; j < len_pix ; j++, jj+=3 ) {
+		    if ( spp == 3 ) jj = ch;
+		    else jj = 0;
+		    for ( j=0 ; j < len_pix ; j++, jj+=spp ) {
 			ret_rgb_img_ptr[pix_offset+j]
 			    = strip_buf_ptr[jj] * scl;
 		    }
@@ -244,7 +249,9 @@ static int read_tiff24or48_to_float( const char *filename_in, double scale,
 		for ( ch=0 ; ch < 3 ; ch++ ) {
 		    /* get array ptr of each ch */
 		    ret_rgb_img_ptr = ret_img_buf->array_ptr(0,0,ch);
-		    for ( j=0, jj=ch ; j < len_pix ; j++, jj+=3 ) {
+		    if ( spp == 3 ) jj = ch;
+		    else jj = 0;
+		    for ( j=0 ; j < len_pix ; j++, jj+=spp ) {
 			ret_rgb_img_ptr[pix_offset+j]
 			    = strip_buf_ptr[jj] * scale;
 		    }
