@@ -1,6 +1,6 @@
 #include "test_simd.h"
 
-/* SSE3 is used for binning */
+/* SSE3 is used for binning/zoom */
 #if defined(_SSE3_IS_OK)
 #include <xmmintrin.h>
 #include <pmmintrin.h>
@@ -58,7 +58,7 @@ static void convert_c2f( const unsigned char *src, size_t n, float *dst )
 static int display_image( int win_image, double disp_x, double disp_y,
 			  const mdarray &img_buf,
 			  int tiff_sztype,
-			  int binning,		/* 1: original scale 2:1/2 */ 
+			  int binning,		/* 1: original scale  2:1/2 -2:2x */ 
 			  int display_ch,	/* 0:RGB 1:R 2:G 3:B */
 			  const int contrast_rgb[],
 			  bool needs_resize_win,
@@ -71,7 +71,8 @@ static int display_image( int win_image, double disp_x, double disp_y,
     double ct[3];
     size_t display_width, display_height;
     size_t n_img_buf_ch;
-    size_t bin = binning;
+    const size_t bin = (size_t)binning;
+    const size_t zoom = (size_t)(0 - binning);
 
     if ( img_buf.dim_length() != 3 && img_buf.dim_length() != 2 ) {
         sio.eprintf("[ERROR] img_buf is not RGB data\n");
@@ -79,11 +80,21 @@ static int display_image( int win_image, double disp_x, double disp_y,
     }
 
     /* determine display width */
-    display_width = img_buf.x_length() / bin;
-    if ( img_buf.x_length() % bin !=0 ) display_width ++;
-    display_height = img_buf.y_length() / bin;
-    if ( img_buf.y_length() % bin !=0 ) display_height ++;
-
+    if ( 0 < binning ) {
+	display_width = img_buf.x_length() / bin;
+	if ( img_buf.x_length() % bin !=0 ) display_width ++;
+	display_height = img_buf.y_length() / bin;
+	if ( img_buf.y_length() % bin !=0 ) display_height ++;
+    }
+    else if ( binning == -2 ) {
+	display_width = img_buf.x_length() * zoom;
+	display_height = img_buf.y_length() * zoom;
+    }
+    else {
+        sio.eprintf("[ERROR] unsupported binning factor: %d\n",binning);
+	return -1;
+    }
+    
     /* determine display ch (R,G,B or RGB) */
     if ( display_ch == 1 ) {
 	src_ch[0] = 0;	src_ch[1] = 0;  src_ch[2] = 0;  
@@ -130,7 +141,7 @@ static int display_image( int win_image, double disp_x, double disp_y,
 	    img_buf_ptr[1] = (const unsigned char *)img_buf.data_ptr();
 	    img_buf_ptr[2] = (const unsigned char *)img_buf.data_ptr();
 	}
-	if ( bin < 2 ) {
+	if ( binning == 1 ) {
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
 		double v;
 		size_t ii;
@@ -265,18 +276,137 @@ static int display_image( int win_image, double disp_x, double disp_y,
 	}
 	/* set base range */
 	if ( img_buf.size_type() == UCHAR_ZT ) {
-	    ftr = 1.0 / (double)(bin * bin);
+	    if ( 0 < binning ) ftr = 1.0 / (double)(bin * bin);
+	    else ftr = 1.0;
 	}
 	else {
 	    if ( tiff_sztype < 0 ) {	/* float */
-		ftr = 256.0 / (double)(bin * bin);
+		if ( 0 < binning ) ftr = 256.0 / (double)(bin * bin);
+		else ftr = 256.0;
 	    }
 	    else {			/* 16-bit */
-		ftr = 1.0 / (double)(256 * bin * bin);
+		if ( 0 < binning ) ftr = 1.0 / (256.0 * bin * bin);
+		else ftr = 1.0 / 256.0;
 	    }
 	}
 	/* */
-	if ( bin < 2 ) {
+	if ( binning == -2 ) {			/* 2x */
+#if defined(_SSSE3_IS_OK)
+	    const __m128i sfl_red_ix_l =
+	    /*                    right  to  left !                      */
+	    /*            B  G  R  A  B  G  R  A  B  G  R  A  B  G  R  A */
+	    _mm_set_epi8(-1,-1, 4,-1,-1,-1, 4,-1,-1,-1, 0,-1,-1,-1, 0,-1);
+	    const __m128i sfl_red_ix_r =
+	    _mm_set_epi8(-1,-1,12,-1,-1,-1,12,-1,-1,-1, 8,-1,-1,-1, 8,-1);
+	    /* */
+	    const __m128i sfl_green_ix_l =
+	    /*            B  G  R  A  B  G  R  A  B  G  R  A  B  G  R  A */
+	    _mm_set_epi8(-1, 4,-1,-1,-1, 4,-1,-1,-1, 0,-1,-1,-1, 0,-1,-1);
+	    const __m128i sfl_green_ix_r =
+	    _mm_set_epi8(-1,12,-1,-1,-1,12,-1,-1,-1, 8,-1,-1,-1, 8,-1,-1);
+	    /* */
+	    const __m128i sfl_blue_ix_l =
+	    /*            B  G  R  A  B  G  R  A  B  G  R  A  B  G  R  A */
+	    _mm_set_epi8( 4,-1,-1,-1, 4,-1,-1,-1, 0,-1,-1,-1, 0,-1,-1,-1);
+	    const __m128i sfl_blue_ix_r =
+	    _mm_set_epi8(12,-1,-1,-1,12,-1,-1,-1, 8,-1,-1,-1, 8,-1,-1,-1);
+	    /* */
+	    const __m128 f0 = _mm_set1_ps((float)(ftr * ct[0]));
+	    const __m128 f1 = _mm_set1_ps((float)(ftr * ct[1]));
+	    const __m128 f2 = _mm_set1_ps((float)(ftr * ct[2]));
+	    const __m128 c255 = _mm_set1_ps((float)255.0);
+	    const __m128 c000 = _mm_set1_ps((float)0.0);
+	    const size_t step_sse16 = 16 / sizeof(float);	/* 4 */
+	    const size_t n_sse16 = img_buf.x_length() / step_sse16;
+	    const size_t nel_sse16 = step_sse16 * n_sse16;
+	    /* _mm_cvtps works as *pseudo* round() */
+	    const unsigned int mxcsr = _mm_getcsr();
+	    _mm_setcsr(mxcsr & 0xffff9fffU);
+#endif
+	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
+		double v;
+		/* */
+		if ( img_buf.size_type() == UCHAR_ZT ) {
+		    size_t ii;
+		    for ( ii=0 ; ii < 3 ; ii++ ) {
+			convert_c2f( img_buf_c_ptr[ii] + off1, img_buf.x_length(),
+				     linebuf_c2f.array_ptr() + ii * img_buf.x_length() );
+		    }
+		}
+		else {
+		    linebuf_ptr[0] = img_buf_f_ptr[0] + off1;
+		    linebuf_ptr[1] = img_buf_f_ptr[1] + off1;
+		    linebuf_ptr[2] = img_buf_f_ptr[2] + off1;
+		}
+		j = 0;	/* src */
+		k = 0;	/* dest */
+#if defined(_SSSE3_IS_OK)
+		__m128 ps0, m0;
+		__m128i si0, si1, si_l, si_r;
+		for ( ; j < nel_sse16 ; j += step_sse16, k += 32 ) {
+		    /* red */
+		    ps0 = _mm_loadu_ps( linebuf_ptr[0] + j );
+		    ps0 = _mm_mul_ps(ps0, f0);
+		    m0 = _mm_or_ps(_mm_cmpgt_ps(ps0, c255),_mm_cmplt_ps(ps0, c000));
+		    si0 = _mm_cvtps_epi32(ps0);
+		    si0 = _mm_or_si128(si0, (__m128i)m0);
+		    si_l = _mm_shuffle_epi8(si0, sfl_red_ix_l);
+		    si_r = _mm_shuffle_epi8(si0, sfl_red_ix_r);
+		    /* green */
+		    ps0 = _mm_loadu_ps( linebuf_ptr[1] + j );
+		    ps0 = _mm_mul_ps(ps0, f1);
+		    m0 = _mm_or_ps(_mm_cmpgt_ps(ps0, c255),_mm_cmplt_ps(ps0, c000));
+		    si0 = _mm_cvtps_epi32(ps0);
+		    si0 = _mm_or_si128(si0, (__m128i)m0);
+		    si1 = _mm_shuffle_epi8(si0, sfl_green_ix_l);
+		    si_l = _mm_or_si128(si_l, si1);
+		    si1 = _mm_shuffle_epi8(si0, sfl_green_ix_r);
+		    si_r = _mm_or_si128(si_r, si1);
+		    /* blue */
+		    ps0 = _mm_loadu_ps( linebuf_ptr[2] + j );
+		    ps0 = _mm_mul_ps(ps0, f2);
+		    m0 = _mm_or_ps(_mm_cmpgt_ps(ps0, c255),_mm_cmplt_ps(ps0, c000));
+		    si0 = _mm_cvtps_epi32(ps0);
+		    si0 = _mm_or_si128(si0, (__m128i)m0);
+		    si1 = _mm_shuffle_epi8(si0, sfl_blue_ix_l);
+		    si_l = _mm_or_si128(si_l, si1);
+		    si1 = _mm_shuffle_epi8(si0, sfl_blue_ix_r);
+		    si_r = _mm_or_si128(si_r, si1);
+		    /* store! */
+		    _mm_storeu_si128((__m128i *)(tmp_buf_ptr + off4 + k), si_l);
+		    _mm_storeu_si128((__m128i *)(tmp_buf_ptr + off4 + k + 16), si_r);
+		}
+#endif
+		for ( ; j < img_buf.x_length() ; j++ ) {
+		    //
+		    v = linebuf_ptr[0][j] * ftr * ct[0] + 0.5;
+		    if ( 255.0 < v ) v = 255.0;
+		    else if ( v < 0 ) v = 255.0;
+		    tmp_buf_ptr[off4 + k + 1] = (unsigned char)v;
+		    tmp_buf_ptr[off4 + k + 5] = (unsigned char)v;
+		    //
+		    v = linebuf_ptr[1][j] * ftr * ct[1] + 0.5;
+		    if ( 255.0 < v ) v = 255.0;
+		    else if ( v < 0 ) v = 255.0;
+		    tmp_buf_ptr[off4 + k + 2] = (unsigned char)v;
+		    tmp_buf_ptr[off4 + k + 6] = (unsigned char)v;
+		    //
+		    v = linebuf_ptr[2][j] * ftr * ct[2] + 0.5;
+		    if ( 255.0 < v ) v = 255.0;
+		    else if ( v < 0 ) v = 255.0;
+		    tmp_buf_ptr[off4 + k + 3] = (unsigned char)v;
+		    tmp_buf_ptr[off4 + k + 7] = (unsigned char)v;
+		    k+=8;
+		}
+		tmp_buf->move(1 /* dim */, i*2 /* src */, 1, i*2+1 /*dest */, false /* not clr */);
+		off4 += (display_width * 4) * 2;
+		off1 += img_buf.x_length();
+	    }
+#if defined(_SSSE3_IS_OK)
+	    _mm_setcsr(mxcsr);
+#endif
+	}	/* if ( binning == -2 ) */
+	else if ( binning == 1 ) {
 #if defined(_SSSE3_IS_OK)
 	    const __m128i sfl_red_ix =
 	    /*                    right  to  left !                      */
@@ -384,7 +514,7 @@ static int display_image( int win_image, double disp_x, double disp_y,
 #if defined(_SSSE3_IS_OK)
 	    _mm_setcsr(mxcsr);
 #endif
-	}
+	}	/* if ( binning == 1 ) */
 	else {
 	    float *lv_p = NULL;
 	    mdarray_float lv(false, &lv_p);
@@ -408,7 +538,7 @@ static int display_image( int win_image, double disp_x, double disp_y,
 		    size_t j_start = 0;
 		    k = ii * display_width;	/* offset */
 #if defined(_SSE3_IS_OK)
-		    if ( bin == 2 ) {
+		    if ( binning == 2 ) {
 			size_t n_sse = img_buf.x_length() / 8;
 			const float *p_src = linebuf_ptr_rgb;
 			float *p_dst = lv_p + k;
@@ -428,7 +558,7 @@ static int display_image( int win_image, double disp_x, double disp_y,
 			k += 4 * n_sse;
 			j_start = 8 * n_sse;
 		    }
-		    else if ( bin == 3 ) {
+		    else if ( binning == 3 ) {
 			size_t n_sse = img_buf.x_length() / 12;
 			const float *p_src = linebuf_ptr_rgb;
 			float *p_dst = lv_p + k;
@@ -467,7 +597,7 @@ static int display_image( int win_image, double disp_x, double disp_y,
 			k += 4 * n_sse;
 			j_start = 12 * n_sse;
 		    }
-		    else if ( bin == 4 ) {
+		    else if ( binning == 4 ) {
 			size_t n_sse = img_buf.x_length() / 16;
 			const float *p_src = linebuf_ptr_rgb;
 			float *p_dst = lv_p + k;
@@ -493,7 +623,7 @@ static int display_image( int win_image, double disp_x, double disp_y,
 			k += 4 * n_sse;
 			j_start = 16 * n_sse;
 		    }
-		    else if ( bin == 6 ) {
+		    else if ( binning == 6 ) {
 			size_t n_sse = img_buf.x_length() / 24;
 			const float *p_src = linebuf_ptr_rgb;
 			float *p_dst = lv_p + k;
@@ -561,7 +691,7 @@ static int display_image( int win_image, double disp_x, double disp_y,
 			k += 4 * n_sse;
 			j_start = 24 * n_sse;
 		    }
-		    else if ( bin == 8 ) {
+		    else if ( binning == 8 ) {
 			size_t n_sse = img_buf.x_length() / 32;
 			const float *p_src = linebuf_ptr_rgb;
 			float *p_dst = lv_p + k;
@@ -600,7 +730,7 @@ static int display_image( int win_image, double disp_x, double disp_y,
 			k += 4 * n_sse;
 			j_start = 32 * n_sse;
 		    }
-		    else if ( bin == 10 ) {
+		    else if ( binning == 10 ) {
 			size_t n_sse = img_buf.x_length() / 40;
 			const float *p_src = linebuf_ptr_rgb;
 			float *p_dst = lv_p + k;
@@ -725,8 +855,13 @@ static int display_image( int win_image, double disp_x, double disp_y,
     }
     
     if ( needs_resize_win == true ) {
-        gresize(win_image, display_width, display_height);
-	coordinate(win_image, 0,0, 0.0, 0.0, 1.0/binning, 1.0/binning);
+	gresize(win_image, display_width, display_height);
+	if ( 0 < binning ) {
+	    coordinate(win_image, 0,0, 0.0, 0.0, 1.0/binning, 1.0/binning);
+	}
+	else {
+	    coordinate(win_image, 0,0, 0.0, 0.0, 1.0*zoom, 1.0*zoom);
+	}
     }
 
     gputimage(win_image, disp_x, disp_y,

@@ -576,9 +576,9 @@ int main( int argc, char *argv[] )
 		  display_bin, display_ch, contrast_rgb, true, &tmp_buf_img);
 
     winname(win_image, "Imave Viewer  "
-	    "zoom = 1/%d  contrast = ( %d, %d, %d )  "
+	    "zoom = %3.2f  contrast = ( %d, %d, %d )  "
 	    "auto_zoom = %d  dither = %d",
-	    display_bin,
+	    (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
 	    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
 	    (int)flag_auto_zoom, (int)flag_dither);
 
@@ -708,8 +708,9 @@ int main( int argc, char *argv[] )
 	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
-	    if ( 1 < display_bin ) {
-		if ( display_bin <= 4 ) display_bin --;
+	    if ( -2 < display_bin ) {
+		if ( display_bin <= 1 ) display_bin = -2;
+		else if ( display_bin <= 4 ) display_bin --;
 		else display_bin -= 2;
 		refresh_image = 1;
 		refresh_winsize = true;
@@ -717,7 +718,9 @@ int main( int argc, char *argv[] )
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
 	    if ( display_bin < 10 ) {
-		if ( display_bin < 4 ) display_bin ++;
+		if ( display_bin <= -3 ) display_bin ++;
+		else if ( display_bin <= 0 ) display_bin = 1;
+		else if ( display_bin <= 3 ) display_bin ++;
 		else display_bin += 2;
 		refresh_image = 1;
 		refresh_winsize = true;
@@ -1183,9 +1186,9 @@ int main( int argc, char *argv[] )
 			  display_bin, display_ch, contrast_rgb,
 			  refresh_winsize, &tmp_buf_img);
 	    winname(win_image, "Image Viewer  "
-		    "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  "
+		    "channel = %s  zoom = %3.2f  contrast = ( %d, %d, %d )  "
 		    "auto_zoom = %d  dither = %d  ",
-		    names_ch[display_ch], display_bin,
+		    names_ch[display_ch], (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
 		    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
 		    (int)flag_auto_zoom, (int)flag_dither);
 	    flag_drawed = false;
@@ -1193,9 +1196,9 @@ int main( int argc, char *argv[] )
 
 	if ( refresh_winname == true ) {
 	    winname(win_image, "Image Viewer  "
-		    "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  "
+		    "channel = %s  zoom = %3.2f  contrast = ( %d, %d, %d )  "
 		    "auto_zoom = %d  dither = %d  ",
-		    names_ch[display_ch], display_bin,
+		    names_ch[display_ch], (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
 		    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
 		    (int)flag_auto_zoom, (int)flag_dither);
 	}
