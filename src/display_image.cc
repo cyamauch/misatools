@@ -126,111 +126,6 @@ static int display_image( int win_image, double disp_x, double disp_y,
 
     //sio.eprintf("[DEBUG] n_img_buf_ch = %zd\n",n_img_buf_ch);
     
-#if 0	/* old code for UCHAR_ZT */
-    if ( img_buf.size_type() == UCHAR_ZT ) {
-	const unsigned char *img_buf_ptr[3];
-	size_t off1 = 0;
-	size_t off4 = 0;
-	if ( n_img_buf_ch == 3 ) {
-	    img_buf_ptr[0] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[0]);
-	    img_buf_ptr[1] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[1]);
-	    img_buf_ptr[2] = (const unsigned char *)img_buf.data_ptr(0,0,src_ch[2]);
-	}
-	else {
-	    img_buf_ptr[0] = (const unsigned char *)img_buf.data_ptr();
-	    img_buf_ptr[1] = (const unsigned char *)img_buf.data_ptr();
-	    img_buf_ptr[2] = (const unsigned char *)img_buf.data_ptr();
-	}
-	if ( binning == 1 ) {
-	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
-		double v;
-		size_t ii;
-		for ( ii=0 ; ii < 3 ; ii++ ) {
-		    const unsigned char *img_buf_ptr_rgb = img_buf_ptr[ii];
-		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++, k+=4 ) {
-			v = img_buf_ptr_rgb[off1 + j] * ct[ii] + 0.5;
-			if ( 255.0 < v ) v = 255.0;
-			else if ( v < 0 ) v = 255.0;
-			tmp_buf_ptr[off4 + k] = (unsigned char)v;
-		    }
-		}
-		off4 += display_width * 4;
-		off1 += img_buf.x_length();
-	    }
-	}
-	else {
-	    float *lv_p = NULL;
-	    mdarray_float lv(false, &lv_p);
-	    lv.resize(display_width * n_img_buf_ch);
-	    lv.clean();
-	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
-		size_t ii;
-		for ( ii=0 ; ii < n_img_buf_ch ; ii++ ) {
-		    const unsigned char *img_buf_ptr_rgb = img_buf_ptr[ii];
-		    k = ii * display_width;	/* offset */
-		    for ( j=0 ; j < img_buf.x_length() ; j++ ) {
-			lv_p[k] += img_buf_ptr_rgb[off1 + j];
-			if ( (j+1) % bin == 0 ) k++;
-		    }
-		}
-		if ( (i+1) % bin == 0 || (i+1) == img_buf.y_length() ) {
-		    const double ftr = 1.0 / (double)(bin * bin);
-		    double v;
-		    if ( n_img_buf_ch == 3 ) {	/* RGB */
-			float *lv_p_r = lv_p + 0;
-			float *lv_p_g = lv_p + display_width;
-			float *lv_p_b = lv_p + 2 * display_width;
-			for ( j=0, l=0 ; j < display_width ; j++ ) {
-			          l++;
-			    v = lv_p_r[j] * ftr * ct[0] + 0.5;
-			    lv_p_r[j] = 0.0;
-			    if ( 255.0 < v ) v = 255.0;
-			    else if ( v < 0 ) v = 255.0;
-			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			          l++;
-			    v = lv_p_g[j] * ftr * ct[1] + 0.5;
-			    lv_p_g[j] = 0.0;
-			    if ( 255.0 < v ) v = 255.0;
-			    else if ( v < 0 ) v = 255.0;
-			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			          l++;
-			    v = lv_p_b[j] * ftr * ct[2] + 0.5;
-			    lv_p_b[j] = 0.0;
-			    if ( 255.0 < v ) v = 255.0;
-			    else if ( v < 0 ) v = 255.0;
-			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			          l++;
-			}
-		    }
-		    else {			/* MONO */
-			for ( j=0, l=0 ; j < display_width ; j++ ) {
-			          l++;
-			    v = lv_p[j] * ftr * ct[0] + 0.5;
-			    if ( 255.0 < v ) v = 255.0;
-			    else if ( v < 0 ) v = 255.0;
-			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			          l++;
-			    v = lv_p[j] * ftr * ct[1] + 0.5;
-			    if ( 255.0 < v ) v = 255.0;
-			    else if ( v < 0 ) v = 255.0;
-			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			          l++;
-			    v = lv_p[j] * ftr * ct[2] + 0.5;
-			    lv_p[j] = 0.0;
-			    if ( 255.0 < v ) v = 255.0;
-			    else if ( v < 0 ) v = 255.0;
-			    tmp_buf_ptr[off4 + l] = (unsigned char)v;
-			          l++;
-			}
-		    }
-		    off4 += display_width * 4;
-		}
-		off1 += img_buf.x_length();
-	    }
-	}
-    }
-#endif	/* #if 0 */
-
     if ( img_buf.size_type() == FLOAT_ZT || img_buf.size_type() == UCHAR_ZT ) {
 	/* for UCHAR_ZT */
 	mdarray_float linebuf_c2f(false);
@@ -432,7 +327,6 @@ static int display_image( int win_image, double disp_x, double disp_y,
 #endif
 	    for ( i=0 ; i < img_buf.y_length() ; i++ ) {
 		double v;
-#if 1
 		if ( img_buf.size_type() == UCHAR_ZT ) {
 		    size_t ii;
 		    for ( ii=0 ; ii < 3 ; ii++ ) {
@@ -496,18 +390,6 @@ static int display_image( int win_image, double disp_x, double disp_y,
 		    tmp_buf_ptr[off4 + k] = (unsigned char)v;
 		    k++;
 		}
-#else
-		size_t ii;
-		for ( ii=0 ; ii < 3 ; ii++ ) {
-		    const float *linebuf_ptr_rgb = linebuf_ptr[ii];
-		    for ( j=0, k=ii+1 ; j < img_buf.x_length() ; j++, k+=4 ) {
-			v = linebuf_ptr_rgb[j] * ftr * ct[ii] + 0.5;
-			if ( 255.0 < v ) v = 255.0;
-			else if ( v < 0 ) v = 255.0;
-			tmp_buf_ptr[off4 + k] = (unsigned char)v;
-		    }
-		}
-#endif
 		off4 += display_width * 4;
 		off1 += img_buf.x_length();
 	    }
