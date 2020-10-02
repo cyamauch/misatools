@@ -145,8 +145,8 @@ static int init_aphoto( aphoto *rec_p )
 {
     rec_p->obj_x = -32000;
     rec_p->obj_y = -32000;
-    rec_p->obj_r = 65535;
-    rec_p->sky_r = 65535;
+    rec_p->obj_r = -1;
+    rec_p->sky_r = -1;
     rec_p->obj_area = 0;
     rec_p->sky_area = 0;
     rec_p->sky_median[0] = NAN;
@@ -283,6 +283,57 @@ static int perform_aphoto( const mdarray &img_buf, int tiff_szt,
     return ret_status;
 }
 
+static void draw_lines_for_aphoto( int win, size_t width, size_t height,
+				   const aphoto &aphoto_rec, int step )
+{
+    if ( step == 1 ) {
+	drawline(win, 0, aphoto_rec.obj_y, width, aphoto_rec.obj_y);
+	drawline(win, aphoto_rec.obj_x, 0, aphoto_rec.obj_x, height);
+    }
+    if ( step == 2 || 0 < aphoto_rec.obj_r ) {
+	drawcirc(win, aphoto_rec.obj_x, aphoto_rec.obj_y,
+		 aphoto_rec.obj_r, aphoto_rec.obj_r);
+    }
+    if ( step == 3 || 0 < aphoto_rec.sky_r ) {
+	drawcirc(win, aphoto_rec.obj_x, aphoto_rec.obj_y,
+		 aphoto_rec.sky_r, aphoto_rec.sky_r);
+    }
+    return;
+}
+
+static void append_aphoto_log( const char *filename, int tiff_szt,
+			       const aphoto &aphoto_rec,
+			       tarray_tstring *aphoto_log_p )
+{
+    tstring log;
+    
+    if ( aphoto_log_p->length() < 1 ) {
+	log.printf("#filename,bps,"
+		   "obj_x,obj_y,obj_r,sky_r,obj_area,sky_area,"
+		   "sky_median[R],sky_median[G],sky_median[B],"
+		   "sky_stddev[R],sky_stddev[G],sky_stddev[B],"
+		   "obj_cnt[R],obj_cnt[G],obj_cnt[B]");
+	aphoto_log_p->append(log, 1);
+    }
+    log.printf("%s,%d,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g",
+	       filename, tiff_szt,
+	       aphoto_rec.obj_x, aphoto_rec.obj_y,
+	       aphoto_rec.obj_r, aphoto_rec.sky_r,
+	       aphoto_rec.obj_area, aphoto_rec.sky_area,
+	       aphoto_rec.sky_median[0],
+	       aphoto_rec.sky_median[1],
+	       aphoto_rec.sky_median[2],
+	       aphoto_rec.sky_stddev[0],
+	       aphoto_rec.sky_stddev[1],
+	       aphoto_rec.sky_stddev[2],
+	       aphoto_rec.obj_cnt[0],
+	       aphoto_rec.obj_cnt[1],
+	       aphoto_rec.obj_cnt[2]);
+    aphoto_log_p->append(log, 1);
+
+    return;
+}
+
 static int update_loupe_buf( const mdarray &src_img_buf,
 			     int cen_x, int cen_y, int zoom_factor,
 			     mdarray *dest_loupe_buf )
@@ -378,39 +429,39 @@ static int update_loupe_buf( const mdarray &src_img_buf,
 
 const command_list Cmd_list[] = {
 #define CMD_DISPLAY_TARGET 1
-        {CMD_DISPLAY_TARGET,    "Display Normal            [1]"},
+        {CMD_DISPLAY_TARGET,    "Display Normal                [1]"},
 #define CMD_DISPLAY_INVERT 2
-        {CMD_DISPLAY_INVERT,    "Display Invert            [2]"},
+        {CMD_DISPLAY_INVERT,    "Display Invert                [2]"},
 #define CMD_DISPLAY_RGB 3
-        {CMD_DISPLAY_RGB,       "Display RGB               [c]"},
+        {CMD_DISPLAY_RGB,       "Display RGB                   [c]"},
 #define CMD_DISPLAY_R 4
-        {CMD_DISPLAY_R,         "Display Red               [c]"},
+        {CMD_DISPLAY_R,         "Display Red                   [c]"},
 #define CMD_DISPLAY_G 5
-        {CMD_DISPLAY_G,         "Display Green             [c]"},
+        {CMD_DISPLAY_G,         "Display Green                 [c]"},
 #define CMD_DISPLAY_B 6
-        {CMD_DISPLAY_B,         "Display Blue              [c]"},
+        {CMD_DISPLAY_B,         "Display Blue                  [c]"},
 #define CMD_ZOOM 7
-        {CMD_ZOOM,              "Zoom +/-                  [+][-]"},
+        {CMD_ZOOM,              "Zoom +/-                      [+][-]"},
 #define CMD_CONT_RGB 8
-        {CMD_CONT_RGB,          "RGB Contrast +/-          [<][>]"},
+        {CMD_CONT_RGB,          "RGB Contrast +/-              [<][>]"},
 #define CMD_CONT_R 9
-        {CMD_CONT_R,            "Red Contrast +/-          [r][R]"},
+        {CMD_CONT_R,            "Red Contrast +/-              [r][R]"},
 #define CMD_CONT_G 10
-        {CMD_CONT_G,            "Green Contrast +/-        [g][G]"},
+        {CMD_CONT_G,            "Green Contrast +/-            [g][G]"},
 #define CMD_CONT_B 11
-        {CMD_CONT_B,            "Blue Contrast +/-         [b][B]"},
+        {CMD_CONT_B,            "Blue Contrast +/-             [b][B]"},
 #define CMD_LOUPE_ZOOM 12
-        {CMD_LOUPE_ZOOM,        "Zoom factor of loupe +/-  [l][L]"},
+        {CMD_LOUPE_ZOOM,        "Zoom factor of loupe +/-      [l][L]"},
 #define CMD_IMSTAT 13
-        {CMD_IMSTAT,            "Image statistics          [s]"},
+        {CMD_IMSTAT,            "Image statistics              [s]"},
 #define CMD_APHOTO 14
-        {CMD_APHOTO,            "Aperture Photometry       [p]"},
+        {CMD_APHOTO,            "Aperture Photometry / fixed-r [p][P]"},
 #define CMD_SAVE_SLOG 15
-        {CMD_SAVE_SLOG,         "Save Log of Statistics    [Enter]"},
+        {CMD_SAVE_SLOG,         "Save Log of Statistics        [Enter]"},
 #define CMD_AUTO_ZOOM 16
-        {CMD_AUTO_ZOOM,         "Auto zoom on/off for loading [z]"},
+        {CMD_AUTO_ZOOM,         "Auto zoom on/off for loading  [z]"},
 #define CMD_DITHER 17
-        {CMD_DITHER,            "Dither on/off for saving  [d]"},
+        {CMD_DITHER,            "Dither on/off for saving      [d]"},
 #define CMD_SAVE_8BIT 18
         {CMD_SAVE_8BIT,         "Save as 8-bit TIFF"},
 #define CMD_SAVE_16BIT 19
@@ -418,7 +469,7 @@ const command_list Cmd_list[] = {
 #define CMD_SAVE_FLOAT 20
         {CMD_SAVE_FLOAT,        "Save as 32-bit float TIFF"},
 #define CMD_EXIT 21
-        {CMD_EXIT,              "Exit                      [q]"},
+        {CMD_EXIT,              "Exit                          [q]"},
         {0, NULL}		/* EOL */
 };
 
@@ -459,7 +510,7 @@ int main( int argc, char *argv[] )
 
     bool flag_drawed;
     int aphoto_step;
-    aphoto aphoto_rec;
+    aphoto aphoto_tmp, aphoto_rec;
     tarray_tstring aphoto_log;
 
     tstring log_filename;
@@ -605,9 +656,11 @@ int main( int argc, char *argv[] )
      * MAIN EVENT LOOP
      */
 
+    init_aphoto( &aphoto_tmp );
     init_aphoto( &aphoto_rec );
-    flag_drawed = false;
     aphoto_step = 0;
+    
+    flag_drawed = false;
 
     while ( 1 ) {
 
@@ -694,7 +747,14 @@ int main( int argc, char *argv[] )
 		ev_btn = 3;
 	    }
 	    else if ( ev_btn == 's' ) cmd_id = CMD_IMSTAT;
-	    else if ( ev_btn == 'p' ) cmd_id = CMD_APHOTO;
+	    else if ( ev_btn == 'p' ) {
+		cmd_id = CMD_APHOTO;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'P' ) {
+		cmd_id = CMD_APHOTO;
+		ev_btn = 3;
+	    }
 	    else if ( ev_btn == 13 /* Enter */ ) cmd_id = CMD_SAVE_SLOG;
 	    else if ( ev_btn == 'z' ) cmd_id = CMD_AUTO_ZOOM;
 	    else if ( ev_btn == 'd' ) cmd_id = CMD_DITHER;
@@ -895,15 +955,18 @@ int main( int argc, char *argv[] )
 			   imstat_rec.max[2]);
 		imstat_log.append(log, 1);
 	    }
-	    else if ( cmd_id == CMD_APHOTO ) {
-		/*
-		perform_aphoto( win_image, img_buf, tiff_szt,
-				display_bin, display_ch,
-				display_type, contrast_rgb, &tmp_buf_img );
-		*/
-		//refresh_image = 1;
-		init_aphoto( &aphoto_rec );
+	    else if ( cmd_id == CMD_APHOTO && ev_btn == 1 ) {
+		/* New aperture photometory */
+		init_aphoto( &aphoto_tmp );
 		aphoto_step = 1;
+	    }
+	    else if ( cmd_id == CMD_APHOTO && ev_btn == 3 ) {
+		/* photometory reusing previous aperture */
+		if ( 0 < aphoto_rec.obj_r &&
+		     aphoto_rec.obj_r < aphoto_rec.sky_r ) {
+		    aphoto_tmp = aphoto_rec;
+		     aphoto_step = 1;
+		}
 	    }
 	    else if ( cmd_id == CMD_SAVE_SLOG ) {
 		if ( 0 < imstat_log.length() ||
@@ -977,112 +1040,110 @@ int main( int argc, char *argv[] )
 		cmd_id = 0;
 		refresh_image = 1;
 	    }
-	    else if ( aphoto_step == 1 ) {
+	    else if ( aphoto_step == 1 && ev_win == win_image ) {
 		cmd_id = 0;
 		if ( ev_type == MotionNotify ) {
 		    newgcfunction(win_image, GXxor);
 		    newrgbcolor(win_image, 0x00,0xff,0x00);
 		    /* draw large cross */
 		    if ( flag_drawed == true ) {
-			drawline(win_image, 0, aphoto_rec.obj_y,
-				 img_buf.x_length(), aphoto_rec.obj_y);
-			drawline(win_image, aphoto_rec.obj_x, 0,
-				 aphoto_rec.obj_x, img_buf.y_length());
+			draw_lines_for_aphoto(win_image,
+				      img_buf.x_length(), img_buf.y_length(),
+				      aphoto_tmp, aphoto_step);
 		    }
-		    aphoto_rec.obj_x = ev_x;
-		    aphoto_rec.obj_y = ev_y;
-		    drawline(win_image, 0, aphoto_rec.obj_y,
-			     img_buf.x_length(), aphoto_rec.obj_y);
-		    drawline(win_image, aphoto_rec.obj_x, 0,
-			     aphoto_rec.obj_x, img_buf.y_length());
+		    aphoto_tmp.obj_x = ev_x;
+		    aphoto_tmp.obj_y = ev_y;
+		    draw_lines_for_aphoto(win_image,
+				      img_buf.x_length(), img_buf.y_length(),
+				      aphoto_tmp, aphoto_step);
 		    newgcfunction(win_image, GXcopy);
 		    flag_drawed = true;
 		}
 		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
-		    if ( 0 <= aphoto_rec.obj_x &&
-			 aphoto_rec.obj_x < img_buf.x_length() &&
-			 0 <= aphoto_rec.obj_y &&
-			 aphoto_rec.obj_y < img_buf.y_length() ) {
-			aphoto_step ++;
-		    }
-		}
-	    }
-	    else if ( aphoto_step == 2 ) {
-		cmd_id = 0;
-		if ( ev_type == MotionNotify ) {
-		    double ev_r;
-		    newgcfunction(win_image, GXxor);
-		    newrgbcolor(win_image, 0x00,0xff,0x00);
-		    /* draw object circle */
-		    ev_r = sqrt(pow(aphoto_rec.obj_x-ev_x,2) +
-				pow(aphoto_rec.obj_y-ev_y,2));
-		    if ( flag_drawed == true ) {
-			drawcirc(win_image, aphoto_rec.obj_x, aphoto_rec.obj_y,
-				 aphoto_rec.obj_r, aphoto_rec.obj_r);
-		    }
-		    aphoto_rec.obj_r = ev_r;
-		    drawcirc(win_image, aphoto_rec.obj_x, aphoto_rec.obj_y,
-			     aphoto_rec.obj_r, aphoto_rec.obj_r);
-		    newgcfunction(win_image, GXcopy);
-		    flag_drawed = true;
-		}
-		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
-		    if ( aphoto_rec.obj_r < img_buf.x_length() &&
-			 aphoto_rec.obj_r < img_buf.y_length() ) {
-			aphoto_step ++;
-		    }
-		}
-	    }
-	    else if ( aphoto_step == 3 ) {
-		cmd_id = 0;
-		if ( ev_type == MotionNotify ) {
-		    double ev_r;
-		    newgcfunction(win_image, GXxor);
-		    newrgbcolor(win_image, 0x00,0xff,0x00);
-		    /* draw object circle */
-		    ev_r = sqrt(pow(aphoto_rec.obj_x-ev_x,2) +
-				pow(aphoto_rec.obj_y-ev_y,2));
-		    if ( flag_drawed == true ) {
-			drawcirc(win_image, aphoto_rec.obj_x, aphoto_rec.obj_y,
-				 aphoto_rec.sky_r, aphoto_rec.sky_r);
-		    }
-		    aphoto_rec.sky_r = ev_r;
-		    drawcirc(win_image, aphoto_rec.obj_x, aphoto_rec.obj_y,
-			     aphoto_rec.sky_r, aphoto_rec.sky_r);
-		    newgcfunction(win_image, GXcopy);
-		    flag_drawed = true;
-		}
-		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
-		    if ( aphoto_rec.obj_r < aphoto_rec.sky_r &&
-			 aphoto_rec.sky_r < img_buf.x_length() &&
-			 aphoto_rec.sky_r < img_buf.y_length() ) {
-			tstring log;
-			aphoto_step = 0;
-			/* perform */
-			perform_aphoto(img_buf, tiff_szt, &aphoto_rec);
-			if ( aphoto_log.length() < 1 ) {
-			    log.printf("#filename,bps,"
-				       "obj_x,obj_y,obj_r,sky_r,obj_area,sky_area,"
-				       "sky_median[R],sky_median[G],sky_median[B],"
-				       "sky_stddev[R],sky_stddev[G],sky_stddev[B],"
-				       "obj_cnt[R],obj_cnt[G],obj_cnt[B]");
-			    aphoto_log.append(log, 1);
+		    if ( 0 <= aphoto_tmp.obj_x &&
+			 aphoto_tmp.obj_x < img_buf.x_length() &&
+			 0 <= aphoto_tmp.obj_y &&
+			 aphoto_tmp.obj_y < img_buf.y_length() ) {
+			/* */
+			if ( 0 < aphoto_tmp.obj_r &&	/* right btn */
+			     aphoto_tmp.obj_r < aphoto_tmp.sky_r ) {
+			    /* perform */
+			    perform_aphoto(img_buf, tiff_szt, &aphoto_tmp);
+			    /* */
+			    append_aphoto_log( filenames[sel_file_id].cstr(),
+					   tiff_szt, aphoto_tmp, &aphoto_log );
+			    aphoto_rec = aphoto_tmp;
+			    /* */
+			    aphoto_step = 0;
+			    refresh_image = 1;
 			}
-			log.printf("%s,%d,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g",
-				   filenames[sel_file_id].cstr(), tiff_szt,
-				   aphoto_rec.obj_x, aphoto_rec.obj_y,
-				   aphoto_rec.obj_r, aphoto_rec.sky_r,
-				   aphoto_rec.obj_area, aphoto_rec.sky_area,
-				   aphoto_rec.sky_median[0],
-				   aphoto_rec.sky_median[1],
-				   aphoto_rec.sky_median[2],
-				   aphoto_rec.sky_stddev[0],
-				   aphoto_rec.sky_stddev[1],
-				   aphoto_rec.sky_stddev[2],
-				   aphoto_rec.obj_cnt[0],
-				   aphoto_rec.obj_cnt[1],
-				   aphoto_rec.obj_cnt[2]);
-			aphoto_log.append(log, 1);
+			else {				/* left btn */
+			    aphoto_step ++;
+			}
+		    }
+		}
+	    }
+	    else if ( aphoto_step == 2 && ev_win == win_image ) {
+		cmd_id = 0;
+		if ( ev_type == MotionNotify ) {
+		    double ev_r;
+		    newgcfunction(win_image, GXxor);
+		    newrgbcolor(win_image, 0x00,0xff,0x00);
+		    /* draw object circle */
+		    ev_r = sqrt(pow(aphoto_tmp.obj_x-ev_x,2) +
+				pow(aphoto_tmp.obj_y-ev_y,2));
+		    if ( flag_drawed == true ) {
+			draw_lines_for_aphoto(win_image,
+				      img_buf.x_length(), img_buf.y_length(),
+				      aphoto_tmp, aphoto_step);
+		    }
+		    aphoto_tmp.obj_r = ev_r;
+		    draw_lines_for_aphoto(win_image,
+				      img_buf.x_length(), img_buf.y_length(),
+				      aphoto_tmp, aphoto_step);
+		    newgcfunction(win_image, GXcopy);
+		    flag_drawed = true;
+		}
+		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
+		    if ( aphoto_tmp.obj_r < img_buf.x_length() &&
+			 aphoto_tmp.obj_r < img_buf.y_length() ) {
+			aphoto_step ++;
+		    }
+		}
+	    }
+	    else if ( aphoto_step == 3 && ev_win == win_image ) {
+		cmd_id = 0;
+		if ( ev_type == MotionNotify ) {
+		    double ev_r;
+		    newgcfunction(win_image, GXxor);
+		    newrgbcolor(win_image, 0x00,0xff,0x00);
+		    /* draw object circle */
+		    ev_r = sqrt(pow(aphoto_tmp.obj_x-ev_x,2) +
+				pow(aphoto_tmp.obj_y-ev_y,2));
+		    if ( flag_drawed == true ) {
+			draw_lines_for_aphoto(win_image,
+				      img_buf.x_length(), img_buf.y_length(),
+				      aphoto_tmp, aphoto_step);
+		    }
+		    aphoto_tmp.sky_r = ev_r;
+		    draw_lines_for_aphoto(win_image,
+				      img_buf.x_length(), img_buf.y_length(),
+				      aphoto_tmp, aphoto_step);
+		    newgcfunction(win_image, GXcopy);
+		    flag_drawed = true;
+		}
+		else if ( ev_type == ButtonPress && ev_btn == 1 ) {
+		    if ( aphoto_tmp.obj_r < aphoto_tmp.sky_r &&
+			 aphoto_tmp.sky_r < img_buf.x_length() &&
+			 aphoto_tmp.sky_r < img_buf.y_length() ) {
+			/* perform */
+			perform_aphoto(img_buf, tiff_szt, &aphoto_tmp);
+			/* */
+			append_aphoto_log( filenames[sel_file_id].cstr(),
+					   tiff_szt, aphoto_tmp, &aphoto_log );
+			aphoto_rec = aphoto_tmp;
+			/* */
+			aphoto_step = 0;
 			refresh_image = 1;
 		    }
 		}
