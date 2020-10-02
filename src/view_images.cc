@@ -132,7 +132,11 @@ typedef struct _aphoto {
     double obj_y;
     double obj_r;
     double sky_r;
-    double sky_lv[3];
+    double obj_area;
+    double sky_area;
+    double sky_median[3];
+    double sky_stddev[3];
+    double obj_area_cnt[3];
     double obj_cnt[3];
 } aphoto;
 
@@ -142,9 +146,17 @@ static int init_aphoto( aphoto *rec_p )
     rec_p->obj_y = -32000;
     rec_p->obj_r = 65535;
     rec_p->sky_r = 65535;
-    rec_p->sky_lv[0] = NAN;
-    rec_p->sky_lv[1] = NAN;
-    rec_p->sky_lv[2] = NAN;
+    rec_p->obj_area = 0;
+    rec_p->sky_area = 0;
+    rec_p->sky_median[0] = NAN;
+    rec_p->sky_median[1] = NAN;
+    rec_p->sky_median[2] = NAN;
+    rec_p->sky_stddev[0] = NAN;
+    rec_p->sky_stddev[1] = NAN;
+    rec_p->sky_stddev[2] = NAN;
+    rec_p->obj_area_cnt[0] = NAN;
+    rec_p->obj_area_cnt[1] = NAN;
+    rec_p->obj_area_cnt[2] = NAN;
     rec_p->obj_cnt[0] = NAN;
     rec_p->obj_cnt[1] = NAN;
     rec_p->obj_cnt[2] = NAN;
@@ -198,7 +210,8 @@ static int perform_aphoto( const mdarray &img_buf, int tiff_szt,
     for ( i=0 ; i < 3 ; i++ ) {
 	stat_buf.copy(&stat_buf_1d,
 		      0, stat_buf.x_length(), 0, stat_buf.y_length(), i, 1);
-	rec_p->sky_lv[i] = md_median(stat_buf_1d);
+	rec_p->sky_median[i] = md_median(stat_buf_1d);
+	rec_p->sky_stddev[i] = md_stddev(stat_buf_1d);
     }
 
     /* object */
@@ -221,6 +234,9 @@ static int perform_aphoto( const mdarray &img_buf, int tiff_szt,
 	}
     }
 
+    rec_p->obj_area = cnt_obj_pixels;
+    rec_p->sky_area = cnt_sky_pixels;
+
 #if 0	/* test! */
     newgcfunction(win_image, GXcopy);
     display_image(win_image, 0, 0, stat_buf, tiff_szt, display_bin, display_ch,
@@ -232,7 +248,8 @@ static int perform_aphoto( const mdarray &img_buf, int tiff_szt,
     for ( i=0 ; i < 3 ; i++ ) {
 	stat_buf.copy(&stat_buf_1d,
 		      0, stat_buf.x_length(), 0, stat_buf.y_length(), i, 1);
-	rec_p->obj_cnt[i] = md_total(stat_buf_1d);
+	rec_p->obj_area_cnt[i] = md_total(stat_buf_1d);
+	rec_p->obj_cnt[i] = rec_p->obj_area_cnt[i] - (cnt_obj_pixels * rec_p->sky_median[i]);
     }
 
     /* display */
@@ -241,23 +258,23 @@ static int perform_aphoto( const mdarray &img_buf, int tiff_szt,
     sio.printf("obj_y                     = %g\n",obj_y);
     sio.printf("obj_r                     = %g\n",obj_r);
     sio.printf("sky_r                     = %g\n",sky_r);
-    sio.printf("sky_area                  = %zu pixels\n",cnt_sky_pixels);
     sio.printf("obj_area                  = %zu pixels\n",cnt_obj_pixels);
+    sio.printf("sky_area                  = %zu pixels\n",cnt_sky_pixels);
     sio.printf("[Red]\n");
-    sio.printf("sky_median                = %g\n",rec_p->sky_lv[0]);
-    sio.printf("obj-area_count            = %g\n",rec_p->obj_cnt[0]);
-    sio.printf("obj_count(sky-subtracted) = %g\n",
-	       rec_p->obj_cnt[0] - (cnt_obj_pixels * rec_p->sky_lv[0]));
+    sio.printf("sky_median                = %g\n",rec_p->sky_median[0]);
+    sio.printf("sky_stddev                = %g\n",rec_p->sky_stddev[0]);
+    sio.printf("obj-area_count            = %g\n",rec_p->obj_area_cnt[0]);
+    sio.printf("obj_count(sky-subtracted) = %g\n",rec_p->obj_cnt[0]);
     sio.printf("[Green]\n");
-    sio.printf("sky_median                = %g\n",rec_p->sky_lv[1]);
-    sio.printf("obj-area_count            = %g\n",rec_p->obj_cnt[1]);
-    sio.printf("obj_count(sky-subtracted) = %g\n",
-	       rec_p->obj_cnt[1] - (cnt_obj_pixels * rec_p->sky_lv[1]));
+    sio.printf("sky_median                = %g\n",rec_p->sky_median[1]);
+    sio.printf("sky_stddev                = %g\n",rec_p->sky_stddev[1]);
+    sio.printf("obj-area_count            = %g\n",rec_p->obj_area_cnt[1]);
+    sio.printf("obj_count(sky-subtracted) = %g\n",rec_p->obj_cnt[1]);
     sio.printf("[Blue]\n");
-    sio.printf("sky_median                = %g\n",rec_p->sky_lv[2]);
-    sio.printf("obj-area_count            = %g\n",rec_p->obj_cnt[2]);
-    sio.printf("obj_count(sky-subtracted) = %g\n",
-	       rec_p->obj_cnt[2] - (cnt_obj_pixels * rec_p->sky_lv[2]));
+    sio.printf("sky_median                = %g\n",rec_p->sky_median[2]);
+    sio.printf("sky_stddev                = %g\n",rec_p->sky_stddev[2]);
+    sio.printf("obj-area_count            = %g\n",rec_p->obj_area_cnt[2]);
+    sio.printf("obj_count(sky-subtracted) = %g\n",rec_p->obj_cnt[2]);
     sio.printf("-------------------------\n");
 
     ret_status = 0;
@@ -1050,18 +1067,23 @@ int main( int argc, char *argv[] )
 			perform_aphoto(img_buf, tiff_szt, &aphoto_rec);
 			if ( aphoto_log.length() < 1 ) {
 			    log.printf("#filename,bps,"
-				       "obj_x,obj_y,obj_r,sky_r,"
-				       "sky_lv[R],sky_lv[G],sky_lv[B],"
+				       "obj_x,obj_y,obj_r,sky_r,obj_area,sky_area,"
+				       "sky_median[R],sky_median[G],sky_median[B],"
+				       "sky_stddev[R],sky_stddev[G],sky_stddev[B],"
 				       "obj_cnt[R],obj_cnt[G],obj_cnt[B]");
 			    aphoto_log.append(log, 1);
 			}
-			log.printf("%s,%d,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g",
+			log.printf("%s,%d,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g",
 				   filenames[sel_file_id].cstr(), tiff_szt,
 				   aphoto_rec.obj_x, aphoto_rec.obj_y,
 				   aphoto_rec.obj_r, aphoto_rec.sky_r,
-				   aphoto_rec.sky_lv[0],
-				   aphoto_rec.sky_lv[1],
-				   aphoto_rec.sky_lv[2],
+				   aphoto_rec.obj_area, aphoto_rec.sky_area,
+				   aphoto_rec.sky_median[0],
+				   aphoto_rec.sky_median[1],
+				   aphoto_rec.sky_median[2],
+				   aphoto_rec.sky_stddev[0],
+				   aphoto_rec.sky_stddev[1],
+				   aphoto_rec.sky_stddev[2],
 				   aphoto_rec.obj_cnt[0],
 				   aphoto_rec.obj_cnt[1],
 				   aphoto_rec.obj_cnt[2]);
@@ -1110,11 +1132,11 @@ int main( int argc, char *argv[] )
 		if ( flag_auto_zoom == true ) {
 		    display_bin = get_bin_factor_for_display(img_buf.x_length(),
 						     img_buf.y_length(), true);
-		}
-		if ( display_bin < 0 ) {
-		    sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
-				"bad display depth\n");
-		    goto quit;
+		    if ( display_bin < 0 ) {
+			sio.eprintf("[ERROR] get_bin_factor_for_display() failed: "
+				    "bad display depth\n");
+			goto quit;
+		    }
 		}
 
 		refresh_image = 2;
