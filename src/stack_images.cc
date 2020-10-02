@@ -663,10 +663,10 @@ int main( int argc, char *argv[] )
 		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
 
     winname(win_image, "Imave Viewer  "
-	    "zoom = 1/%d  contrast = ( %d, %d, %d )  "
+	    "zoom = %3.2f  contrast = ( %d, %d, %d )  "
 	    "sigma-clipping: [N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
 	    "dither = %d",
-	    display_bin,
+	    (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
 	    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
 	    count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 	    (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
@@ -894,17 +894,14 @@ int main( int argc, char *argv[] )
 	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
-	    if ( 1 < display_bin ) {
-		if ( display_bin <= 4 ) display_bin --;
-		else display_bin -= 2;
+	    if ( minus_binning_with_limit(&display_bin,
+		  img_buf.x_length(), img_buf.y_length()) == true ) {
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
-	    if ( display_bin < 10 ) {
-		if ( display_bin < 4 ) display_bin ++;
-		else display_bin += 2;
+	    if ( plus_binning_with_limit(&display_bin) == true ) {
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
@@ -1115,9 +1112,9 @@ int main( int argc, char *argv[] )
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Residual  offset = ( %ld, %ld )  "
-		       "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  ",
-		       offset_x, offset_y,
-		       names_ch[display_ch], display_bin,
+		       "channel = %s  zoom = %3.2f  contrast = ( %d, %d, %d )  ",
+		       offset_x, offset_y, names_ch[display_ch],
+		       (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
 		       contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 		//img_display.init(false);
 	    }
@@ -1126,8 +1123,9 @@ int main( int argc, char *argv[] )
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Reference  "
-		       "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  ",
-		       names_ch[display_ch], display_bin,
+		       "channel = %s  zoom = %3.2f  contrast = ( %d, %d, %d )  ",
+		       names_ch[display_ch],
+		       (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
 		       contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 		//img_display.init(false);
 	    }
@@ -1141,9 +1139,9 @@ int main( int argc, char *argv[] )
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Target  offset = ( %ld, %ld )  "
-		      "channel = %s  zoom = 1/%d  contrast = ( %d, %d, %d )  ",
-		      offset_x, offset_y,
-		      names_ch[display_ch], display_bin,
+		      "channel = %s  zoom = %3.2f  contrast = ( %d, %d, %d )  ",
+		      offset_x, offset_y, names_ch[display_ch],
+		      (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
 		      contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 		//img_display.init(false);
 	    }

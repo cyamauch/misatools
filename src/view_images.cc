@@ -118,6 +118,7 @@ static int get_dirname( const char *filename, tstring *ret_dir )
     return ret;
 }
 
+
 typedef struct _imstat {
     double total[3];
     double median[3];
@@ -725,20 +726,14 @@ int main( int argc, char *argv[] )
 	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
-	    if ( -2 < display_bin ) {
-		if ( display_bin <= 1 ) display_bin = -2;
-		else if ( display_bin <= 4 ) display_bin --;
-		else display_bin -= 2;
+	    if ( minus_binning_with_limit(&display_bin,
+		  img_buf.x_length(), img_buf.y_length()) == true ) {
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
-	    if ( display_bin < 10 ) {
-		if ( display_bin <= -3 ) display_bin ++;
-		else if ( display_bin <= 0 ) display_bin = 1;
-		else if ( display_bin <= 3 ) display_bin ++;
-		else display_bin += 2;
+	    if ( plus_binning_with_limit(&display_bin) == true ) {
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }

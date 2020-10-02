@@ -155,8 +155,9 @@ int main( int argc, char *argv[] )
     
     display_image(win_image, 0, 0, image_buf, tiff_szt, 
 		  display_bin, 0, contrast_rgb, true, &tmp_buf);
-    winname(win_image, "Imave Viewer  zoom = 1/%d  contrast = ( %d, %d, %d )",
-	    display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
+    winname(win_image, "Imave Viewer  zoom = %3.2f  contrast = ( %d, %d, %d )",
+	    (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
+	    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 
     /* set drawing mode */
     newgcfunction(win_image, GXxor);
@@ -186,17 +187,14 @@ int main( int argc, char *argv[] )
 		    goto quit;
 		}
 		else if ( ev_btn == '+' || ev_btn == ';' ) {	/* zoom-in */
-		    if ( 1 < display_bin ) {
-			if ( display_bin <= 4 ) display_bin --;
-			else display_bin -= 2;
+		    if ( minus_binning_with_limit(&display_bin,
+						  width, height) == true ) {
 			refresh_image = true;
 			refresh_winsize = true;
 		    }
 		}
 		else if ( ev_btn == '-' ) {		/* zoom-out */
-		    if ( display_bin < 10 ) {
-			if ( display_bin < 4 ) display_bin ++;
-			else display_bin += 2;
+		    if ( plus_binning_with_limit(&display_bin) == true ) {
 			refresh_image = true;
 			refresh_winsize = true;
 		    }
@@ -333,8 +331,9 @@ int main( int argc, char *argv[] )
 			  display_bin, 0, contrast_rgb,
 			  refresh_winsize, &tmp_buf);
 	    winname(win_image,
-	       "Imave Viewer  zoom = 1/%d  contrast = ( %d, %d, %d )",
-	       display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
+	       "Imave Viewer  zoom = %3.2f  contrast = ( %d, %d, %d )",
+	       (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
+	       contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    newgcfunction(win_image, GXxor);
 	    flag_drawed = false;
 

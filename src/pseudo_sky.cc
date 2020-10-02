@@ -885,7 +885,8 @@ int main( int argc, char *argv[] )
 		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
 
     winname(win_image, "Imave Viewer  "
-	"zoom = 1/%d  contrast = ( %d, %d, %d )  dither = %d", display_bin,
+	"zoom = %3.2f  contrast = ( %d, %d, %d )  dither = %d",
+	(double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
 	contrast_rgb[0], contrast_rgb[1], contrast_rgb[2], (int)flag_dither);
 
     /* allocate buffer */
@@ -1098,17 +1099,14 @@ int main( int argc, char *argv[] )
 	    refresh_image = 1;
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
-	    if ( 1 < display_bin ) {
-		if ( display_bin <= 4 ) display_bin --;
-		else display_bin -= 2;
+	    if ( minus_binning_with_limit(&display_bin,
+		  target_img_buf.x_length(), target_img_buf.y_length()) == true ) {
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
-	    if ( display_bin < 10 ) {
-		if ( display_bin < 4 ) display_bin ++;
-		else display_bin += 2;
+	    if ( plus_binning_with_limit(&display_bin) == true ) {
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
@@ -1434,29 +1432,31 @@ int main( int argc, char *argv[] )
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Residual [%s]  %s"
-			"channel = %s  zoom = 1/%d  "
+			"channel = %s  zoom = %3.2f  "
 			"contrast = ( %d, %d, %d )  ",
 			names_res_type[display_res_type], str_min_v.cstr(),
 			names_ch[display_ch],
-			display_bin, 
+			(double)((display_bin < 0) ? -display_bin : 1.0/display_bin), 
 			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    }
 	    else if ( display_type == 1 ) {	/* Sky */
 		display_image(win_image, 0, 0, sky_img_buf, 2,
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
-		winname(win_image, "Pseudo Sky  channel = %s  zoom = 1/%d  "
+		winname(win_image, "Pseudo Sky  channel = %s  zoom = %3.2f  "
 			"contrast = ( %d, %d, %d )  ",
-			names_ch[display_ch], display_bin, 
+			names_ch[display_ch],
+			(double)((display_bin < 0) ? -display_bin : 1.0/display_bin), 
 			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    }
 	    else {				/* Target */
 		display_image(win_image, 0, 0, target_img_buf, 2,
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
-		winname(win_image, "Target  channel = %s  zoom = 1/%d  "
+		winname(win_image, "Target  channel = %s  zoom = %3.2f  "
 			"contrast = ( %d, %d, %d )  ",
-			names_ch[display_ch], display_bin, 
+			names_ch[display_ch],
+			(double)((display_bin < 0) ? -display_bin : 1.0/display_bin), 
 			contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    }
 	    refresh_graphics = true;

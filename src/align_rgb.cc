@@ -265,8 +265,9 @@ int main( int argc, char *argv[] )
 
     display_image( win_rgb, 0, 0, image_rgb_buf, 2, display_bin, 0,
 		   contrast_rgb, true, &tmp_buf );
-    winname(win_rgb, "RGB  zoom = 1/%d  contrast = ( %d, %d, %d )",
-	    display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
+    winname(win_rgb, "RGB  zoom = %3.2f  contrast = ( %d, %d, %d )",
+	    (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
+	    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 
     display_image( win_gr, 0, 0, image_gr_buf, 2, display_bin, 2,
 		   contrast_rgb, true, &tmp_buf );
@@ -424,17 +425,14 @@ int main( int argc, char *argv[] )
 	    refresh_gb = 2;
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
-	    if ( 1 < display_bin ) {
-		if ( display_bin <= 4 ) display_bin --;
-		else display_bin -= 2;
+	    if ( minus_binning_with_limit(&display_bin,
+					  width, height) == true ) {
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 3 ) {
-	    if ( display_bin < 10 ) {
-		if ( display_bin < 4 ) display_bin ++;
-		else display_bin += 2;
+	    if ( plus_binning_with_limit(&display_bin) == true ) {
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
@@ -570,8 +568,9 @@ int main( int argc, char *argv[] )
 	    display_image( win_rgb, 0, 0, image_rgb_buf, 2, display_bin, 0,
 			   contrast_rgb, refresh_winsize, &tmp_buf );
 	    winname(win_rgb,
-	       "RGB  zoom = 1/%d  contrast = ( %d, %d, %d )",
-	       display_bin, contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
+	       "RGB  zoom = %3.2f  contrast = ( %d, %d, %d )",
+	       (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
+	       contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
 	    refresh_gr = 1;
 	    refresh_gb = 1;
 	}
