@@ -154,6 +154,7 @@ static int create_preview_filename( const char *filename_in,
 static int raw_to_preview( const char *filename_in,
 			   const char *deadpix_file,
 			   const long crop_prms[],
+			   const double brightness,
 			   const double gamma_prms[] )
 {
     int return_status = -1;
@@ -196,12 +197,12 @@ static int raw_to_preview( const char *filename_in,
 	    goto quit;
 	}
         snprintf(dcraw_cmd, dcraw_cmd_len,
-		 "dcraw -c -h -j -t 0 -g %f %f -P %s %s",
+		 "dcraw -c -h -j -t 0 -b %f -g %f %f -P %s %s", brightness,
 		 gamma_prms[0], gamma_prms[1], deadpix_file, filename_in);
     }
     else {
 	snprintf(dcraw_cmd, dcraw_cmd_len,
-		 "dcraw -c -h -j -t 0 -g %f %f %s",
+		 "dcraw -c -h -j -t 0 -b %f -g %f %f %s", brightness,
 		 gamma_prms[0], gamma_prms[1], filename_in);
     }
 
@@ -333,6 +334,7 @@ int main( int argc, char *argv[] )
     size_t arg_cnt;
     long crop_prms[4] = {-1,-1,-1,-1};
     double gamma_prms[2] = {2.222, 4.5};
+    double brightness = 1.0;
     char deadpix_file[PATH_MAX] = {'\0'};
     
     if ( argc < 2 ) {
@@ -343,6 +345,7 @@ int main( int argc, char *argv[] )
 	fprintf(stderr,"\n");
 	fprintf(stderr,"-P file ... Fix the dead pixels listed in this file\n");
 	fprintf(stderr,"-c [x,y,]width,height ... Crop images. Center when x and y are omitted\n");
+	fprintf(stderr,"-b brightness ... Adjust brightness (default = 1.0)\n");
 	fprintf(stderr,"-g gamma_p[,gamma_ts] ... Set gamma curve (default = 2.222,4.5)\n");
 	goto quit;
     }
@@ -357,6 +360,13 @@ int main( int argc, char *argv[] )
 		    fprintf(stderr,"[ERROR] get_crop_prms() failed\n");
 		    goto quit;
 		}
+		arg_cnt ++;
+	    }
+	}
+        else if ( strcmp(argv[arg_cnt],"-b") == 0 ) {
+	    arg_cnt ++;
+	    if ( argv[arg_cnt] != NULL ) {
+	        brightness = atof(argv[arg_cnt]);
 		arg_cnt ++;
 	    }
 	}
@@ -382,7 +392,7 @@ int main( int argc, char *argv[] )
 
     while ( arg_cnt < argc ) {
         if ( raw_to_preview(argv[arg_cnt],
-			    deadpix_file, crop_prms, gamma_prms) < 0 ) {
+		    deadpix_file, crop_prms, brightness, gamma_prms) < 0 ) {
 	    fprintf(stderr,"[ERROR] raw_to_preview() failed\n");
 	    goto quit;
 	}
