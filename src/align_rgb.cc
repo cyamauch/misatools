@@ -150,7 +150,7 @@ const command_list Cmd_list[] = {
 #define CMD_SAVE 13
         {CMD_SAVE,              "Save Aligned Image        [Enter]"},
 #define CMD_EXIT 14
-        {CMD_EXIT,              "Exit                      [q]"},
+        {CMD_EXIT,              "Exit                     [q][ESC]"},
         {0, NULL}		/* EOL */
 };
 

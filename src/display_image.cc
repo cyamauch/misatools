@@ -886,6 +886,25 @@ static int display_image( int win_image, double disp_x, double disp_y,
     return 0;
 }
 
+static const size_t Max_display_len = 1920 * 6;
+
+static bool fix_zoom_factor( int *display_bin_p, size_t img_width, size_t img_height )
+{
+    bool rt = false;
+    int bin = *display_bin_p;
+
+    if ( bin < -1 ) {
+	size_t zoom = (size_t)(0 - bin);
+	if ( Max_display_len < img_width * zoom ) bin = *display_bin_p;
+	else if ( Max_display_len < img_height * zoom ) bin = *display_bin_p;
+    }
+    
+    if ( bin != *display_bin_p ) rt = true;
+    *display_bin_p = bin;
+
+    return rt;
+}
+
 
 static bool minus_binning_with_limit( int *display_bin_p, size_t img_width, size_t img_height )
 {
@@ -900,8 +919,8 @@ static bool minus_binning_with_limit( int *display_bin_p, size_t img_width, size
     }
     if ( bin < -1 ) {
 	size_t zoom = (size_t)(0 - bin);
-	if ( 1920 * 8 < img_width * zoom ) bin = *display_bin_p;
-	else if ( 1920 * 8 < img_height * zoom ) bin = *display_bin_p;
+	if ( Max_display_len < img_width * zoom ) bin = *display_bin_p;
+	else if ( Max_display_len < img_height * zoom ) bin = *display_bin_p;
     }
     
     if ( bin != *display_bin_p ) rt = true;

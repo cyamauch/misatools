@@ -286,17 +286,25 @@ static int perform_aphoto( const mdarray &img_buf, int tiff_szt,
 static void draw_lines_for_aphoto( int win, size_t width, size_t height,
 				   const aphoto &aphoto_rec, int step )
 {
-    if ( step == 1 ) {
+    if ( 0 < step ) {
 	drawline(win, 0, aphoto_rec.obj_y, width, aphoto_rec.obj_y);
 	drawline(win, aphoto_rec.obj_x, 0, aphoto_rec.obj_x, height);
-    }
-    if ( step == 2 || 0 < aphoto_rec.obj_r ) {
-	drawcirc(win, aphoto_rec.obj_x, aphoto_rec.obj_y,
+	if ( 0 < aphoto_rec.obj_r ) {
+	    drawcirc(win, aphoto_rec.obj_x, aphoto_rec.obj_y,
 		 aphoto_rec.obj_r, aphoto_rec.obj_r);
-    }
-    if ( step == 3 || 0 < aphoto_rec.sky_r ) {
-	drawcirc(win, aphoto_rec.obj_x, aphoto_rec.obj_y,
-		 aphoto_rec.sky_r, aphoto_rec.sky_r);
+	    drawstr(win,
+		    aphoto_rec.obj_x + Font_margin + aphoto_rec.obj_r,
+		    aphoto_rec.obj_y - Font_margin,
+		    Fontsize, 0, "r=%.2f", aphoto_rec.obj_r);
+	}
+	if ( 0 < aphoto_rec.sky_r ) {
+	    drawcirc(win, aphoto_rec.obj_x, aphoto_rec.obj_y,
+		     aphoto_rec.sky_r, aphoto_rec.sky_r);
+	    drawstr(win,
+		    aphoto_rec.obj_x + Font_margin,
+		    aphoto_rec.obj_y - Font_margin - aphoto_rec.sky_r,
+		    Fontsize, 0, "r=%.2f", aphoto_rec.sky_r);
+	}
     }
     return;
 }
@@ -315,8 +323,8 @@ static void append_aphoto_log( const char *filename, int tiff_szt,
 		   "obj_cnt[R],obj_cnt[G],obj_cnt[B]");
 	aphoto_log_p->append(log, 1);
     }
-    log.printf("%s,%d,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g",
-	       filename, tiff_szt,
+    log.printf("%c%s%c,%d,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g,%g",
+	       34,filename,34, tiff_szt,
 	       aphoto_rec.obj_x, aphoto_rec.obj_y,
 	       aphoto_rec.obj_r, aphoto_rec.sky_r,
 	       aphoto_rec.obj_area, aphoto_rec.sky_area,
@@ -429,39 +437,39 @@ static int update_loupe_buf( const mdarray &src_img_buf,
 
 const command_list Cmd_list[] = {
 #define CMD_DISPLAY_TARGET 1
-        {CMD_DISPLAY_TARGET,    "Display Normal                [1]"},
+        {CMD_DISPLAY_TARGET,    "Display Normal                 [1]"},
 #define CMD_DISPLAY_INVERT 2
-        {CMD_DISPLAY_INVERT,    "Display Invert                [2]"},
+        {CMD_DISPLAY_INVERT,    "Display Invert                 [2]"},
 #define CMD_DISPLAY_RGB 3
-        {CMD_DISPLAY_RGB,       "Display RGB                   [c]"},
+        {CMD_DISPLAY_RGB,       "Display RGB                    [c]"},
 #define CMD_DISPLAY_R 4
-        {CMD_DISPLAY_R,         "Display Red                   [c]"},
+        {CMD_DISPLAY_R,         "Display Red                    [c]"},
 #define CMD_DISPLAY_G 5
-        {CMD_DISPLAY_G,         "Display Green                 [c]"},
+        {CMD_DISPLAY_G,         "Display Green                  [c]"},
 #define CMD_DISPLAY_B 6
-        {CMD_DISPLAY_B,         "Display Blue                  [c]"},
+        {CMD_DISPLAY_B,         "Display Blue                   [c]"},
 #define CMD_ZOOM 7
-        {CMD_ZOOM,              "Zoom +/-                      [+][-]"},
+        {CMD_ZOOM,              "Zoom +/-                       [+][-]"},
 #define CMD_CONT_RGB 8
-        {CMD_CONT_RGB,          "RGB Contrast +/-              [<][>]"},
+        {CMD_CONT_RGB,          "RGB Contrast +/-               [<][>]"},
 #define CMD_CONT_R 9
-        {CMD_CONT_R,            "Red Contrast +/-              [r][R]"},
+        {CMD_CONT_R,            "Red Contrast +/-               [r][R]"},
 #define CMD_CONT_G 10
-        {CMD_CONT_G,            "Green Contrast +/-            [g][G]"},
+        {CMD_CONT_G,            "Green Contrast +/-             [g][G]"},
 #define CMD_CONT_B 11
-        {CMD_CONT_B,            "Blue Contrast +/-             [b][B]"},
+        {CMD_CONT_B,            "Blue Contrast +/-              [b][B]"},
 #define CMD_LOUPE_ZOOM 12
-        {CMD_LOUPE_ZOOM,        "Zoom factor of loupe +/-      [l][L]"},
+        {CMD_LOUPE_ZOOM,        "Zoom factor of loupe +/-       [l][L]"},
 #define CMD_IMSTAT 13
-        {CMD_IMSTAT,            "Image statistics              [s]"},
+        {CMD_IMSTAT,            "Image statistics               [s]"},
 #define CMD_APHOTO 14
-        {CMD_APHOTO,            "Aperture Photometry / fixed-r [p][P]"},
+        {CMD_APHOTO,            "Aperture Photometry / Reuse Ap [p][P]"},
 #define CMD_SAVE_SLOG 15
-        {CMD_SAVE_SLOG,         "Save Log of Statistics        [Enter]"},
+        {CMD_SAVE_SLOG,         "Save Log of Statistics         [Enter]"},
 #define CMD_AUTO_ZOOM 16
-        {CMD_AUTO_ZOOM,         "Auto zoom on/off for loading  [z]"},
+        {CMD_AUTO_ZOOM,         "Auto zoom on/off for loading   [z]"},
 #define CMD_DITHER 17
-        {CMD_DITHER,            "Dither on/off for saving      [d]"},
+        {CMD_DITHER,            "Dither on/off for saving       [d]"},
 #define CMD_SAVE_8BIT 18
         {CMD_SAVE_8BIT,         "Save as 8-bit TIFF"},
 #define CMD_SAVE_16BIT 19
@@ -469,7 +477,7 @@ const command_list Cmd_list[] = {
 #define CMD_SAVE_FLOAT 20
         {CMD_SAVE_FLOAT,        "Save as 32-bit float TIFF"},
 #define CMD_EXIT 21
-        {CMD_EXIT,              "Exit                          [q]"},
+        {CMD_EXIT,              "Exit                          [q][ESC]"},
         {0, NULL}		/* EOL */
 };
 
@@ -501,7 +509,7 @@ int main( int argc, char *argv[] )
     int contrast_rgb[3] = {8, 8, 8};	/* contrast for display */
 
     int loupe_height = 220;
-    int loupe_zoom = 5;
+    int loupe_zoom = 7;
     int loupe_x = Loupe_pos_out;
     int loupe_y = Loupe_pos_out;
 
@@ -759,7 +767,10 @@ int main( int argc, char *argv[] )
 	    else if ( ev_btn == 'z' ) cmd_id = CMD_AUTO_ZOOM;
 	    else if ( ev_btn == 'd' ) cmd_id = CMD_DITHER;
 	    /* ESC key or 'q' */
-	    else if ( ev_btn == 27 || ev_btn == 'q' ) cmd_id = CMD_EXIT;
+	    else if ( ev_btn == 27 || ev_btn == 'q' ) {
+		/* do not exit when aperture photometry */
+		if ( aphoto_step < 1 ) cmd_id = CMD_EXIT;
+	    }
 	}
 
 	/*
@@ -931,9 +942,9 @@ int main( int argc, char *argv[] )
 			       "max[R],max[G],max[B]");
 		    imstat_log.append(log, 1);
 		}
-		log.printf("%s,%d,%zu,%zu,%g,%g,%g,%g,%g,%g,%g,%g,%g,"
+		log.printf("%c%s%c,%d,%zu,%zu,%g,%g,%g,%g,%g,%g,%g,%g,%g,"
 			   "%g,%g,%g,%g,%g,%g,%g,%g,%g",
-			   filenames[sel_file_id].cstr(), tiff_szt,
+			   34,filenames[sel_file_id].cstr(),34, tiff_szt,
 			   img_buf.x_length(), img_buf.y_length(),
 			   imstat_rec.total[0],
 			   imstat_rec.total[1],
@@ -959,6 +970,7 @@ int main( int argc, char *argv[] )
 		/* New aperture photometory */
 		init_aphoto( &aphoto_tmp );
 		aphoto_step = 1;
+		refresh_image = 1;
 	    }
 	    else if ( cmd_id == CMD_APHOTO && ev_btn == 3 ) {
 		/* photometory reusing previous aperture */
@@ -966,6 +978,7 @@ int main( int argc, char *argv[] )
 		     aphoto_rec.obj_r < aphoto_rec.sky_r ) {
 		    aphoto_tmp = aphoto_rec;
 		     aphoto_step = 1;
+		     refresh_image = 1;
 		}
 	    }
 	    else if ( cmd_id == CMD_SAVE_SLOG ) {
@@ -1026,8 +1039,9 @@ int main( int argc, char *argv[] )
 	    if ( 1 <= cmd_id ) {
 		/* NOP */
 	    }
-	    else if ( 0 < aphoto_step &&
-		      ev_type == KeyPress && ev_btn == 8 /* backspace */ ) {
+	    else if ( 0 < aphoto_step && ev_type == KeyPress &&
+		      /* backspace, ESC, or 'q' */
+		      ( ev_btn == 8 || ev_btn == 27 || ev_btn == 'q' ) ) {
 		/* cancel */
 		aphoto_step = 0;
 		cmd_id = 0;
@@ -1167,6 +1181,12 @@ int main( int argc, char *argv[] )
 	else if ( ev_type == KeyPress && ev_btn == 2 /* PageUp */ ) {
 	    f_id = sel_file_id - 1;
 	}
+	else if ( ev_type == KeyPress && ev_btn == 31 /* Down key */ ) {
+	    f_id = sel_file_id + 1;
+	}
+	else if ( ev_type == KeyPress && ev_btn == 30 /* Up key */ ) {
+	    f_id = sel_file_id - 1;
+	}
 	
 	if ( f_id != sel_file_id &&
 	     0 <= f_id && (size_t)f_id < filenames.length() ) {
@@ -1193,6 +1213,10 @@ int main( int argc, char *argv[] )
 				    "bad display depth\n");
 			goto quit;
 		    }
+		}
+		else {
+		    fix_zoom_factor(&display_bin,
+				    img_buf.x_length(), img_buf.y_length());
 		}
 
 		refresh_image = 2;

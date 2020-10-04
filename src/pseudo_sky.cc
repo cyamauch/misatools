@@ -724,7 +724,7 @@ const command_list Cmd_list[] = {
 #define CMD_SAVE_IMAGE 26
         {CMD_SAVE_IMAGE,        "Save Pseudo-Sky-Subtracted image"},
 #define CMD_EXIT 27
-        {CMD_EXIT,              "Exit                      [q]"},
+        {CMD_EXIT,              "Exit                     [q][ESC]"},
         {0, NULL}		/* EOL */
 };
 

@@ -496,7 +496,7 @@ const command_list Cmd_list[] = {
 #define CMD_STACK_SILENT 25
         {CMD_STACK_SILENT,      "Start Stacking without preview"},
 #define CMD_EXIT 26
-        {CMD_EXIT,              "Exit                      [q]"},
+        {CMD_EXIT,              "Exit                     [q][ESC]"},
         {0, NULL}		/* EOL */
 };
 
