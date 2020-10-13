@@ -1,3 +1,7 @@
+#include "display_image.h"
+
+static const size_t Max_display_len = 1920 * 6;
+
 #include "test_simd.h"
 
 /* SSE3 is used for binning/zoom */
@@ -55,14 +59,21 @@ static void convert_c2f( const unsigned char *src, size_t n, float *dst )
     return;
 }
 
-static int display_image( int win_image, double disp_x, double disp_y,
-			  const mdarray &img_buf,
-			  int tiff_sztype,
-			  int binning,		/* 1: original scale  2:1/2 -2:2x */ 
-			  int display_ch,	/* 0:RGB 1:R 2:G 3:B */
-			  const int contrast_rgb[],
-			  bool needs_resize_win,
-			  mdarray_uchar *tmp_buf )
+#include <sli/stdstreamio.h>
+#include <sli/tarray_tstring.h>
+#include <sli/mdarray.h>
+#include <sli/mdarray_statistics.h>
+#include <eggx.h>
+using namespace sli;
+
+int display_image( int win_image, double disp_x, double disp_y,
+		   const mdarray &img_buf,
+		   int tiff_sztype,
+		   int binning,		/* 1: original scale  2:1/2 -2:2x */ 
+		   int display_ch,	/* 0:RGB 1:R 2:G 3:B */
+		   const int contrast_rgb[],
+		   bool needs_resize_win,
+		   mdarray_uchar *tmp_buf )
 {
     stdstreamio sio;
     unsigned char *tmp_buf_ptr;
@@ -1034,9 +1045,42 @@ static int display_image( int win_image, double disp_x, double disp_y,
     return 0;
 }
 
-static const size_t Max_display_len = 1920 * 6;
 
-static bool fix_zoom_factor( int *display_bin_p, size_t img_width, size_t img_height )
+int get_bin_factor_for_display( size_t img_width, size_t img_height,
+				bool fast_only )
+{
+    int r_depth, r_width, r_height;
+    int ret_val = -1;
+    if ( ggetdisplayinfo(&r_depth,&r_width,&r_height) < 0 ) {
+	goto quit;
+    }
+    else {
+	const int margin = 80;
+	int bin_x, bin_y;
+
+	if ( r_depth < 24 ) goto quit;
+	
+	bin_x = (img_width + margin) / r_width;
+	if ( (img_width + margin) %  r_width != 0 ) bin_x ++;
+	bin_y = (img_height + margin) / r_height;
+	if ( (img_height + margin) % r_height != 0 ) bin_y ++;
+	
+	if ( bin_x < bin_y ) ret_val = bin_y;
+	else ret_val = bin_x;
+
+	if ( fast_only == true ) {		/* SIMD-applied only */
+	    if ( 3 < ret_val ) {
+		if ( (ret_val % 2) != 0 ) ret_val ++;
+		if ( 10 < ret_val ) ret_val = 10;
+	    }
+	}
+    }
+ quit:
+    return ret_val;
+}
+
+
+bool fix_zoom_factor( int *display_bin_p, size_t img_width, size_t img_height )
 {
     bool rt = false;
     int bin = *display_bin_p;
@@ -1054,7 +1098,7 @@ static bool fix_zoom_factor( int *display_bin_p, size_t img_width, size_t img_he
 }
 
 
-static bool minus_binning_with_limit( int *display_bin_p, size_t img_width, size_t img_height )
+bool minus_binning_with_limit( int *display_bin_p, size_t img_width, size_t img_height )
 {
     bool rt = false;
     int bin = *display_bin_p;
@@ -1067,6 +1111,9 @@ static bool minus_binning_with_limit( int *display_bin_p, size_t img_width, size
     }
     if ( bin < -1 ) {
 	size_t zoom = (size_t)(0 - bin);
+	//stdstreamio sio;
+	//sio.printf("[DEBUG] Max_display_len=%zu img_width=%zu zoom=%zu\n",
+	//	   Max_display_len, img_width, zoom);
 	if ( Max_display_len < img_width * zoom ) bin = *display_bin_p;
 	else if ( Max_display_len < img_height * zoom ) bin = *display_bin_p;
     }
@@ -1077,7 +1124,8 @@ static bool minus_binning_with_limit( int *display_bin_p, size_t img_width, size
     return rt;
 }
 
-static int plus_binning_with_limit( int *display_bin_p )
+
+int plus_binning_with_limit( int *display_bin_p )
 {
     bool rt = false;
     int bin = *display_bin_p;
@@ -1095,3 +1143,47 @@ static int plus_binning_with_limit( int *display_bin_p )
     return rt;
 }
 
+
+int load_display_params( const char *filename, int contrast_rgb[] )
+{
+    int return_status = -1;
+    stdstreamio sio, f_in;
+    tstring line;
+    if ( f_in.open("r", filename) < 0 ) {
+	goto quit;
+    }
+    line = f_in.getline();
+    line.trim();
+    if ( 0 < line.length() ) {
+	tarray_tstring elms;
+	elms.split(line.cstr()," ",false);
+	if ( elms.length() == 3 ) {
+	    contrast_rgb[0] = elms[0].atoi();
+	    if ( contrast_rgb[0] < 0 ) contrast_rgb[0] = 0;
+	    contrast_rgb[1] = elms[1].atoi();
+	    if ( contrast_rgb[1] < 0 ) contrast_rgb[1] = 0;
+	    contrast_rgb[2] = elms[2].atoi();
+	    if ( contrast_rgb[2] < 0 ) contrast_rgb[2] = 0;
+	}
+    }
+    f_in.close();
+    return_status = 0;
+ quit:
+    return return_status;
+}
+
+int save_display_params( const char *filename, const int contrast_rgb[] )
+{
+    int return_status = -1;
+    stdstreamio sio, f_out;
+    if ( f_out.open("w", filename) < 0 ) {
+	sio.eprintf("[ERROR] Cannot write data to display.txt\n");
+	goto quit;
+    }
+    f_out.printf("%d %d %d\n",
+		 contrast_rgb[0], contrast_rgb[1], contrast_rgb[2]);
+    f_out.close();
+    return_status = 0;
+ quit:
+    return return_status;
+}

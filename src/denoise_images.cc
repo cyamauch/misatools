@@ -3,13 +3,10 @@
 #include <sli/tarray_tstring.h>
 #include <sli/mdarray.h>
 #include <sli/mdarray_statistics.h>
-using namespace sli;
 
-#include "read_tiff24or48_to_float.h"
-#include "write_float_to_tiff24or48.h"
-#include "write_float_to_tiff.h"
-#include "make_output_filename.cc"
-#include "icc_srgb_profile.c"
+#include "tiff_funcs.h"
+
+using namespace sli;
 
 #include "wavelet_denoise.c"
 
@@ -122,17 +119,17 @@ int main( int argc, char *argv[] )
 
 
     for ( i=0 ; i < filenames_in.length() ; i++ ) {
-	int sztype;
+	int tiff_szt = 0;
 	tstring filename, filename_out;
 	float *ptr;
 	size_t j;
 
 	filename = filenames_in[i];
 	sio.printf("Loading %s\n", filename.cstr());
-	if ( read_tiff24or48_to_float(filename.cstr(), 65536.0,
-		    &img_in_buf, &sztype, &icc_buf, camera_calibration1) < 0 ) {
+	if ( load_tiff_into_float(filename.cstr(), 65536.0,
+		    &img_in_buf, &tiff_szt, &icc_buf, camera_calibration1) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename.cstr());
-	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+	    sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 	    goto quit;
 	}
 
@@ -145,12 +142,6 @@ int main( int argc, char *argv[] )
 			 threshold, img_in_buf.array_ptr(),
 			 img_work_buf.array_ptr() );
 	
-	/* create new filename */
-	if ( sztype == 1 ) {
-	}
-	else {
-	}
-
 	if ( icc_buf.length() == 0 ) {
 	    icc_buf.resize_1d(sizeof(Icc_srgb_profile));
 	    icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
@@ -159,8 +150,8 @@ int main( int argc, char *argv[] )
 	/* check min, max and write a processed file */
 	ptr = img_in_buf.array_ptr();
 	if ( flag_output_16bit == true ) {
-	    make_output_filename(filename.cstr(), "denoised", "16bit",
-				 &filename_out);
+	    make_tiff_filename(filename.cstr(), "denoised", "16bit",
+			       &filename_out);
 	    for ( j=0 ; j < img_in_buf.length() ; j++ ) {
 		if ( ptr[j] < 0 ) ptr[j] = 0.0;
 		else if ( 65535.0 < ptr[j] ) ptr[j] = 65535.0;
@@ -168,16 +159,16 @@ int main( int argc, char *argv[] )
 	    sio.printf("Writing '%s' [16bit/ch] ", filename_out.cstr());
 	    if ( flag_dither == true ) sio.printf("using dither ...\n");
 	    else sio.printf("NOT using dither ...\n");
-	    if ( write_float_to_tiff24or48(img_in_buf,
+	    if ( save_float_to_tiff24or48(img_in_buf,
 			icc_buf, camera_calibration1,
 			0.0, 65535.0, flag_dither, filename_out.cstr()) < 0 ) {
-		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
+		sio.eprintf("[ERROR] save_float_to_tiff24or48() failed\n");
 		goto quit;
 	    }
 	}
-	else if ( sztype == 1 && flag_output_8bit == true ) {
-	    make_output_filename(filename.cstr(), "denoised", "8bit",
-				 &filename_out);
+	else if ( tiff_szt == 1 && flag_output_8bit == true ) {
+	    make_tiff_filename(filename.cstr(), "denoised", "8bit",
+			       &filename_out);
 	    for ( j=0 ; j < img_in_buf.length() ; j++ ) {
 		ptr[j] /= 256.0;
 		if ( ptr[j] < 0 ) ptr[j] = 0.0;
@@ -186,20 +177,20 @@ int main( int argc, char *argv[] )
 	    sio.printf("Writing '%s' [8bit/ch] ", filename_out.cstr());
 	    if ( flag_dither == true ) sio.printf("using dither ...\n");
 	    else sio.printf("NOT using dither ...\n");
-	    if ( write_float_to_tiff24or48(img_in_buf,
+	    if ( save_float_to_tiff24or48(img_in_buf,
 			  icc_buf, camera_calibration1, 
 			  0.0, 255.0, flag_dither, filename_out.cstr()) < 0 ) {
-		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
+		sio.eprintf("[ERROR] save_float_to_tiff24or48() failed\n");
 		goto quit;
 	    }
 	}
 	else {
-	    make_output_filename(filename.cstr(), "denoised", "float",
-				 &filename_out);
+	    make_tiff_filename(filename.cstr(), "denoised", "float",
+			       &filename_out);
 	    sio.printf("Writing '%s' [32-bit_float/ch]\n", filename_out.cstr());
-	    if ( write_float_to_tiff(img_in_buf, icc_buf, camera_calibration1, 
-				     65536.0, filename_out.cstr()) < 0 ) {
-		sio.eprintf("[ERROR] write_float_to_tiff() failed\n");
+	    if ( save_float_to_tiff(img_in_buf, icc_buf, camera_calibration1, 
+				    65536.0, filename_out.cstr()) < 0 ) {
+		sio.eprintf("[ERROR] save_float_to_tiff() failed\n");
 		goto quit;
 	    }
 	}
@@ -211,8 +202,3 @@ int main( int argc, char *argv[] )
  quit:
     return return_status;
 }
-
-
-#include "read_tiff24or48_to_float.cc"
-#include "write_float_to_tiff24or48.cc"
-#include "write_float_to_tiff.cc"

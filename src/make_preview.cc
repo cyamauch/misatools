@@ -6,12 +6,9 @@
 #include <sli/tarray_tstring.h>
 #include <sli/mdarray.h>
 #include <sli/mdarray_statistics.h>
-using namespace sli;
 
-#include "read_tiff24or48.h"
-#include "write_tiff24or48.h"
-#include "make_output_filename.cc"
-#include "icc_srgb_profile.c"
+#include "tiff_funcs.h"
+using namespace sli;
 
 /**
  * @file   make_preview.cc
@@ -35,8 +32,8 @@ static int do_convert( const char *in_filename,
     filename_in = in_filename;
     
     /* read tiff-24or48-bit file and store its data to array */
-    if ( read_tiff24or48( filename_in.cstr(), &img_buf1, &icc_buf ) < 0 ) {
-        sio.eprintf("[ERROR] read_tiff24or48() failed\n");
+    if ( load_tiff( filename_in.cstr(), &img_buf1, &icc_buf ) < 0 ) {
+        sio.eprintf("[ERROR] load_tiff() failed\n");
 	goto quit;
     }
     width = img_buf1.x_length();
@@ -188,12 +185,12 @@ static int do_convert( const char *in_filename,
     /* write image data file */
     
     if ( img_buf1.bytes() == 1 ) {
-	make_output_filename(filename_in.cstr(), "preview", "8bit",
-			     &filename_out);
+	make_tiff_filename(filename_in.cstr(), "preview", "8bit",
+			   &filename_out);
     }
     else {
-	make_output_filename(filename_in.cstr(), "preview", "16bit",
-			     &filename_out);
+	make_tiff_filename(filename_in.cstr(), "preview", "16bit",
+			   &filename_out);
     }
     
     sio.printf("Writing %s ...\n", filename_out.cstr());
@@ -203,8 +200,8 @@ static int do_convert( const char *in_filename,
 	icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
     }
     
-    if ( write_tiff24or48(img_buf1, icc_buf, filename_out.cstr()) < 0 ) {
-        sio.eprintf("[ERROR] write_tiff24or48() failed\n");
+    if ( save_tiff(img_buf1, icc_buf, filename_out.cstr()) < 0 ) {
+        sio.eprintf("[ERROR] save_tiff() failed\n");
 	goto quit;
     }
 
@@ -357,6 +354,3 @@ int main( int argc, char *argv[] )
  quit:
     return return_status;
 }
-
-#include "read_tiff24or48.cc"
-#include "write_tiff24or48.cc"

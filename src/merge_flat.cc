@@ -1,12 +1,10 @@
 #include <sli/stdstreamio.h>
 #include <sli/mdarray.h>
 #include <sli/mdarray_statistics.h>
-using namespace sli;
 
-#include "read_tiff24or48_to_float.h"
-#include "write_float_to_tiff24or48.h"
-#include "write_float_to_tiff.h"
-#include "icc_srgb_profile.c"
+#include "tiff_funcs.h"
+
+using namespace sli;
 
 int main( int argc, char *argv[] )
 {
@@ -36,28 +34,28 @@ int main( int argc, char *argv[] )
     
     filename_in = argv[1];
     sio.printf("Loading %s\n", filename_in);
-    if ( read_tiff24or48_to_float(filename_in, 1.0,
+    if ( load_tiff_into_float(filename_in, 1.0,
 			  &img_flat_r_buf, &sztype_r, &icc_buf, NULL) < 0 ) {
 	sio.eprintf("[ERROR] cannot load '%s'\n", filename_in);
-	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+	sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 	goto quit;
     }
     
     filename_in = argv[2];
     sio.printf("Loading %s\n", filename_in);
-    if ( read_tiff24or48_to_float(filename_in, 1.0,
+    if ( load_tiff_into_float(filename_in, 1.0,
 			  &img_flat_g_buf, &sztype_g, &icc_buf, NULL) < 0 ) {
 	sio.eprintf("[ERROR] cannot load '%s'\n", filename_in);
-	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+	sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 	goto quit;
     }
 
     filename_in = argv[3];
     sio.printf("Loading %s\n", filename_in);
-    if ( read_tiff24or48_to_float(filename_in, 1.0,
+    if ( load_tiff_into_float(filename_in, 1.0,
 			  &img_flat_b_buf, &sztype_r, &icc_buf, NULL) < 0 ) {
 	sio.eprintf("[ERROR] cannot load '%s'\n", filename_in);
-	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+	sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 	goto quit;
     }
 
@@ -73,9 +71,9 @@ int main( int argc, char *argv[] )
     if ( sztype_r < 0 || sztype_g < 0 || sztype_b < 0 ) {
 	sio.printf("Writing %s ...\n", filename_out_float);
 
-	if ( write_float_to_tiff(img_flat_g_buf, icc_buf, NULL,
-				 1.0, filename_out_float) < 0 ) {
-	    sio.eprintf("[ERROR] write_float_to_tiff() failed\n");
+	if ( save_float_to_tiff(img_flat_g_buf, icc_buf, NULL,
+				1.0, filename_out_float) < 0 ) {
+	    sio.eprintf("[ERROR] save_float_to_tiff() failed\n");
 	    goto quit;
 	}
     }
@@ -84,9 +82,9 @@ int main( int argc, char *argv[] )
 
 	img_flat_g_buf *= 65536.0;
 
-	if ( write_float_to_tiff24or48(img_flat_g_buf, icc_buf, NULL, 
+	if ( save_float_to_tiff24or48(img_flat_g_buf, icc_buf, NULL, 
 				     0.0, 65535.0, false, filename_out) < 0 ) {
-	    sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
+	    sio.eprintf("[ERROR] save_float_to_tiff24or48() failed\n");
 	    goto quit;
 	}
     }
@@ -95,7 +93,3 @@ int main( int argc, char *argv[] )
  quit:
     return return_status;
 }
-
-#include "read_tiff24or48_to_float.cc"
-#include "write_float_to_tiff24or48.cc"
-#include "write_float_to_tiff.cc"

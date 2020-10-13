@@ -3,12 +3,9 @@
 #include <sli/tarray_tstring.h>
 #include <sli/mdarray.h>
 #include <sli/mdarray_statistics.h>
-using namespace sli;
 
-#include "read_tiff24or48_to_float.h"
-#include "write_float_to_tiff24or48.h"
-#include "write_float_to_tiff.h"
-#include "icc_srgb_profile.c"
+#include "tiff_funcs.h"
+using namespace sli;
 
 /* Maximum byte length of 3-d image buffer to get median */
 static const uint64_t Max_stat_buf_bytes = (uint64_t)500 * 1024 * 1024;
@@ -137,10 +134,10 @@ int main( int argc, char *argv[] )
     }
 
     sio.printf("Loading %s\n", filename_dark);
-    if ( read_tiff24or48_to_float(filename_dark, 65536.0,
-				  &img_dark_buf, NULL, &icc_buf, NULL) < 0 ) {
+    if ( load_tiff_into_float(filename_dark, 65536.0,
+			      &img_dark_buf, NULL, &icc_buf, NULL) < 0 ) {
 	sio.eprintf("[ERROR] cannot load dark\n");
-	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+	sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 	goto quit;
     }
     width = img_dark_buf.x_length();
@@ -176,9 +173,9 @@ int main( int argc, char *argv[] )
 		const char *filename_in = filenames_in[i].cstr();
 		//size_t l;
 		sio.printf("  Reading %s\n",filename_in);
-		if ( read_tiff24or48_to_float(filename_in, 65536.0,
+		if ( load_tiff_into_float(filename_in, 65536.0,
 				   &img_load_buf, NULL, &icc_buf, NULL) < 0 ) {
-		    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+		    sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 		    goto quit;
 		}
 		/* Subtract dark */
@@ -186,10 +183,10 @@ int main( int argc, char *argv[] )
 		    filename_dark =
 		       darkfile_list[cnt_dark % darkfile_list.length()].cstr();
 		    sio.printf("  Reading %s\n", filename_dark);
-		    if ( read_tiff24or48_to_float(filename_dark, 65536.0,
+		    if ( load_tiff_into_float(filename_dark, 65536.0,
 				   &img_dark_buf, NULL, &icc_buf, NULL) < 0 ) {
 			sio.eprintf("[ERROR] cannot load dark\n");
-			sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+			sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 			goto quit;
 		    }
 		    cnt_dark ++;
@@ -271,9 +268,9 @@ int main( int argc, char *argv[] )
 	    }
 	}
     
-	if ( write_float_to_tiff(result_buf, icc_buf, NULL, 
+	if ( save_float_to_tiff(result_buf, icc_buf, NULL, 
 			       1.0, filename_out_float[target_channel]) < 0 ) {
-	    sio.eprintf("[ERROR] write_float_to_tiff() failed\n");
+	    sio.eprintf("[ERROR] save_float_to_tiff() failed\n");
 	    goto quit;
 	}
 
@@ -304,9 +301,9 @@ int main( int argc, char *argv[] )
 	    }
 	}
     
-	if ( write_float_to_tiff24or48(result_buf, icc_buf, NULL,
+	if ( save_float_to_tiff24or48(result_buf, icc_buf, NULL,
 	       0.0, 65535.0, flag_dither, filename_out[target_channel]) < 0 ) {
-	    sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
+	    sio.eprintf("[ERROR] save_float_to_tiff24or48() failed\n");
 	    goto quit;
 	}
 
@@ -316,7 +313,3 @@ int main( int argc, char *argv[] )
  quit:
     return return_status;
 }
-
-#include "read_tiff24or48_to_float.cc"
-#include "write_float_to_tiff.cc"
-#include "write_float_to_tiff24or48.cc"

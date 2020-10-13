@@ -9,19 +9,13 @@
 #include <sli/mdarray_statistics.h>
 #include <eggx.h>
 #include <unistd.h>
+
+#include "tiff_funcs.h"
+#include "display_image.h"
+#include "gui_base.h"
+
 using namespace sli;
 
-const double Contrast_scale = 4.0;
-
-#include "read_tiff24or48_separate_buffer.h"
-#include "write_float_to_tiff24or48.h"
-#include "write_float_to_tiff.h"
-#include "get_bin_factor_for_display.c"
-#include "display_image.cc"
-#include "load_display_params.cc"
-#include "save_display_params.cc"
-#include "make_output_filename.cc"
-#include "icc_srgb_profile.c"
 
 /**
  * @file   align_rgb.cc
@@ -29,11 +23,6 @@ const double Contrast_scale = 4.0;
  *         8/16-bit integer and 32-bit float images are supported.
  */
 
-const int Font_y_off = 3;
-const int Font_margin = 2;
-static int Fontsize = 14;
-#include "set_fontsize.c"
-#include "command_window.c"
 
 static int get_result_rgb_image( 
     long off_r_x, long off_r_y, long off_b_x, long off_b_y,
@@ -208,10 +197,10 @@ int main( int argc, char *argv[] )
     f_in.close();
 
     sio.printf("Open: %s\n", filename.cstr());
-    if ( read_tiff24or48_separate_buffer( filename.cstr(),
+    if ( load_tiff_into_separate_buffer( filename.cstr(),
 			  &in_image_r_buf, &in_image_g_buf, &in_image_b_buf,
 			  &tiff_szt, &icc_buf, NULL ) < 0 ) {
-	sio.eprintf("[ERROR] read_tiff24or48_separate_buffer() failed\n");
+	sio.eprintf("[ERROR] load_tiff_into_separate_buffer() failed\n");
 	goto quit;
     }
     if ( tiff_szt == 1 ) sio.printf("found 8-bit RGB image.\n");
@@ -381,33 +370,33 @@ int main( int argc, char *argv[] )
 		icc_buf.put_elements(Icc_srgb_profile,sizeof(Icc_srgb_profile));
 	    }
 	    if ( tiff_szt == 1 ) {	/* 8-bit */
-		make_output_filename(filename.cstr(), "aligned-rgb", "8bit",
-				     &out_filename);
+		make_tiff_filename(filename.cstr(), "aligned-rgb", "8bit",
+				   &out_filename);
 		sio.printf("Saved [%s]\n", out_filename.cstr());
-		if ( write_float_to_tiff24or48(image_rgb_buf, icc_buf, NULL, 
+		if ( save_float_to_tiff24or48(image_rgb_buf, icc_buf, NULL, 
 				0.0, 255.0, false, out_filename.cstr()) < 0 ) {
-		    sio.eprintf("[ERROR] write_float_to_tiff24or48() failed.\n");
+		    sio.eprintf("[ERROR] save_float_to_tiff24or48() failed.\n");
 		    goto quit;
 		}
 		refresh_image = 2;
 	    }
 	    else if ( tiff_szt == 2 ) {
-		make_output_filename(filename.cstr(), "aligned-rgb", "16bit",
-				     &out_filename);
+		make_tiff_filename(filename.cstr(), "aligned-rgb", "16bit",
+				   &out_filename);
 		sio.printf("Saved [%s]\n", out_filename.cstr());
-		if ( write_float_to_tiff24or48(image_rgb_buf, icc_buf, NULL, 
+		if ( save_float_to_tiff24or48(image_rgb_buf, icc_buf, NULL, 
 			      0.0, 65535.0, false, out_filename.cstr()) < 0 ) {
-		    sio.eprintf("[ERROR] write_float_to_tiff24or48() failed.\n");
+		    sio.eprintf("[ERROR] save_float_to_tiff24or48() failed.\n");
 		    goto quit;
 		}
 	    }
 	    else if ( tiff_szt == -4 ) {
-		make_output_filename(filename.cstr(), "aligned-rgb", "float",
-				     &out_filename);
+		make_tiff_filename(filename.cstr(), "aligned-rgb", "float",
+				   &out_filename);
 		sio.printf("Saved [%s]\n", out_filename.cstr());
-		if ( write_float_to_tiff(image_rgb_buf, icc_buf, NULL, 
-					 1.0, out_filename.cstr()) < 0 ) {
-		    sio.eprintf("[ERROR] write_float_to_tiff() failed.\n");
+		if ( save_float_to_tiff(image_rgb_buf, icc_buf, NULL, 
+					1.0, out_filename.cstr()) < 0 ) {
+		    sio.eprintf("[ERROR] save_float_to_tiff() failed.\n");
 		    goto quit;
 		}
 	    }
@@ -630,7 +619,3 @@ int main( int argc, char *argv[] )
  quit:
     return return_status;
 }
-
-#include "read_tiff24or48_separate_buffer.cc"
-#include "write_float_to_tiff24or48.cc"
-#include "write_float_to_tiff.cc"

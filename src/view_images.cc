@@ -9,114 +9,21 @@
 #include <sli/mdarray_statistics.h>
 #include <eggx.h>
 #include <unistd.h>
+
+#include "file_io.h"
+#include "tiff_funcs.h"
+#include "display_image.h"
+#include "gui_base.h"
+#include "loupe_funcs.h"
+
 using namespace sli;
 
-const double Contrast_scale = 2.0;
-
-#include "read_tiff24or48.h"
-#include "get_bin_factor_for_display.c"
-#include "load_display_params.cc"
-#include "save_display_params.cc"
-//#include "make_output_filename.cc"
-//#include "icc_srgb_profile.c"
 
 /**
  * @file   view_images.cc
  * @brief  TIFF image viewer.
  *         8/16-bit integer and 32-bit float images are supported.
  */
-
-const int Font_y_off = 3;
-const int Font_margin = 2;
-static int Fontsize = 14;
-#include "set_fontsize.c"
-#include "command_window.c"
-#include "display_file_list.cc"
-#include "display_image.cc"
-const int Loupe_pos_out = -32000;
-
-/* test suffix of filename and try opening file with readonly */
-static bool test_tiff_file( const char *file )
-{
-    stdstreamio f_in;
-    tstring filename = file;
-    ssize_t len_file = (ssize_t)filename.length();
-    bool is_tiff_name = false;
-    bool ret_value = false;
-
-    if ( file == NULL ) goto quit;
-    
-    if ( filename.rfind(".tif") + 4 == len_file ) is_tiff_name = true;
-    else if ( filename.rfind(".tiff") + 5 == len_file ) is_tiff_name = true;
-    else if ( filename.rfind(".TIF") + 4 == len_file ) is_tiff_name = true;
-    else if ( filename.rfind(".TIFF") + 5 == len_file ) is_tiff_name = true;
-
-    if ( is_tiff_name == true ) {
-	if ( f_in.open("r", file) == 0 ) {
-	    f_in.close();
-	    ret_value =  true;
-	}
-    }
-
- quit:
-    return ret_value;
-}
-
-/* e.g. ././boo//foo => boo/foo */
-static int remove_redundancy_in_path( tstring *path_p )
-{
-    ssize_t ix;
-    int ret = -1;
-
-    if ( path_p == NULL ) goto quit;
-    
-    while ( (*path_p).find("./") == 0 ) {
-	(*path_p).erase(0,2);
-    }
-    while ( 0 < (ix=(*path_p).find("/./")) ) {
-	(*path_p).erase(ix,2);
-    }
-    while ( 0 < (ix=(*path_p).find("//")) ) {
-	(*path_p).erase(ix,1);
-    }
-    
-    ret = 0;
-
- quit:
-    return ret;
-}
-
-/* 'dirname' command */
-static int get_dirname( const char *filename, tstring *ret_dir )
-{
-    ssize_t ix;
-    int ret = -1;
-
-    if ( filename == NULL ) goto quit;
-    if ( ret_dir == NULL ) goto quit;
-
-    *ret_dir = filename;
-
-    ix = ret_dir->rfind('/');
-
-    if ( 0 <= ix ) {
-	ret_dir->resize(ix);
-	if ( ret_dir->length() == 0 ) {
-	    ret_dir->assign(".");
-	}
-	else {
-	    remove_redundancy_in_path(ret_dir);
-	}
-    }
-    else {
-	ret_dir->assign(".");
-    }
-
-    ret = 0;
-
- quit:
-    return ret;
-}
 
 
 typedef struct _imstat {
@@ -293,17 +200,17 @@ static void draw_lines_for_aphoto( int win, size_t width, size_t height,
 	    drawcirc(win, aphoto_rec.obj_x, aphoto_rec.obj_y,
 		 aphoto_rec.obj_r, aphoto_rec.obj_r);
 	    drawstr(win,
-		    aphoto_rec.obj_x + Font_margin + aphoto_rec.obj_r,
-		    aphoto_rec.obj_y - Font_margin,
-		    Fontsize, 0, "r=%.2f", aphoto_rec.obj_r);
+		    aphoto_rec.obj_x + get_font_margin() + aphoto_rec.obj_r,
+		    aphoto_rec.obj_y - get_font_margin(),
+		    get_fontsize(), 0, "r=%.2f", aphoto_rec.obj_r);
 	}
 	if ( 0 < aphoto_rec.sky_r ) {
 	    drawcirc(win, aphoto_rec.obj_x, aphoto_rec.obj_y,
 		     aphoto_rec.sky_r, aphoto_rec.sky_r);
 	    drawstr(win,
-		    aphoto_rec.obj_x + Font_margin,
-		    aphoto_rec.obj_y - Font_margin - aphoto_rec.sky_r,
-		    Fontsize, 0, "r=%.2f", aphoto_rec.sky_r);
+		    aphoto_rec.obj_x + get_font_margin(),
+		    aphoto_rec.obj_y - get_font_margin() - aphoto_rec.sky_r,
+		    get_fontsize(), 0, "r=%.2f", aphoto_rec.sky_r);
 	}
     }
     return;
@@ -340,98 +247,6 @@ static void append_aphoto_log( const char *filename, int tiff_szt,
     aphoto_log_p->append(log, 1);
 
     return;
-}
-
-static int update_loupe_buf( const mdarray &src_img_buf,
-			     int cen_x, int cen_y, int zoom_factor,
-			     mdarray *dest_loupe_buf )
-{
-    const size_t src_width = src_img_buf.x_length();
-    const size_t src_height = src_img_buf.y_length();
-    size_t dest_width, dest_height;
-    size_t i;
-    int szt = src_img_buf.size_type();
-    int ret_status = -1;
-
-    if ( dest_loupe_buf == NULL ) goto quit;
-
-    if ( zoom_factor < 3 ) zoom_factor = 3;
-    else if ( 127 < zoom_factor ) zoom_factor = 127;
-    if ( (zoom_factor % 2) == 0 ) zoom_factor ++;
-    
-    dest_width = dest_loupe_buf->x_length();
-    dest_height = dest_loupe_buf->y_length();
-
-    if ( dest_loupe_buf->size_type() != szt ) {
-	dest_loupe_buf->convert(szt);
-    }
-
-    if ( szt == FLOAT_ZT ) {
-	for ( i=0 ; i < 3 ; i++ ) {
-	    size_t j;
-	    const float *src_p = (const float *)src_img_buf.data_ptr(0,0,i);
-	    for ( j=0 ; j < dest_height ; j++ ) {
-		float *dest_p = (float *)dest_loupe_buf->data_ptr(0,j,i);
-		int src_y;
-		int j_adj = (int)j - (int)dest_height / 2;
-		if ( 0 < j_adj ) j_adj += zoom_factor/2;
-		else if ( j_adj < 0 ) j_adj -= zoom_factor/2;
-		src_y = cen_y + j_adj / zoom_factor;
-		size_t k;
-		if ( 0 <= src_y && src_y < (int)src_height ) {
-		    for ( k=0 ; k < dest_width ; k++ ) {
-			int src_x;
-			int k_adj = (int)k - (int)dest_width / 2;
-			if ( 0 < k_adj ) k_adj += zoom_factor/2;
-			else if ( k_adj < 0 ) k_adj -= zoom_factor/2;
-			src_x = cen_x + k_adj / zoom_factor;
-			if ( 0 <= src_x && src_x < (int)src_width ) 
-			    dest_p[k] = src_p[src_width * src_y + src_x];
-			else 
-			    dest_p[k] = 0;
-		    }
-		}
-		else {
-		    for ( k=0 ; k < dest_width ; k++ ) dest_p[k] = 0;
-		}
-	    }
-	}
-    }
-    else if ( szt == UCHAR_ZT ) {
-	for ( i=0 ; i < 3 ; i++ ) {
-	    size_t j;
-	    const unsigned char *src_p = (const unsigned char *)src_img_buf.data_ptr(0,0,i);
-	    for ( j=0 ; j < dest_height ; j++ ) {
-		unsigned char *dest_p = (unsigned char *)dest_loupe_buf->data_ptr(0,j,i);
-		int src_y;
-		int j_adj = (int)j - (int)dest_height / 2;
-		if ( 0 < j_adj ) j_adj += zoom_factor/2;
-		else if ( j_adj < 0 ) j_adj -= zoom_factor/2;
-		src_y = cen_y + j_adj / zoom_factor;
-		size_t k;
-		if ( 0 <= src_y && src_y < (int)src_height ) {
-		    for ( k=0 ; k < dest_width ; k++ ) {
-			int src_x;
-			int k_adj = (int)k - (int)dest_width / 2;
-			if ( 0 < k_adj ) k_adj += zoom_factor/2;
-			else if ( k_adj < 0 ) k_adj -= zoom_factor/2;
-			src_x = cen_x + k_adj / zoom_factor;
-			if ( 0 <= src_x && src_x < (int)src_width ) 
-			    dest_p[k] = src_p[src_width * src_y + src_x];
-			else 
-			    dest_p[k] = 0;
-		    }
-		}
-		else {
-		    for ( k=0 ; k < dest_width ; k++ ) dest_p[k] = 0;
-		}
-	    }
-	}
-    }
-
-    ret_status = 0;
- quit:
-    return ret_status;
 }
 
 
@@ -490,7 +305,6 @@ int main( int argc, char *argv[] )
     tarray_tstring filenames;
     tstring filename_1st;
     tstring dirname;
-    size_t maxlen_filename;
     int sel_file_id = 0;
    
     command_win command_win_rec;
@@ -585,18 +399,6 @@ int main( int argc, char *argv[] )
 	p_in.close();
     }
 
-    /* get maxlen_filename */
-    maxlen_filename = 0;
-    for ( i=0 ; i < filenames.length() ; i++ ) {
-	if ( maxlen_filename < filenames[i].length() ) {
-	    maxlen_filename = filenames[i].length();
-	}
-    }
-
-    if ( maxlen_filename == 0 ) {
-        sio.eprintf("[ERROR] cannot find TIFF files.\n");
-	goto quit;
-    }
 
     
     /*
@@ -611,29 +413,29 @@ int main( int argc, char *argv[] )
     /* command window */
     
     get_command_list_info(Cmd_list, &max_len_menu_string);
-    loupe_height = (Fontsize / 2) * max_len_menu_string;
+    loupe_height = (get_fontsize() / 2) * max_len_menu_string;
 
     command_win_rec = gopen_command_window( Cmd_list,
-			Font_margin + 2*Fontsize + Font_margin + loupe_height);
+      get_font_margin() + 2*get_fontsize() + get_font_margin() + loupe_height);
 
     loupe_buf.resize_3d(command_win_rec.width, loupe_height, 3);
     
     /* file selector */
     
-    win_filesel = gopen((Fontsize/2) * (maxlen_filename + 2),
-			Fontsize * (filenames.length()));
-    gsetbgcolor(win_filesel,"#404040");
-    gclr(win_filesel);
-    winname(win_filesel, "File Selector");
+    win_filesel = gopen_file_selector(filenames, false);
+    if ( win_filesel < 0 ) {
+        sio.eprintf("[ERROR] gopen_file_selector() failed.\n");
+	goto quit;
+    }
     
     display_file_list(win_filesel, filenames, sel_file_id, false, -1, NULL);
 
     /* image viewer */
 
     sio.printf("Open: %s\n", filenames[sel_file_id].cstr());
-    if ( read_tiff24or48(filenames[sel_file_id].cstr(),
+    if ( load_tiff(filenames[sel_file_id].cstr(),
 			 &img_buf, &tiff_szt, NULL, NULL) < 0 ) {
-        sio.eprintf("[ERROR] read_tiff24or48() failed\n");
+        sio.eprintf("[ERROR] load_tiff() failed\n");
 	goto quit;
     }
 
@@ -1173,7 +975,7 @@ int main( int argc, char *argv[] )
 	}
 	else if ( ev_type == ButtonPress && ev_btn == 1 &&
 	     ev_win == win_filesel ) {
-	    f_id = ev_y / Fontsize;
+	    f_id = ev_y / get_fontsize();
 	}
 	else if ( ev_type == KeyPress && ev_btn == 6 /* PageDown */ ) {
 	    f_id = sel_file_id + 1;
@@ -1195,9 +997,9 @@ int main( int argc, char *argv[] )
 	    
 	    sio.printf("Open: %s\n", filenames[f_id].cstr());
 		    
-	    if ( read_tiff24or48(filenames[f_id].cstr(), 
+	    if ( load_tiff(filenames[f_id].cstr(), 
 				 &img_buf, &tiff_szt, NULL, NULL) < 0 ) {
-	        sio.eprintf("[ERROR] read_tiff24or48() failed\n");
+	        sio.eprintf("[ERROR] load_tiff() failed\n");
 		sel_file_id = -1;
 	    }
 	    else {
@@ -1228,58 +1030,6 @@ int main( int argc, char *argv[] )
 
 	/* Update window */
 
-	if ( refresh_loupe != 0 || refresh_image != 0 ) {
-	    const int this_y0 = command_win_rec.reserved_y0;
-	    const int win_cmd = command_win_rec.win_id;
-	    const int digit_y_pos = Font_margin + Fontsize - Font_y_off + 1;
-	    const int loupe_y_pos = Font_margin + 2*Fontsize + Font_margin - 1;
-	    const int cross_x = loupe_buf.x_length() / 2;
-	    const int cross_y = loupe_buf.y_length() / 2;
-	    const int hole = 4;	/* center hole of loupe */
-	    if ( refresh_loupe == 2 ) {
-		loupe_x = (int)ev_x;
-		loupe_y = (int)ev_y;
-	    }
-	    layer(win_cmd, 0, 2);
-	    copylayer(win_cmd, 1, 2);
-	    drawstr(win_cmd, Font_margin, this_y0 + digit_y_pos,
-		    Fontsize, 0, "zoom=%d", loupe_zoom);
-	    if ( loupe_x != Loupe_pos_out ) {
-		drawstr(win_cmd,
-			Font_margin + 9 * (Fontsize/2), this_y0 + digit_y_pos,
-			Fontsize, 0, "x=%d y=%d", loupe_x, loupe_y);
-		drawstr(win_cmd,
-			Font_margin,
-			this_y0 + digit_y_pos + Fontsize,
-			Fontsize, 0, "RGB=%5g %5g %5g",
-			img_buf.dvalue(loupe_x, loupe_y, 0),
-			img_buf.dvalue(loupe_x, loupe_y, 1),
-			img_buf.dvalue(loupe_x, loupe_y, 2) );
-		update_loupe_buf(img_buf, loupe_x, loupe_y, loupe_zoom,
-				 &loupe_buf);
-		if (display_type == 1) newgcfunction(win_cmd, GXcopyInverted);
-		else newgcfunction(win_cmd, GXcopy);
-		display_image(win_cmd,
-			      0, this_y0 + loupe_y_pos,
-			      loupe_buf, tiff_szt,
-			      1, display_ch, contrast_rgb,
-			      false, &tmp_buf_loupe);
-		newgcfunction(win_cmd, GXxor);
-		newrgbcolor(win_cmd, 0x00,0xff,0x00);
-		drawline(win_cmd, 0, this_y0 + loupe_y_pos + cross_y,
-		     cross_x - hole, this_y0 + loupe_y_pos + cross_y);
-		drawline(win_cmd, cross_x + hole, this_y0 + loupe_y_pos + cross_y,
-		     loupe_buf.x_length() - 1, this_y0 + loupe_y_pos + cross_y);
-		drawline(win_cmd, cross_x, this_y0 + loupe_y_pos + 0,
-		     cross_x, this_y0 + loupe_y_pos + cross_y - hole);
-		drawline(win_cmd, cross_x, this_y0 + loupe_y_pos + cross_y + hole,
-		     cross_x, this_y0 + loupe_y_pos + loupe_buf.y_length() - 1);
-		newgcfunction(win_cmd, GXcopy);
-		newrgbcolor(win_cmd, 0xff,0xff,0xff);
-	    }
-	    copylayer(win_cmd, 2, 0);
-	}
-	
 	if ( refresh_image != 0 ) {
 	    if ( display_type == 1 ) newgcfunction(win_image, GXcopyInverted);
 	    else newgcfunction(win_image, GXcopy);
@@ -1305,6 +1055,18 @@ int main( int argc, char *argv[] )
 		    (int)flag_auto_zoom, (int)flag_dither);
 	}
 
+	if ( refresh_loupe != 0 || refresh_image != 0 ) {
+	    int gcfnc;
+	    if (display_type == 1) gcfnc = GXcopyInverted;
+	    else gcfnc = GXcopy;
+	    display_loupe( command_win_rec.win_id,
+			   0, command_win_rec.reserved_y0,
+			   refresh_loupe, img_buf, tiff_szt, ev_x, ev_y,
+			   loupe_zoom, contrast_rgb, display_ch,
+			   gcfnc, &loupe_buf, 
+			   &loupe_x, &loupe_y, &tmp_buf_loupe);
+	}
+	
 	if ( refresh_list == true ) {
 
 	    display_file_list(win_filesel, filenames, sel_file_id, false,
@@ -1320,4 +1082,3 @@ int main( int argc, char *argv[] )
     return return_status;
 }
 
-#include "read_tiff24or48.cc"

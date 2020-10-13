@@ -3,13 +3,10 @@
 #include <sli/tarray_tstring.h>
 #include <sli/mdarray.h>
 #include <sli/mdarray_statistics.h>
-using namespace sli;
 
-#include "read_tiff24or48_to_float.h"
-#include "write_float_to_tiff24or48.h"
-#include "write_float_to_tiff.h"
-#include "make_output_filename.cc"
-#include "icc_srgb_profile.c"
+#include "tiff_funcs.h"
+
+using namespace sli;
 
 /**
  * @file   proc_images.cc
@@ -165,10 +162,10 @@ int main( int argc, char *argv[] )
 	f_in.close();
 	dark_rgb.resize_1d(3);
 	sio.printf("Loading '%s'\n", filename_dark);
-	if ( read_tiff24or48_to_float(filename_dark, 65536.0, 
+	if ( load_tiff_into_float(filename_dark, 65536.0, 
 				    &img_dark_buf, &sztype, NULL, NULL) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename_dark);
-	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+	    sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 	    goto quit;
 	}
 	if ( sztype == 1 ) sio.printf("Found an 8-bit dark image\n");
@@ -199,11 +196,11 @@ int main( int argc, char *argv[] )
 	int sztype;
 	f_in.close();
 	sio.printf("Loading '%s'\n", filename_flat[flag_use_flat]);
-	if ( read_tiff24or48_to_float(filename_flat[flag_use_flat], 1.0,
+	if ( load_tiff_into_float(filename_flat[flag_use_flat], 1.0,
 				    &img_flat_buf, &sztype, NULL, NULL) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n",
 			filename_flat[flag_use_flat]);
-	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+	    sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 	    goto quit;
 	}
 	if ( sztype == 1 ) sio.printf("Found an 8-bit flat image\n");
@@ -238,10 +235,10 @@ int main( int argc, char *argv[] )
 	    f_in.close();
 	    sky_rgb.resize_1d(3);
 	    sio.printf("Loading '%s'\n", filename_sky.cstr());
-	    if ( read_tiff24or48_to_float(filename_sky.cstr(), 65536.0, 
+	    if ( load_tiff_into_float(filename_sky.cstr(), 65536.0, 
 				     &img_sky_buf, &sztype, NULL, NULL) < 0 ) {
 		sio.eprintf("[ERROR] cannot load '%s'\n", filename_sky.cstr());
-		sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+		sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 		goto quit;
 	    }
 	    if ( sztype == 1 ) sio.printf("Found an 8-bit sky image\n");
@@ -266,20 +263,20 @@ int main( int argc, char *argv[] )
 
 	filename = filenames_in[i];
 	sio.printf("Loading '%s'\n", filename.cstr());
-	if ( read_tiff24or48_to_float(filename.cstr(), 65536.0, 
+	if ( load_tiff_into_float(filename.cstr(), 65536.0, 
 		   &img_in_buf, &sztype, &icc_buf, camera_calibration1) < 0 ) {
 	    sio.eprintf("[ERROR] cannot load '%s'\n", filename.cstr());
-	    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+	    sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 	    goto quit;
 	}
 	if ( 0 < darkfile_list.length() ) {
 	    int sztype0;
 	    const char *fn = darkfile_list[i % darkfile_list.length()].cstr();
 	    sio.printf("Loading '%s'\n", fn);
-	    if ( read_tiff24or48_to_float(fn, 65536.0, 
+	    if ( load_tiff_into_float(fn, 65536.0, 
 				  &img_dark_buf, &sztype0, NULL, NULL) < 0 ) {
 		sio.eprintf("[ERROR] cannot load '%s'\n", fn);
-		sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+		sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 		goto quit;
 	    }
 	    if ( sztype0 == 1 ) sio.printf("Found an 8-bit dark image\n");
@@ -343,8 +340,8 @@ int main( int argc, char *argv[] )
 	/* check min, max and write a processed file */
 	ptr = img_in_buf.array_ptr();
 	if ( flag_output_16bit == true ) {
-	    make_output_filename(filename.cstr(), "proc", "16bit",
-				 &filename_out);
+	    make_tiff_filename(filename.cstr(), "proc", "16bit",
+			       &filename_out);
 	    for ( j=0 ; j < img_in_buf.length() ; j++ ) {
 		if ( ptr[j] < 0 ) ptr[j] = 0.0;
 		else if ( 65535.0 < ptr[j] ) ptr[j] = 65535.0;
@@ -352,16 +349,16 @@ int main( int argc, char *argv[] )
 	    sio.printf("Writing '%s' [16bit/ch] ", filename_out.cstr());
 	    if ( flag_dither == true ) sio.printf("using dither ...\n");
 	    else sio.printf("NOT using dither ...\n");
-	    if ( write_float_to_tiff24or48(img_in_buf,  
+	    if ( save_float_to_tiff24or48(img_in_buf,  
 			icc_buf, camera_calibration1,
 			0.0, 65535.0, flag_dither, filename_out.cstr()) < 0 ) {
-		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
+		sio.eprintf("[ERROR] save_float_to_tiff24or48() failed\n");
 		goto quit;
 	    }
 	}
 	else if ( sztype == 1 && flag_output_8bit == true ) {
-	    make_output_filename(filename.cstr(), "proc", "8bit",
-				 &filename_out);
+	    make_tiff_filename(filename.cstr(), "proc", "8bit",
+			       &filename_out);
 	    for ( j=0 ; j < img_in_buf.length() ; j++ ) {
 		ptr[j] /= 256.0;
 		if ( ptr[j] < 0 ) ptr[j] = 0.0;
@@ -370,20 +367,20 @@ int main( int argc, char *argv[] )
 	    sio.printf("Writing '%s' [8bit/ch] ", filename_out.cstr());
 	    if ( flag_dither == true ) sio.printf("using dither ...\n");
 	    else sio.printf("NOT using dither ...\n");
-	    if ( write_float_to_tiff24or48(img_in_buf,  
+	    if ( save_float_to_tiff24or48(img_in_buf,  
 			  icc_buf, camera_calibration1,
 			  0.0, 255.0, flag_dither, filename_out.cstr()) < 0 ) {
-		sio.eprintf("[ERROR] write_float_to_tiff24or48() failed\n");
+		sio.eprintf("[ERROR] save_float_to_tiff24or48() failed\n");
 		goto quit;
 	    }
 	}
 	else {	/* output float tiff */
-	    make_output_filename(filename.cstr(), "proc", "float",
-				 &filename_out);
+	    make_tiff_filename(filename.cstr(), "proc", "float",
+			       &filename_out);
 	    sio.printf("Writing '%s' [32-bit_float/ch]\n", filename_out.cstr());
-	    if ( write_float_to_tiff(img_in_buf, icc_buf, camera_calibration1,
+	    if ( save_float_to_tiff(img_in_buf, icc_buf, camera_calibration1,
 				     65536.0, filename_out.cstr()) < 0 ) {
-		sio.eprintf("[ERROR] write_float_to_tiff() failed\n");
+		sio.eprintf("[ERROR] save_float_to_tiff() failed\n");
 		goto quit;
 	    }
 	}
@@ -394,8 +391,3 @@ int main( int argc, char *argv[] )
  quit:
     return return_status;
 }
-
-#include "read_tiff24or48_to_float.cc"
-#include "write_float_to_tiff24or48.cc"
-#include "write_float_to_tiff.cc"
-

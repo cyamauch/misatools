@@ -3,12 +3,9 @@
 #include <sli/tarray_tstring.h>
 #include <sli/mdarray.h>
 #include <sli/mdarray_statistics.h>
-using namespace sli;
 
-#include "read_tiff24or48.h"
-#include "write_tiff24or48.h"
-#include "write_float_to_tiff.h"
-#include "icc_srgb_profile.c"
+#include "tiff_funcs.h"
+using namespace sli;
 
 /**
  * @file   make_dark.cc
@@ -51,9 +48,9 @@ int main( int argc, char *argv[] )
     filenames_in.erase(0, 1);	/* erase command name */
 
     filename_in = filenames_in[0].cstr();
-    if ( read_tiff24or48(filename_in, &img_load_buf, &tiff_szt,
-			 &icc_buf, NULL) < 0 ) {
-	sio.eprintf("[ERROR] read_tiff24or48() failed\n");
+    if ( load_tiff(filename_in, &img_load_buf, &tiff_szt,
+		   &icc_buf, NULL) < 0 ) {
+	sio.eprintf("[ERROR] load_tiff() failed\n");
 	goto quit;
     }
     width = img_load_buf.x_length();
@@ -95,9 +92,9 @@ int main( int argc, char *argv[] )
 		filename_in = filenames_in[i].cstr();
 		sio.printf("  Reading %s\n",filename_in);
 		img_load_buf.init(sz_type, false);
-		if ( read_tiff24or48(filename_in, &img_load_buf, &tiff_szt0,
-				     NULL, NULL) < 0 ) {
-		    sio.eprintf("[ERROR] read_tiff24or48() failed\n");
+		if ( load_tiff(filename_in, &img_load_buf, &tiff_szt0,
+			       NULL, NULL) < 0 ) {
+		    sio.eprintf("[ERROR] load_tiff() failed\n");
 		    goto quit;
 		}
 		if ( tiff_szt0 != tiff_szt ) {
@@ -128,16 +125,16 @@ int main( int argc, char *argv[] )
     }
 
     if ( tiff_szt < 0 ) {
-	if ( write_float_to_tiff(result_buf, icc_buf,
-				 NULL, 1.0, filename_out) < 0 ) {
-	    sio.eprintf("[ERROR] write_float_to_tiff() failed\n");
+	if ( save_float_to_tiff(result_buf, icc_buf,
+				NULL, 1.0, filename_out) < 0 ) {
+	    sio.eprintf("[ERROR] save_float_to_tiff() failed\n");
 	    goto quit;
 	}
     }
     else {
-	if ( write_tiff24or48(result_buf, tiff_szt, icc_buf,
-			      NULL, filename_out) < 0 ) {
-	    sio.eprintf("[ERROR] write_tiff24or48() failed\n");
+	if ( save_tiff(result_buf, tiff_szt, icc_buf,
+		       NULL, filename_out) < 0 ) {
+	    sio.eprintf("[ERROR] save_tiff() failed\n");
 	    goto quit;
 	}
     }
@@ -146,7 +143,3 @@ int main( int argc, char *argv[] )
  quit:
     return return_status;
 }
-
-#include "read_tiff24or48.cc"
-#include "write_tiff24or48.cc"
-#include "write_float_to_tiff.cc"

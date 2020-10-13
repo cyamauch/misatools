@@ -9,19 +9,12 @@
 #include <sli/mdarray_statistics.h>
 #include <eggx.h>
 #include <unistd.h>
+
+#include "tiff_funcs.h"
+#include "display_image.h"
+
 using namespace sli;
 
-const double Contrast_scale = 4.0;
-
-#include "read_tiff24or48.h"
-#include "write_float_to_tiff48.h"
-#include "write_float_to_tiff.h"
-#include "load_display_params.cc"
-#include "save_display_params.cc"
-#include "get_bin_factor_for_display.c"
-#include "display_image.cc"
-#include "make_output_filename.cc"
-#include "icc_srgb_profile.c"
 
 /**
  * @file   determine_sky.cc
@@ -120,9 +113,9 @@ int main( int argc, char *argv[] )
     f_in.close();
 
     sio.printf("Open: %s\n", filename.cstr());
-    if ( read_tiff24or48( filename.cstr(), 
-			  &image_buf, &tiff_szt, &icc_buf, NULL ) < 0 ) {
-	sio.eprintf("[ERROR] read_tiff24or48() failed\n");
+    if ( load_tiff( filename.cstr(), 
+		    &image_buf, &tiff_szt, &icc_buf, NULL ) < 0 ) {
+	sio.eprintf("[ERROR] load_tiff() failed\n");
 	goto quit;
     }
     if ( tiff_szt == 1 ) {
@@ -437,24 +430,24 @@ int main( int argc, char *argv[] )
     }
 
     /* save using float */
-    make_output_filename(filename.cstr(), "sky-lv",
-			 "float", &out_filename);
+    make_tiff_filename(filename.cstr(), "sky-lv",
+		       "float", &out_filename);
     sio.printf("Writing '%s' ...\n", out_filename.cstr());
-    if ( write_float_to_tiff(image_buf, icc_buf, NULL, 
-			     65536.0, out_filename.cstr()) < 0 ) {
-	sio.eprintf("[ERROR] write_float_to_tiff() failed.\n");
+    if ( save_float_to_tiff(image_buf, icc_buf, NULL, 
+			    65536.0, out_filename.cstr()) < 0 ) {
+	sio.eprintf("[ERROR] save_float_to_tiff() failed.\n");
 	goto quit;
     }
     
     /* save using 16-bit */
-    make_output_filename(filename.cstr(), "sky-lv",
-			 "16bit", &out_filename);
+    make_tiff_filename(filename.cstr(), "sky-lv",
+		       "16bit", &out_filename);
     sio.printf("Writing '%s' ", out_filename.cstr());
     if ( flag_dither == true ) sio.printf("using dither ...\n");
     else sio.printf("NOT using dither ...\n");
-    if ( write_float_to_tiff48(image_buf, icc_buf, NULL,
+    if ( save_float_to_tiff48(image_buf, icc_buf, NULL,
 		       0.0, 65535.0, flag_dither, out_filename.cstr()) < 0 ) {
-	sio.eprintf("[ERROR] write_float_to_tiff48() failed.\n");
+	sio.eprintf("[ERROR] save_float_to_tiff48() failed.\n");
 	goto quit;
     }
 
@@ -464,8 +457,3 @@ int main( int argc, char *argv[] )
  quit:
     return return_status;
 }
-
-
-#include "read_tiff24or48.cc"
-#include "write_float_to_tiff48.cc"
-#include "write_float_to_tiff.cc"

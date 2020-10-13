@@ -9,20 +9,14 @@
 #include <sli/mdarray_statistics.h>
 #include <eggx.h>
 #include <unistd.h>
+
+#include "tiff_funcs.h"
+#include "display_image.h"
+#include "gui_base.h"
+#include "loupe_funcs.h"
+
 using namespace sli;
 
-const double Contrast_scale = 2.0;
-
-#include "read_tiff24or48_to_float.h"
-#include "write_float_to_tiff48.h"
-#include "write_float_to_tiff.h"
-#include "get_bin_factor_for_display.c"
-#include "load_display_params.cc"
-#include "save_display_params.cc"
-#include "load_sigclip_params.cc"
-#include "save_sigclip_params.cc"
-#include "make_output_filename.cc"
-#include "icc_srgb_profile.c"
 
 /**
  * @file   stack_images.cc
@@ -32,14 +26,49 @@ const double Contrast_scale = 2.0;
 
 const char *Refframe_conffile = "refframe.txt";
 
-const int Font_y_off = 3;
-const int Font_margin = 2;
-static int Fontsize = 14;
-#include "set_fontsize.c"
-#include "command_window.c"
-#include "display_file_list.cc"
-#include "display_image.cc"
 
+static int load_sigclip_params( const char *filename,
+			int *count_sigma_clip_p, int sigma_rgb[], 
+			bool *std_sigma_clip_p, bool *comet_sigma_clip_p )
+{
+    int return_status = -1;
+    stdstreamio sio, f_in;
+    tstring line;
+    if ( f_in.open("r", filename) < 0 ) {
+	goto quit;
+    }
+    line = f_in.getline();
+    line.trim();
+    if ( 0 < line.length() ) {
+	tarray_tstring elms;
+	elms.split(line.cstr()," ",false);
+	if ( elms.length() == 6 ) {
+	    int v;
+	    v = elms[0].atoi();
+	    if ( v < 0 ) v = 0;
+	    *count_sigma_clip_p = v;
+
+	    sigma_rgb[0] = elms[1].atoi();
+	    if ( sigma_rgb[0] < 0 ) sigma_rgb[0] = 0;
+	    sigma_rgb[1] = elms[2].atoi();
+	    if ( sigma_rgb[1] < 0 ) sigma_rgb[1] = 0;
+	    sigma_rgb[2] = elms[3].atoi();
+	    if ( sigma_rgb[2] < 0 ) sigma_rgb[2] = 0;
+
+	    v = elms[4].atoi();
+	    if ( v != 0 ) *std_sigma_clip_p = true;
+	    else *std_sigma_clip_p = false;
+
+	    v = elms[5].atoi();
+	    if ( v != 0 ) *comet_sigma_clip_p = true;
+	    else *comet_sigma_clip_p = false;
+	}
+    }
+    f_in.close();
+    return_status = 0;
+ quit:
+    return return_status;
+}
 
 static int get_offset_filename( const char *target_filename,
 				tstring *ret_filename )
@@ -58,6 +87,25 @@ static int get_offset_filename( const char *target_filename,
     return 0;
 }
 
+static int save_sigclip_params( const char *filename,
+				int count_sigma_clip, const int sigma_rgb[],
+				bool std_sigma_clip, bool comet_sigma_clip )
+{
+    int return_status = -1;
+    stdstreamio sio, f_out;
+    if ( f_out.open("w", filename) < 0 ) {
+	sio.eprintf("[ERROR] Cannot write data to %s\n", filename);
+	goto quit;
+    }
+    f_out.printf("%d %d %d %d %d %d\n",
+		 count_sigma_clip,
+		 sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
+		 (int)std_sigma_clip, (int)comet_sigma_clip);
+    f_out.close();
+    return_status = 0;
+ quit:
+    return return_status;
+}
 
 static int read_offset_file( const tarray_tstring &filenames, int sel_file_id,
 			     long *ret_offset_x, long *ret_offset_y )
@@ -139,9 +187,9 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 
     /* load reference ... needs for ICC data */
     sio.printf("Stacking [%s]\n", filenames[ref_file_id].cstr());
-    if ( read_tiff24or48_to_float(filenames[ref_file_id].cstr(), 65536.0,
-				  &img_buf, NULL, &icc_buf, NULL) < 0 ) {
-	sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+    if ( load_tiff_into_float(filenames[ref_file_id].cstr(), 65536.0,
+			      &img_buf, NULL, &icc_buf, NULL) < 0 ) {
+	sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 	goto quit;
     }
 
@@ -184,9 +232,9 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     for ( i=0 ; i < filenames.length() ; i++ ) {
         if ( flg_saved[i] == true ) {
 	    sio.printf("Stacking [%s]\n", filenames[i].cstr());
-	    if ( read_tiff24or48_to_float(filenames[i].cstr(), 65536.0,
-					  &img_buf, NULL, NULL, NULL) < 0 ) {
-		sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+	    if ( load_tiff_into_float(filenames[i].cstr(), 65536.0,
+				      &img_buf, NULL, NULL, NULL) < 0 ) {
+		sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 	    }
 	    else {
 		//double max_val;
@@ -290,9 +338,9 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 	for ( i=0 ; i < filenames.length() ; i++ ) {
 	    if ( (int)i == ref_file_id || flg_saved[i] == true ) {
 		sio.printf("Stacking with Sigma-Clipping [%s]\n", filenames[i].cstr());
-		if ( read_tiff24or48_to_float(filenames[i].cstr(), 65536.0,
-					      &img_buf, NULL, NULL, NULL) < 0 ) {
-		    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+		if ( load_tiff_into_float(filenames[i].cstr(), 65536.0,
+					  &img_buf, NULL, NULL, NULL) < 0 ) {
+		    sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 		}
 	        else {
 		    unsigned char *p5 = flag_buf.array_ptr();
@@ -415,25 +463,25 @@ static int do_stack_and_save( const tarray_tstring &filenames,
     appended_str.printf("+%zdframes_stacked", n_plus);
 
     /* save using float */
-    make_output_filename(filenames[ref_file_id].cstr(), appended_str.cstr(),
-			 "float", &out_filename);
+    make_tiff_filename(filenames[ref_file_id].cstr(), appended_str.cstr(),
+		       "float", &out_filename);
     sio.printf("Writing '%s' ...\n", out_filename.cstr());
-    if ( write_float_to_tiff(*stacked_buf_result_ptr, icc_buf, NULL, 
-			     65536.0, out_filename.cstr()) < 0 ) {
-	sio.eprintf("[ERROR] write_float_to_tiff() failed.\n");
+    if ( save_float_to_tiff(*stacked_buf_result_ptr, icc_buf, NULL, 
+			    65536.0, out_filename.cstr()) < 0 ) {
+	sio.eprintf("[ERROR] save_float_to_tiff() failed.\n");
 	goto quit;
     }
     
     /* save using 16-bit */
-    make_output_filename(filenames[ref_file_id].cstr(), appended_str.cstr(),
-			 "16bit", &out_filename);
+    make_tiff_filename(filenames[ref_file_id].cstr(), appended_str.cstr(),
+		       "16bit", &out_filename);
     sio.printf("Writing '%s' ", out_filename.cstr());
     if ( flag_dither == true ) sio.printf("using dither ...\n");
     else sio.printf("NOT using dither ...\n");
     sio.printf("[INFO] scale will be changed\n");
-    if ( write_float_to_tiff48(*stacked_buf_result_ptr, icc_buf, NULL,
+    if ( save_float_to_tiff48(*stacked_buf_result_ptr, icc_buf, NULL,
 			    0.0, 0.0, flag_dither, out_filename.cstr()) < 0 ) {
-	sio.eprintf("[ERROR] write_float_to_tiff48() failed.\n");
+	sio.eprintf("[ERROR] save_float_to_tiff48() failed.\n");
 	goto quit;
     }
 #endif
@@ -475,27 +523,29 @@ const command_list Cmd_list[] = {
         {CMD_CONT_G,            "Green Contrast +/-        [g][G]"},
 #define CMD_CONT_B 15
         {CMD_CONT_B,            "Blue Contrast +/-         [b][B]"},
-#define CMD_SAVE 16
+#define CMD_LOUPE_ZOOM 16
+        {CMD_LOUPE_ZOOM,        "Zoom factor of loupe +/-  [l][L]"},
+#define CMD_SAVE 17
         {CMD_SAVE,              "Save Offset Info          [Enter]"},
-#define CMD_DELETE 17
+#define CMD_DELETE 18
         {CMD_DELETE,            "Delete Offset Info        [Del]"},
-#define CMD_CLR_OFF 18
+#define CMD_CLR_OFF 19
         {CMD_CLR_OFF,           "Clear Currnt Offset       [0]"},
-#define CMD_SIGCLIP_CNT_PM 19
+#define CMD_SIGCLIP_CNT_PM 20
         {CMD_SIGCLIP_CNT_PM,    "N iterations Sig-Clip +/- [i][I]"},
-#define CMD_SIGCLIP_PM 20
+#define CMD_SIGCLIP_PM 21
         {CMD_SIGCLIP_PM,        "Val of Sigma-Clip +/-     [v][V]"},
-#define CMD_SIGCLIP_SKYLV 21
+#define CMD_SIGCLIP_SKYLV 22
         {CMD_SIGCLIP_SKYLV,     "Sky-lv Sigma-Clip on/off  [s]"},
-#define CMD_SIGCLIP_COMET 22
+#define CMD_SIGCLIP_COMET 23
         {CMD_SIGCLIP_COMET,     "Comet Sigma-Clip on/off   [m]"},
-#define CMD_DITHER 23
+#define CMD_DITHER 24
         {CMD_DITHER,            "Dither on/off for saving  [d]"},
-#define CMD_STACK 24
+#define CMD_STACK 25
         {CMD_STACK,             "Start Stacking"},
-#define CMD_STACK_SILENT 25
+#define CMD_STACK_SILENT 26
         {CMD_STACK_SILENT,      "Start Stacking without preview"},
-#define CMD_EXIT 26
+#define CMD_EXIT 27
         {CMD_EXIT,              "Exit                     [q][ESC]"},
         {0, NULL}		/* EOL */
 };
@@ -513,11 +563,14 @@ int main( int argc, char *argv[] )
     int sel_file_id = -1;
     
     command_win command_win_rec;
+    size_t max_len_menu_string;
     int win_filesel, win_image;
     
     mdarray_float ref_img_buf(false);	/* buffer for reference image */
     mdarray_float img_buf(false);	/* buffer for target */
+    mdarray loupe_buf(UCHAR_ZT,false);	/* buffer for loupe */
     mdarray_uchar tmp_buf(false);	/* tmp buffer for displaying */
+    mdarray_uchar tmp_buf_loupe(false);	/* tmp buffer for displaying */
 
     mdarray_float img_display(false);	/* buffer for displaying image */
 
@@ -525,6 +578,11 @@ int main( int argc, char *argv[] )
     int display_ch = 0;			/* 0=RGB 1=R 2=G 3=B */
     int display_bin = 1;		/* binning factor for display */
     int contrast_rgb[3] = {8, 8, 8};	/* contrast for display */
+
+    int loupe_height = 220;
+    int loupe_zoom = 7;
+    int loupe_x = Loupe_pos_out;
+    int loupe_y = Loupe_pos_out;
 
     int count_sigma_clip = 0;
     bool skylv_sigma_clip = true;
@@ -624,16 +682,22 @@ int main( int argc, char *argv[] )
     set_fontsize();
     
     /* command window */
+    
+    get_command_list_info(Cmd_list, &max_len_menu_string);
+    loupe_height = (get_fontsize() / 2) * max_len_menu_string;
 
-    command_win_rec = gopen_command_window( Cmd_list, 0 );
+    command_win_rec = gopen_command_window( Cmd_list,
+      get_font_margin() + 2*get_fontsize() + get_font_margin() + loupe_height);
+
+    loupe_buf.resize_3d(command_win_rec.width, loupe_height, 3);
     
     /* file selector */
     
-    win_filesel = gopen((Fontsize/2) * (refframe.length() + 6 + 4),
-			Fontsize * (filenames.length()));
-    gsetbgcolor(win_filesel,"#404040");
-    gclr(win_filesel);
-    winname(win_filesel, "File Selector");
+    win_filesel = gopen_file_selector(filenames, true);
+    if ( win_filesel < 0 ) {
+        sio.eprintf("[ERROR] gopen_file_selector() failed.\n");
+	goto quit;
+    }
     
     display_file_list( win_filesel, filenames, -1, false,
 		       ref_file_id, flg_saved.array_ptr() );
@@ -641,11 +705,14 @@ int main( int argc, char *argv[] )
     /* image viewer */
 
     sio.printf("Open: %s\n", filenames[ref_file_id].cstr());
-    if ( read_tiff24or48_to_float(filenames[ref_file_id].cstr(), 65536.0,
-				  &ref_img_buf, NULL, NULL, NULL) < 0 ) {
-        sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+    if ( load_tiff_into_float(filenames[ref_file_id].cstr(), 65536.0,
+			      &ref_img_buf, NULL, NULL, NULL) < 0 ) {
+        sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 	goto quit;
     }
+    /* for loupe */
+    img_display.resize(ref_img_buf);
+    img_display.paste(ref_img_buf);
 
     display_bin = get_bin_factor_for_display(ref_img_buf.x_length(),
 					     ref_img_buf.y_length(), true);
@@ -690,6 +757,7 @@ int main( int argc, char *argv[] )
 
         bool refresh_list = false;
         int refresh_image = 0;		/* 1:display only  2:both */
+	int refresh_loupe = 0;
 	bool refresh_winsize = false;
         bool refresh_winname = false;
 	bool save_offset = false;
@@ -697,72 +765,16 @@ int main( int argc, char *argv[] )
 
 	int f_id = -1;
 	int cmd_id = -1;
-	bool flag_file_selector = false;
 	
         /* waiting an event */
-        ev_win = eggx_ggetxpress(&ev_type,&ev_btn,&ev_x,&ev_y);
-
-	/*
-	 *  Check file selector
-	 */
-	if ( ev_type == ButtonPress && ev_btn == 1 &&
-	     ev_win == win_filesel ) {
-	    flag_file_selector = true;
-	    f_id = ev_y / Fontsize;
-	}
-	else if ( ev_type == KeyPress && ev_btn == 6 /* PageDown */ ) {
-	    flag_file_selector = true;
-	    f_id = sel_file_id + 1;
-	    if ( f_id == ref_file_id ) f_id ++;
-	}
-	else if ( ev_type == KeyPress && ev_btn == 2 /* PageUp */ ) {
-	    flag_file_selector = true;
-	    f_id = sel_file_id - 1;
-	    if ( f_id == ref_file_id ) f_id --;
-	}
-	
-	if ( f_id != ref_file_id &&
-	     0 <= f_id && (size_t)f_id < filenames.length() ) {
-
-	    display_file_list( win_filesel, filenames, f_id, true,
-			       ref_file_id, flg_saved.array_ptr() );
-	    
-	    sio.printf("Open: %s\n", filenames[f_id].cstr());
-	    img_display.init(false);	/* save memory ... */
-		    
-	    if ( read_tiff24or48_to_float(filenames[f_id].cstr(), 65536.0,
-					  &img_buf, NULL, NULL, NULL) < 0 ) {
-	        sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
-		sel_file_id = -1;
-	    }
-	    else {
-
-		sel_file_id = f_id;
-		//sio.printf("%ld\n", sel_file_id);
-
-		if ( flg_saved[sel_file_id] == true ) {
-		    if ( read_offset_file(filenames, sel_file_id,
-					  &offset_x, &offset_y) < 0 ) {
-			sio.eprintf("[ERROR] read_offset_file() failed.\n");
-		    }
-		}
-		if ( display_type == 1 ) display_type = 0;
-
-		refresh_image = 2;
-		refresh_list = true;
-
-	    }
-	}
+        ev_win = eggx_ggetevent(&ev_type,&ev_btn,&ev_x,&ev_y);
 
 	/*
 	 *  Check command window
 	 */
 	
-	if ( flag_file_selector == true ) {
-	    /* NOP */
-	}
-	else if ( ev_type == ButtonPress && 1 <= ev_btn && ev_btn <= 3 &&
-		  ev_win == command_win_rec.win_id ) {
+	if ( ev_type == ButtonPress && 1 <= ev_btn && ev_btn <= 3 &&
+	     ev_win == command_win_rec.win_id ) {
 	    cmd_id = 1 + ev_y / command_win_rec.cell_height;
 	}
 	else if ( ev_type == KeyPress ) {
@@ -820,6 +832,14 @@ int main( int argc, char *argv[] )
 		cmd_id = CMD_CONT_B;
 		ev_btn = 3;
 	    }
+	    else if ( ev_btn == 'l' ) {
+		cmd_id = CMD_LOUPE_ZOOM;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'L' ) {
+		cmd_id = CMD_LOUPE_ZOOM;
+		ev_btn = 3;
+	    }
 	    else if ( ev_btn == 'i' ) {
 		cmd_id = CMD_SIGCLIP_CNT_PM;
 		ev_btn = 1;
@@ -870,9 +890,9 @@ int main( int argc, char *argv[] )
 	    }
 	    if ( 0 <= sel_file_id ) {
 		/* reload */
-		if ( read_tiff24or48_to_float(filenames[sel_file_id].cstr(),
+		if ( load_tiff_into_float(filenames[sel_file_id].cstr(),
 				   65536.0, &img_buf, NULL, NULL, NULL) < 0 ) {
-		    sio.eprintf("[ERROR] read_tiff24or48_to_float() failed\n");
+		    sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 		    sel_file_id = -1;
 		}
 	    }
@@ -895,7 +915,7 @@ int main( int argc, char *argv[] )
 	}
 	else if ( cmd_id == CMD_ZOOM && ev_btn == 1 ) {
 	    if ( minus_binning_with_limit(&display_bin,
-		  img_buf.x_length(), img_buf.y_length()) == true ) {
+		  ref_img_buf.x_length(), ref_img_buf.y_length()) == true ) {
 		refresh_image = 1;
 		refresh_winsize = true;
 	    }
@@ -965,6 +985,18 @@ int main( int argc, char *argv[] )
 		refresh_image = 1;
 	    }
 	}
+	else if ( cmd_id == CMD_LOUPE_ZOOM && ev_btn == 1 ) {
+	    if ( loupe_zoom < loupe_height / 2 ) {
+		loupe_zoom += 2;
+		refresh_loupe = 1;
+	    }
+	}
+	else if ( cmd_id == CMD_LOUPE_ZOOM && ev_btn == 3 ) {
+	    if ( 4 < loupe_zoom ) {
+		loupe_zoom -= 2;
+		refresh_loupe = 1;
+	    }
+	}
 	else if ( cmd_id == CMD_SIGCLIP_CNT_PM && ev_btn == 1 ) {
 	    count_sigma_clip ++;
 	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
@@ -1007,6 +1039,17 @@ int main( int argc, char *argv[] )
 	    refresh_winname = true;
 	}
 
+	if ( ev_win == win_image &&
+	     ( ev_type == MotionNotify || 
+	       ev_type == EnterNotify || ev_type == LeaveNotify ) ) {
+	    if ( ev_type == LeaveNotify ) {
+		ev_x = Loupe_pos_out;
+		ev_y = Loupe_pos_out;
+	    }
+	    cmd_id = 0;
+	    refresh_loupe = 2;
+	}
+
 	/*
 	 * Only when *SELECTED*
 	 */
@@ -1033,32 +1076,39 @@ int main( int argc, char *argv[] )
 	    }
 	    else if ( ev_type == ButtonPress ) {
 		if ( ev_win == win_image && ev_btn == 3 /* right btn */ ) {
-		    offset_x = ev_x - (img_buf.x_length() / 2);
-		    offset_y = ev_y - (img_buf.y_length() / 2);
+		    offset_x = ev_x - (ref_img_buf.x_length() / 2);
+		    offset_y = ev_y - (ref_img_buf.y_length() / 2);
+		    cmd_id = 0;
 		    refresh_image = 2;
 		}
 	    }
+	    /* */
 	    else if ( ev_type == KeyPress ) {
 		//sio.printf("key = %d\n", ev_btn);
 		if ( ev_btn == 28 ) {		/* Right key */
 		    offset_x ++;
+		    cmd_id = 0;
 		    refresh_image = 2;
 		}
 		else if ( ev_btn == 29 ) {	/* Left key */
 		    offset_x --;
+		    cmd_id = 0;
 		    refresh_image = 2;
 		}
-		else if ( ev_btn == 30 ) {	/* Up key */
+		else if ( ev_btn == 30 && ev_win != win_filesel ) { /* Up */
 		    offset_y --;
+		    cmd_id = 0;
 		    refresh_image = 2;
 		}
-		else if ( ev_btn == 31 ) {	/* Down key */
+		else if ( ev_btn == 31 && ev_win != win_filesel ) { /* Down */
 		    offset_y ++;
+		    cmd_id = 0;
 		    refresh_image = 2;
 		}
 		else if ( ev_btn == ' ' ) {
 		    if ( display_type == 0 ) display_type = 1;
 		    else display_type = 0;
+		    cmd_id = 0;
 		    refresh_image = 2;
 		}
 	    }
@@ -1094,9 +1144,70 @@ int main( int argc, char *argv[] )
 
 	}
 
+	/*
+	 *  Check file selector
+	 */
+	if ( 0 <= cmd_id ) {
+	    /* NOP */
+	}
+	else if ( ev_type == ButtonPress && ev_btn == 1 &&
+	     ev_win == win_filesel ) {
+	    f_id = ev_y / get_fontsize();
+	}
+	else if ( ev_type == KeyPress && ev_btn == 6 /* PageDown */ ) {
+	    f_id = sel_file_id + 1;
+	    if ( f_id == ref_file_id ) f_id ++;
+	}
+	else if ( ev_type == KeyPress && ev_btn == 2 /* PageUp */ ) {
+	    f_id = sel_file_id - 1;
+	    if ( f_id == ref_file_id ) f_id --;
+	}
+	else if ( ev_type == KeyPress && ev_btn == 31 /* Down key */ ) {
+	    f_id = sel_file_id + 1;
+	    if ( f_id == ref_file_id ) f_id ++;
+	}
+	else if ( ev_type == KeyPress && ev_btn == 30 /* Up key */ ) {
+	    f_id = sel_file_id - 1;
+	    if ( f_id == ref_file_id ) f_id --;
+	}
+	
+	if ( f_id != ref_file_id &&
+	     0 <= f_id && (size_t)f_id < filenames.length() ) {
+
+	    display_file_list( win_filesel, filenames, f_id, true,
+			       ref_file_id, flg_saved.array_ptr() );
+	    
+	    sio.printf("Open: %s\n", filenames[f_id].cstr());
+	    img_display.init(false);	/* save memory ... */
+		    
+	    if ( load_tiff_into_float(filenames[f_id].cstr(), 65536.0,
+				      &img_buf, NULL, NULL, NULL) < 0 ) {
+	        sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
+		sel_file_id = -1;
+	    }
+	    else {
+
+		sel_file_id = f_id;
+		//sio.printf("%ld\n", sel_file_id);
+
+		if ( flg_saved[sel_file_id] == true ) {
+		    if ( read_offset_file(filenames, sel_file_id,
+					  &offset_x, &offset_y) < 0 ) {
+			sio.eprintf("[ERROR] read_offset_file() failed.\n");
+		    }
+		}
+		if ( display_type == 1 ) display_type = 0;
+
+		refresh_image = 2;
+		refresh_list = true;
+
+	    }
+	}
+
 	/* Update window */
 	    
 	if ( refresh_image != 0 ) {
+	    const int tiff_szt = 2;
 	    if ( 2 <= display_type ) {	/* Residual */
 		if ( 1 < refresh_image || img_display.length() == 0 ) {
 		    //double res_total;
@@ -1108,7 +1219,7 @@ int main( int argc, char *argv[] )
 		    else if ( display_type == 4 ) img_display *= 4.0;
 		    else if ( display_type == 5 ) img_display *= 8.0;
 		}
-		display_image(win_image, 0, 0, img_display, 2,
+		display_image(win_image, 0, 0, img_display, tiff_szt,
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Residual  offset = ( %ld, %ld )  "
@@ -1119,7 +1230,7 @@ int main( int argc, char *argv[] )
 		//img_display.init(false);
 	    }
 	    else if ( display_type == 1 ) {	/* Reference */
-		display_image(win_image, 0, 0, ref_img_buf, 2,
+		display_image(win_image, 0, 0, ref_img_buf, tiff_szt,
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Reference  "
@@ -1135,7 +1246,7 @@ int main( int argc, char *argv[] )
 		    img_display.clean();
 		    img_display.paste(img_buf, offset_x, offset_y, 0);
 		}
-		display_image(win_image, 0, 0, img_display, 2,
+		display_image(win_image, 0, 0, img_display, tiff_szt,
 			      display_bin, display_ch,
 			      contrast_rgb, refresh_winsize, &tmp_buf);
 		winname(win_image, "Target  offset = ( %ld, %ld )  "
@@ -1155,6 +1266,20 @@ int main( int argc, char *argv[] )
 		(int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
 	}
 
+	if ( refresh_loupe != 0 || refresh_image != 0 ) {
+	    const int tiff_szt = 2;
+	    const int gcfnc = GXcopy;
+	    const mdarray_float *disp_img_p;
+	    if ( display_type == 1 ) disp_img_p = &ref_img_buf; /* reference */
+	    else disp_img_p = &img_display;
+	    display_loupe( command_win_rec.win_id,
+			   0, command_win_rec.reserved_y0,
+			   refresh_loupe, *disp_img_p, tiff_szt, ev_x, ev_y,
+			   loupe_zoom, contrast_rgb, display_ch,
+			   gcfnc, &loupe_buf, 
+			   &loupe_x, &loupe_y, &tmp_buf_loupe);
+	}
+	
 	if ( refresh_list == true ) {
 
 	    display_file_list( win_filesel, filenames, sel_file_id, false,
@@ -1169,7 +1294,3 @@ int main( int argc, char *argv[] )
  quit:
     return return_status;
 }
-
-#include "read_tiff24or48_to_float.cc"
-#include "write_float_to_tiff48.cc"
-#include "write_float_to_tiff.cc"

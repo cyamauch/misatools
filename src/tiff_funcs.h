@@ -1,4 +1,58 @@
-static const unsigned char Icc_srgb_profile[] = {
+#ifndef _TIFF_FUNCS_H
+#define _TIFF_FUNCS_H 1
+
+#include <sli/tstring.h>
+#include <sli/mdarray.h>
+
+/* test suffix of filename and try opening file with readonly */
+bool test_tiff_file( const char *file );
+
+int make_tiff_filename( const char *_filename_in,
+		 const char *appended_str,
+		 const char *bit_str,	/* "8bit" , "16bit" or "float" */
+		 sli::tstring *filename_out );
+
+int load_tiff( const char *filename_in,
+    sli::mdarray *ret_img_buf, int *ret_sztype, sli::mdarray_uchar *ret_icc_buf,
+    float camera_calibration1_ret[] );
+
+int load_tiff_into_float( const char *filename_in, double scale,
+			  sli::mdarray_float *ret_img_buf, int *ret_sztype,
+			  sli::mdarray_uchar *ret_icc_buf,
+			  float camera_calibration1_ret[] );
+
+int load_tiff_into_separate_buffer( const char *filename_in,
+	sli::mdarray *ret_img_r_buf, sli::mdarray *ret_img_g_buf,
+	sli::mdarray *ret_img_b_buf,
+	int *ret_sztype, sli::mdarray_uchar *ret_icc_buf,
+	float camera_calibration1_ret[] );
+
+int save_tiff( const sli::mdarray &img_buf_in, int sztype,
+	       const sli::mdarray_uchar &icc_buf_in,
+	       const float camera_calibration1[],	/* [12] */
+	       const char *filename_out );
+
+int save_float_to_tiff( const sli::mdarray &img_buf_in,
+			const sli::mdarray_uchar &icc_buf_in,
+			const float camera_calibration1[],
+			double scale,
+			const char *filename_out );
+
+int save_float_to_tiff48( const sli::mdarray &img_buf_in,
+			  const sli::mdarray_uchar &icc_buf_in,
+			  const float camera_calibration1[],
+			  double min_val, double max_val,
+			  bool dither,
+			  const char *filename_out );
+
+int save_float_to_tiff24or48( const sli::mdarray_float &img_buf_in,
+			      const sli::mdarray_uchar &icc_buf_in,
+			      const float camera_calibration1[],     /* [12] */
+			      double min_val, double max_val,
+			      bool dither,
+			      const char *filename_out );
+
+const unsigned char Icc_srgb_profile[] = {
 0x00,0x00,0x0c,0x48,0x4c,0x69,0x6e,0x6f,
 0x02,0x10,0x00,0x00,0x6d,0x6e,0x74,0x72,
 0x52,0x47,0x42,0x20,0x58,0x59,0x5a,0x20,
@@ -393,3 +447,5 @@ static const unsigned char Icc_srgb_profile[] = {
 0xfc,0x07,0xfc,0x98,0xfd,0x29,0xfd,0xba,
 0xfe,0x4b,0xfe,0xdc,0xff,0x6d,0xff,0xff
 };
+
+#endif
