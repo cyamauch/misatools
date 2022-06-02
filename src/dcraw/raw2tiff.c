@@ -14,7 +14,7 @@
 #include <limits.h>
 #include <tiffio.h>
 
-#include "../icc_srgb_profile.c"
+#include "icc_srgb_profile.c"
 #include "adjust_crop_prms.c"
 
 const int Matrix_RG_GB = 0;
