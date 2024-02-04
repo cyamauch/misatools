@@ -716,7 +716,7 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
         const size_t n_elem_to_read = width * 2; /* 2 lines */
         uint32 j, num_j, j_in;
         long j_out;		/* should be signed integer! */
-	uint32 v_r, v_g, v_b;
+	uint32 v_r, v_g, v_b, v_mono;
 	num_j = width / 2;
 	if ( i < num_i ) {
 	    if ( fread(strip_buf_in, 1, sizeof(uint16) * n_elem_to_read, pp)
@@ -923,15 +923,19 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 		  v_g <<= 8;
 		  v_g |= strip_buf_in[j_in]; j_in ++;
 		  /* */
-		  v_r <<= shift_for_scale_r;
-		  v_g <<= shift_for_scale_g;
+		  v_mono = v_r;  v_mono <<= shift_for_scale_r;
+		  stripe_ptr[1][j_out] = v_mono;  j_out ++;
+		  v_mono = v_r;  v_mono <<= shift_for_scale_g;
+		  stripe_ptr[1][j_out] = v_mono;  j_out ++;
+		  v_mono = v_r;  v_mono <<= shift_for_scale_b;
+		  stripe_ptr[1][j_out] = v_mono;  j_out ++;
 		  /* */
-		  stripe_ptr[1][j_out] = v_r;  j_out ++;
-		  stripe_ptr[1][j_out] = v_r;  j_out ++;
-		  stripe_ptr[1][j_out] = v_r;  j_out ++;
-		  stripe_ptr[1][j_out] = v_g;  j_out ++;
-		  stripe_ptr[1][j_out] = v_g;  j_out ++;
-		  stripe_ptr[1][j_out] = v_g;  j_out ++;
+		  v_mono = v_g;  v_mono <<= shift_for_scale_r;
+		  stripe_ptr[1][j_out] = v_mono;  j_out ++;
+		  v_mono = v_g;  v_mono <<= shift_for_scale_g;
+		  stripe_ptr[1][j_out] = v_mono;  j_out ++;
+		  v_mono = v_g;  v_mono <<= shift_for_scale_b;
+		  stripe_ptr[1][j_out] = v_mono;  j_out ++;
 		}
 		/*** lower line ***/
 		j_in = sizeof(uint16) * width;
@@ -943,15 +947,19 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 		  v_b <<= 8;
 		  v_b |= strip_buf_in[j_in]; j_in ++;
 		  /* */
-		  v_b <<= shift_for_scale_b;
-		  v_g <<= shift_for_scale_g;
+		  v_mono = v_g;  v_mono <<= shift_for_scale_r;
+		  stripe_ptr[2][j_out] = v_mono;  j_out ++;
+		  v_mono = v_g;  v_mono <<= shift_for_scale_g;
+		  stripe_ptr[2][j_out] = v_mono;  j_out ++;
+		  v_mono = v_g;  v_mono <<= shift_for_scale_b;
+		  stripe_ptr[2][j_out] = v_mono;  j_out ++;
 		  /* */
-		  stripe_ptr[2][j_out] = v_g;  j_out ++;
-		  stripe_ptr[2][j_out] = v_g;  j_out ++;
-		  stripe_ptr[2][j_out] = v_g;  j_out ++;
-		  stripe_ptr[2][j_out] = v_b;  j_out ++;
-		  stripe_ptr[2][j_out] = v_b;  j_out ++;
-		  stripe_ptr[2][j_out] = v_b;  j_out ++;
+		  v_mono = v_b;  v_mono <<= shift_for_scale_r;
+		  stripe_ptr[2][j_out] = v_mono;  j_out ++;
+		  v_mono = v_b;  v_mono <<= shift_for_scale_g;
+		  stripe_ptr[2][j_out] = v_mono;  j_out ++;
+		  v_mono = v_b;  v_mono <<= shift_for_scale_b;
+		  stripe_ptr[2][j_out] = v_mono;  j_out ++;
 		}
 	    }
 	}
