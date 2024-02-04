@@ -86,8 +86,8 @@ static int get_fits_key_val( const char *line /* an 80-char string */,
 {
     int return_status = -1;
 
-    if ( 'a' <= line[0] && line[0] <= 'z' ||
-	 'A' <= line[0] && line[0] <= 'Z' || line[0] == '_' ) {
+    if ( ('a' <= line[0] && line[0] <= 'z') ||
+	 ('A' <= line[0] && line[0] <= 'Z') || line[0] == '_' ) {
 	size_t i, n0=0, n1=0, n2=0, n3=0;
 	for ( i=0 ; i < FITS_HEADER_RECORD_UNIT ; i++ ) {
 	    if ( n0 == 0 ) {
@@ -125,7 +125,6 @@ static int get_fits_key_val( const char *line /* an 80-char string */,
 	return_status = 0;
     }
 
- quit:
     return return_status;
 }
 

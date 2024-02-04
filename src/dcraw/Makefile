@@ -16,16 +16,16 @@ clean::
 CMD = gcc
 
 dcraw: dcraw.c
-	$(CMD) -o dcraw -O4 dcraw.c -lm -DNODEPS
+	$(CMD) -O4 dcraw.c -o dcraw -lm -DNODEPS
 
 raw2preview: raw2preview.c
-	$(CMD) -Wall -o raw2preview -O raw2preview.c -ltiff
+	$(CMD) -O -Wall -DUSE_SIMD raw2preview.c -o raw2preview -ltiff 
 
 raw2tiff: raw2tiff.c
-	$(CMD) -Wall -o raw2tiff -O raw2tiff.c -ltiff
+	$(CMD) -O -Wall -DUSE_SIMD raw2tiff.c -o raw2tiff -ltiff
 
 raw2deadpixels: raw2deadpixels.c
-	$(CMD) -Wall -o raw2deadpixels -O raw2deadpixels.c -lm
+	$(CMD) -O -Wall raw2deadpixels.c -o raw2deadpixels -lm
 
 install:: $(OBJS)
 	sh install-sh -m 755 $(OBJS) $(DESTDIR)$(BINDIR)
