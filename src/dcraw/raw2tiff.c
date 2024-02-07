@@ -130,7 +130,7 @@ static int get_fits_key_val( const char *line /* an 80-char string */,
 
 static int get_matrix_type_and_info_fits( const char *filename_in,
 	float basic_info5[], float daylight_mul[], float camera_mul[],
-	size_t fits_size_info[],   /* header-blk-len, bitpix, width, height */
+	size_t fits_size_info[],   /* hdr-blk-len, bitpix, width, height, nz */
 	float fits_pix_info[]	   /* bzero, bscale */ )
 {
     int return_status = -1;
@@ -145,6 +145,7 @@ static int get_matrix_type_and_info_fits( const char *filename_in,
     const char *str_naxis     = "NAXIS";
     const char *str_naxis1    = "NAXIS1";
     const char *str_naxis2    = "NAXIS2";
+    const char *str_naxis3    = "NAXIS3";
     const char *str_bzero     = "BZERO";
     const char *str_bscale    = "BSCALE";
     const char *str_bayerpat  = "BAYERPAT";
@@ -170,6 +171,7 @@ static int get_matrix_type_and_info_fits( const char *filename_in,
     fits_size_info[1] = 0;
     fits_size_info[2] = 0;
     fits_size_info[3] = 0;
+    fits_size_info[4] = 1;	/* n of z */
     fits_pix_info[0] = 0.0;
     fits_pix_info[1] = 1.0;	/* bscale */
     
@@ -182,6 +184,7 @@ static int get_matrix_type_and_info_fits( const char *filename_in,
 	if ( strcmp(key, str_bitpix) == 0 ) fits_size_info[1] = atol(val);
 	else if ( strcmp(key, str_naxis1) == 0 ) fits_size_info[2] = atol(val);
 	else if ( strcmp(key, str_naxis2) == 0 ) fits_size_info[3] = atol(val);
+	else if ( strcmp(key, str_naxis3) == 0 ) fits_size_info[4] = atol(val);
 	else if ( strcmp(key, str_bzero) == 0 ) fits_pix_info[0] = atof(val);
 	else if ( strcmp(key, str_bscale) == 0 ) fits_pix_info[1] = atof(val);
 	else if ( strcmp(key, str_bayerpat) == 0 ) {
@@ -189,7 +192,7 @@ static int get_matrix_type_and_info_fits( const char *filename_in,
 	    else if ( strncmp(val+1,"GRBG",4)==0 ) matrix_type = Matrix_GR_BG;
 	}
 	else if ( strcmp(key, str_naxis) == 0 ) {
-	    if ( atoi(val) != 2 ) goto quit;	/* ERROR */
+	    if ( atoi(val) < 2 || 3 < atoi(val) ) goto quit;	/* ERROR */
 	}
 	else if ( strcmp(key, str_end) == 0 ) break;
     }
@@ -207,7 +210,7 @@ static int get_matrix_type_and_info_fits( const char *filename_in,
 /* Get matrix type using dcraw */
 static int get_matrix_type_and_info_raw( const char *filename_in,
 	float basic_info5[], float daylight_mul[], float camera_mul[],
-	size_t fits_size_info[],   /* header-blk-len, bitpix, width, height */
+	size_t fits_size_info[],   /* hdr-blk-len, bitpix, width, height, nz */
 	float fits_pix_info[]	   /* bzero, bscale */ )
 {
     int return_status = -1;
@@ -248,6 +251,7 @@ static int get_matrix_type_and_info_raw( const char *filename_in,
     fits_size_info[1] = 0;
     fits_size_info[2] = 0;
     fits_size_info[3] = 0;
+    fits_size_info[4] = 0;
     fits_pix_info[0] = 0.0;
     fits_pix_info[1] = 0.0;
 
@@ -297,7 +301,7 @@ static int get_matrix_type_and_info_raw( const char *filename_in,
 /* Get matrix type and camera info */
 static int get_matrix_type_and_info( const char *filename_in,
 	float basic_info5[], float daylight_mul[], float camera_mul[],
-	size_t fits_size_info[],   /* header-blk-len, bitpix, width, height */
+	size_t fits_size_info[],   /* hdr-blk-len, bitpix, width, height, nz */
 	float fits_pix_info[]	   /* bzero, bscale */ )
 {
     int return_status = -1;
@@ -1032,13 +1036,157 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 }
 
 /*
- * main function to convert raw to tiff 16-bit
+ *  e.g., 6000x4000 FITS RGB cube => 6000x4000 RGB tiff output
+ */
+static int rgbcube_to_full( const uint32 shift_for_scale[],
+			  FILE *pp,		       /* input stream     */
+			  TIFF *tiff_out,	       /* output TIFF inst */
+			  uint32 width, uint32 height, /* w/h of output    */
+			  uint16 byps, uint16 spp,     /* 2 and 3          */
+			  uint32 x_out, uint32 y_out,  /* actual crop area */
+			  uint32 width_out, uint32 height_out,
+			  float fits_pix_info[], bool byte_swap )
+{
+    const float fits_bzero = fits_pix_info[0];
+    const float fits_bscale = fits_pix_info[1];
+    
+    int return_status = -1;
+
+    uint32 i, line_cnt_out;
+    unsigned char *strip_buf_tmp = NULL;	/* to read 1 lines  */
+    unsigned char *cube_buf_in = NULL;		/* to read all  */
+    const uint16 *img_buf_ptr[3];
+    size_t off_cube_buf_in;
+    uint16 *strip_buf_out = NULL;		/* buffer for final output */
+    
+    if ( byps != 2 ) {
+        fprintf(stderr,"[ERROR] 'byps' should be 2\n");
+	goto quit;
+    }
+    if ( spp != 3 ) {
+        fprintf(stderr,"[ERROR] 'spp' should be 3\n");
+	goto quit;
+    }
+
+    strip_buf_tmp
+	= (unsigned char *)malloc(sizeof(uint16) * width * 1);
+    if ( strip_buf_tmp == NULL ) {
+        fprintf(stderr,"[ERROR] malloc() failed\n");
+	goto quit;
+    }
+
+    /* allocate buffer for RGB cube */
+    cube_buf_in
+	= (unsigned char *)malloc(sizeof(uint16) * width * height_out * 3);
+    if ( cube_buf_in == NULL ) {
+        fprintf(stderr,"[ERROR] malloc() failed\n");
+	goto quit;
+    }
+
+    strip_buf_out = (uint16 *)malloc(byps * spp * width_out);
+    if ( strip_buf_out == NULL ) {
+        fprintf(stderr,"[ERROR] malloc() failed\n");
+    	goto quit;
+    }
+
+    off_cube_buf_in = 0;
+    for ( i=0 ; i < 3 ; i++ ) {
+        const size_t n_elem_to_read = width;
+	uint32 j;
+
+	for ( j=0 ; j < y_out ; j++ ) {				/* skip */
+	    if ( fread(strip_buf_tmp, 1, sizeof(uint16) * n_elem_to_read, pp)
+		 != sizeof(uint16) * n_elem_to_read ) {
+	        fprintf(stderr,"[ERROR] fread() failed\n");
+		goto quit;
+	    }
+	}
+
+	for ( ; j < y_out + height_out ; j++ ) {     /* read y-cropping area */
+	    if ( fread(cube_buf_in + off_cube_buf_in, 1,
+		       sizeof(uint16) * n_elem_to_read, pp)
+		 != sizeof(uint16) * n_elem_to_read ) {
+	        fprintf(stderr,"[ERROR] fread() failed\n");
+		goto quit;
+	    }
+	    if ( byte_swap == true ) {
+		s_byteswap2(cube_buf_in + off_cube_buf_in, n_elem_to_read);
+		if ( 0.0 < fits_bscale ) {
+		    size_t ix;
+		    const int16 *pr
+			= (const int16 *)(cube_buf_in + off_cube_buf_in);
+		    uint16 *pw = (uint16 *)(cube_buf_in + off_cube_buf_in);
+		    for ( ix=0 ; ix < n_elem_to_read ; ix++ ) {
+			float val = 0.5 + fits_bzero + fits_bscale * pr[ix];
+			if ( val < 0.0 ) pw[ix] = (uint16)0;
+			else if ( 65535.0 < val ) pw[ix] = (uint16)65535;
+			else pw[ix] = (uint16)val;
+		    }
+		}
+	    }
+	    off_cube_buf_in += sizeof(uint16) * n_elem_to_read;
+	}
+
+	if ( i == 2 ) break;
+	
+	for ( ; j < height ; j++ ) {				/* skip */
+	    if ( fread(strip_buf_tmp, 1, sizeof(uint16) * n_elem_to_read, pp)
+		 != sizeof(uint16) * n_elem_to_read ) {
+	        fprintf(stderr,"[ERROR] fread() failed\n");
+		goto quit;
+	    }
+	}
+
+    }
+    
+    img_buf_ptr[0] = (const uint16 *)cube_buf_in;
+    img_buf_ptr[1] = img_buf_ptr[0] + (width * height_out);
+    img_buf_ptr[2] = img_buf_ptr[1] + (width * height_out);
+
+    /* */
+    line_cnt_out = 0;	/* out */
+    for ( i=0 ; i < height_out ; i++ ) {
+	size_t j;
+
+	for ( j=0 ; j < 3 ; j++ ) {
+	    size_t ix;
+	    uint32 k;
+	    ix = j;
+	    for ( k=0 ; k < width_out ; k++ ) {
+		strip_buf_out[ix] = img_buf_ptr[j][x_out + k];
+		strip_buf_out[ix] <<= shift_for_scale[j];
+		ix += 3;			/* out */
+	    }
+	    img_buf_ptr[j] += width;		/* in */
+	}
+
+	if ( TIFFWriteEncodedStrip(tiff_out, line_cnt_out,
+				   strip_buf_out,
+				   byps * spp * width_out) == 0 ) {
+	    fprintf(stderr,"[ERROR] TIFFWriteEncodedStrip() failed\n");
+	    goto quit;
+	}
+	line_cnt_out ++;
+	
+    }
+
+    return_status = 0;
+ quit:
+    if ( strip_buf_out != NULL ) free(strip_buf_out);
+    if ( cube_buf_in != NULL ) free(cube_buf_in);
+    if ( strip_buf_tmp != NULL ) free(strip_buf_tmp);
+
+    return return_status;
+}
+
+/*
+ * main function to convert RAW/FITS to tiff 16-bit
  */
 static int raw_to_tiff( const char *filename_in,
 			const char *deadpix_file,
 			const int bit_used[],
-			const long crop_prms[], /* for output image        */
-			int full_size_image,    /* 0:half-size 1:full-size */
+			const long crop_prms[], /* for output image */
+			bool half_size_image,   /* true: half-size */
 			int bayer_direct        /* non-0: do not solve bayer */)
 {
     int return_status = -1;
@@ -1068,21 +1216,28 @@ static int raw_to_tiff( const char *filename_in,
     float *daylight_multipliers = camera_calibration1 + 5;	/* [3] */
     float *camera_multipliers = camera_calibration1   + 5 + 3;	/* [4] */
 
-    size_t fits_size_info[4]	/* header-bkk-length, bitpix, width, height */
-		= {0,0,0,0};
+    size_t fits_size_info[5] /* header-blk-length, bitpix, width, height, nz */
+		= {0,0,0,0,0};
     float fits_pix_info[2]	/* bzero, bscale */
 		= {0.0, 0.0};
+
+    bool input_file_is_fits = false;
     
     if ( check_a_file(filename_in) < 0 ) {
         fprintf(stderr,"[ERROR] not found: %s\n",filename_in);
 	goto quit;	/* ERROR */
     }
 
+    /* get basic info from RAW/FITS file */
     bayer_matrix = get_matrix_type_and_info(
-		   filename_in, camera_basic_info,
-		   daylight_multipliers, camera_multipliers,
-		   fits_size_info, fits_pix_info);
+				   filename_in, camera_basic_info,
+				   daylight_multipliers, camera_multipliers,
+				   fits_size_info, fits_pix_info);
 
+    if ( 0 < fits_size_info[0] /* header-blk-length */ ) {
+	input_file_is_fits = true;
+    }
+    
     printf("[INFO] Used bit of R,G,B = [%d,%d,%d].  Bayer type = [%s]\n",
 	   bit_used[0],bit_used[1],bit_used[2], bayer_str[bayer_matrix]);
     
@@ -1091,7 +1246,7 @@ static int raw_to_tiff( const char *filename_in,
 	goto quit;	/* ERROR */
     }
 
-    if ( 0 < fits_size_info[0] /* header-blk-length */ ) {
+    if ( input_file_is_fits == true ) {
 	/* FITS */
 	char fits_rec[FITS_FILE_RECORD_UNIT];
 	size_t i;
@@ -1203,11 +1358,16 @@ static int raw_to_tiff( const char *filename_in,
 
     }
 
-    if ( full_size_image != 0 ) {	/* full size image */
+    if ( input_file_is_fits == true &&
+	 2 < fits_size_info[4] ) {		/* NAXIS3 == 3 */
 	width = _width;
 	height = _height;
     }
-    else {				/* half size image */
+    else if ( half_size_image == false ) {	/* full size image */
+	width = _width;
+	height = _height;
+    }
+    else {					/* half size image */
 	width = _width / 2;
 	height = _height / 2;
     }
@@ -1241,15 +1401,31 @@ static int raw_to_tiff( const char *filename_in,
     TIFFSetField(tiff_out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
     TIFFSetField(tiff_out, TIFFTAG_BITSPERSAMPLE, bps);
     TIFFSetField(tiff_out, TIFFTAG_SAMPLESPERPIXEL, spp);
+    TIFFSetField(tiff_out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
     TIFFSetField(tiff_out, TIFFTAG_ROWSPERSTRIP, (uint32)1);
 
-    TIFFSetField(tiff_out, TIFFTAG_CAMERACALIBRATION1, 12, camera_calibration1);
+    if ( input_file_is_fits == false ) {
+	TIFFSetField(tiff_out, TIFFTAG_CAMERACALIBRATION1,
+		     12, camera_calibration1);
+    }
     
     icc_prof_size = sizeof(Icc_srgb_profile);
     TIFFSetField(tiff_out, TIFFTAG_ICCPROFILE,
 		 icc_prof_size, Icc_srgb_profile);
 
-    if ( full_size_image != 0 ) {	/* full size image */
+    if ( input_file_is_fits == true &&
+	 2 < fits_size_info[4] ) {		/* NAXIS3 == 3 */
+        if ( rgbcube_to_full( shift_for_scale,
+			      pp, tiff_out,
+			      width, height,
+			      byps, spp,
+			      x_out, y_out, width_out, height_out,
+			      fits_pix_info, fits_byte_swap ) < 0 ) {
+	    fprintf(stderr,"[ERROR] rgbcube_to_full() failed\n");
+	    goto quit;
+	}
+    }
+    else if ( half_size_image == false ) {	/* full size image */
         if ( bayer_to_full( bayer_matrix, bayer_direct,
 			    shift_for_scale,
 			    pp, tiff_out,
@@ -1261,7 +1437,7 @@ static int raw_to_tiff( const char *filename_in,
 	  goto quit;
 	}
     }
-    else {				/* half size image */
+    else {					/* half size image */
         if ( bayer_to_half( bayer_matrix, bayer_direct,
 			    shift_for_scale,
 			    pp, tiff_out,
@@ -1291,7 +1467,7 @@ int main( int argc, char *argv[] )
 
     size_t arg_cnt, i;
     int bit_used[3] = {14,14,14};
-    int full_size_image = 0;
+    bool half_size_image = false;
     int bayer_direct = 0;
     long crop_prms[4] = {-1,-1,-1,-1};
     char deadpix_file[PATH_MAX] = {'\0'};
@@ -1303,22 +1479,23 @@ int main( int argc, char *argv[] )
         fprintf(stderr,"$ %s [-f] [-d] [-P file] [-c param] bit_used rawfile1 rawfile2 ...\n",argv[0]);
         fprintf(stderr,"$ %s [-f] [-d] [-P file] [-c param] bit_used_R,bit_used_G,bit_used_B rawfile1 ...\n",argv[0]);
 	fprintf(stderr,"\n");
-	fprintf(stderr,"-f ... Output full size images\n");
-	fprintf(stderr,"-d ... Do not demosaic bayer (with -f option)\n");
+	fprintf(stderr,"-h ... Output half size images (only for bayer input)\n");
+	fprintf(stderr,"-d ... Do not demosaic bayer (ignored with -h option)\n");
 	fprintf(stderr,"-m ... Monochrome mode (Do not demosaic bayer)\n");
 	fprintf(stderr,"-P file ... Fix the dead pixels listed in this file\n");
 	fprintf(stderr,"-c [x,y,]width,height ... Crop images. Center when x and y are omitted\n");
 	fprintf(stderr,"bit_used ... 9 to 16.  Set 14 for lossless 14-bit data\n");
         fprintf(stderr,"[EXAMPLE]\n");
         fprintf(stderr,"$ %s 13,14,13 DSC_0001.NEF DSC_0002.NEF DSC_0003.NEF\n", argv[0]);
+        fprintf(stderr,"$ %s 16 ASIImg_frame0001.fit ASIImg_frame0002.fit\n", argv[0]);
 	goto quit;
     }
 
     arg_cnt = 1;
     
     while ( arg_cnt < argc ) {
-        if ( strcmp(argv[arg_cnt],"-f") == 0 ) {
-	    full_size_image = 1;
+        if ( strcmp(argv[arg_cnt],"-h") == 0 ) {
+	    half_size_image = true;
 	    arg_cnt ++;
 	}
         else if ( strcmp(argv[arg_cnt],"-d") == 0 ) {
@@ -1371,7 +1548,7 @@ int main( int argc, char *argv[] )
     while ( arg_cnt < argc ) {
         if ( raw_to_tiff( argv[arg_cnt],
 			  deadpix_file, bit_used, crop_prms,
-			  full_size_image, bayer_direct ) < 0 ) {
+			  half_size_image, bayer_direct ) < 0 ) {
 	    fprintf(stderr,"[ERROR] raw_to_tiff() failed\n");
 	    goto quit;
 	}
