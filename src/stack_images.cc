@@ -565,6 +565,7 @@ int main( int argc, char *argv[] )
     command_win command_win_rec;
     size_t max_len_menu_string;
     int win_filesel, win_image;
+    size_t len_framecount, pos_framecount;
     
     mdarray_float ref_img_buf(false);	/* buffer for reference image */
     mdarray_float img_buf(false);	/* buffer for target */
@@ -630,7 +631,21 @@ int main( int argc, char *argv[] )
     sio.printf("refframe = [%s]\n", refframe.cstr());
 
     filename_frames = refframe;
-    filename_frames.regreplace("[0-9]+","*",false);
+
+    /* Search frame number from right-side of filename */
+    pos_framecount = filename_frames.strrspn("[^0-9]");
+    //sio.eprintf("[DEBUG] pos_framecount = %d.\n",(int)pos_framecount);
+    if ( 0 < pos_framecount && pos_framecount < filename_frames.length()  ) {
+	len_framecount =
+	 filename_frames.strrspn(filename_frames.length() - pos_framecount - 1,
+				 "[0-9]");
+	//sio.eprintf("[DEBUG] len_framecount = %d.\n",(int)len_framecount);
+	if ( 0 < len_framecount ) {
+	    filename_frames.replace(
+		    filename_frames.length() - pos_framecount - len_framecount,
+		    len_framecount ,'?', len_framecount);
+	}
+    }
 
     sio.printf("filename_frames = [%s]\n", filename_frames.cstr());
 
