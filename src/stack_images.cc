@@ -556,7 +556,7 @@ int main( int argc, char *argv[] )
 
     stdstreamio sio, f_in;
     pipestreamio p_in;
-    tstring refframe, filename_frames;
+    tstring refframe, refindex, filename_frames;
     tarray_tstring filenames;
     mdarray_bool flg_saved(false);
     int ref_file_id = -1;
@@ -616,34 +616,54 @@ int main( int argc, char *argv[] )
     }
 
     if ( refframe.length() < 1 ) {
+	ssize_t pos_q;
 	if ( f_in.open("r", Refframe_conffile) < 0 ) {
 	    sio.eprintf("Interactive xy matching and stacking tool\n");
 	    sio.eprintf("\n");
 	    sio.eprintf("[INFO] Please write filename of reference frame in %s.\n",
 			Refframe_conffile);
+	    sio.eprintf("--------------- example1 ----------------\n");
+	    sio.eprintf("20240101_FRAME_????.tiff\n");
+	    sio.eprintf("0001\n");
+	    sio.eprintf("--------------- example2 ----------------\n");
+	    sio.eprintf("FRAME_0001.tiff\n");
+	    sio.eprintf("-----------------------------------------\n");
 	    goto quit;
 	}
-	refframe = f_in.getline();
+	refframe = f_in.getline();			/* 1st line */
 	refframe.trim();
+	pos_q = refframe.strchr('?');
+	if ( 0 <= pos_q ) {
+	    size_t len_q = refframe.strspn(pos_q, '?');
+	    filename_frames = refframe;
+	    refindex = f_in.getline();			/* 2nd line */
+	    refindex.trim();
+	    refframe.replace( pos_q, len_q, refindex.cstr());
+	}
+
 	f_in.close();
     }
 
     sio.printf("refframe = [%s]\n", refframe.cstr());
 
-    filename_frames = refframe;
+    if ( filename_frames.length() < 1 ) {
+    
+	filename_frames = refframe;
 
-    /* Search frame number from right-side of filename */
-    pos_framecount = filename_frames.strrspn("[^0-9]");
-    //sio.eprintf("[DEBUG] pos_framecount = %d.\n",(int)pos_framecount);
-    if ( 0 < pos_framecount && pos_framecount < filename_frames.length()  ) {
-	len_framecount =
+	/* Search frame number from right-side of filename */
+	pos_framecount = filename_frames.strrspn("[^0-9]");
+	//sio.eprintf("[DEBUG] pos_framecount = %d.\n",(int)pos_framecount);
+	if ( 0 < pos_framecount &&
+	     pos_framecount < filename_frames.length()  ) {
+	    len_framecount =
 	 filename_frames.strrspn(filename_frames.length() - pos_framecount - 1,
 				 "[0-9]");
-	//sio.eprintf("[DEBUG] len_framecount = %d.\n",(int)len_framecount);
-	if ( 0 < len_framecount ) {
-	    filename_frames.replace(
+	    //sio.eprintf("[DEBUG] len_framecount = %d.\n",(int)len_framecount);
+	    if ( 0 < len_framecount ) {
+		filename_frames.replace(
 		    filename_frames.length() - pos_framecount - len_framecount,
 		    len_framecount ,'?', len_framecount);
+	    }
 	}
     }
 
