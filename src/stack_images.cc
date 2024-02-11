@@ -556,7 +556,7 @@ int main( int argc, char *argv[] )
 
     stdstreamio sio, f_in;
     pipestreamio p_in;
-    tstring refframe, refindex, filename_frames;
+    tstring refframe, filename_frames;
     tarray_tstring filenames;
     mdarray_bool flg_saved(false);
     int ref_file_id = -1;
@@ -616,15 +616,14 @@ int main( int argc, char *argv[] )
     }
 
     if ( refframe.length() < 1 ) {
-	ssize_t pos_q;
 	if ( f_in.open("r", Refframe_conffile) < 0 ) {
 	    sio.eprintf("Interactive xy matching and stacking tool\n");
 	    sio.eprintf("\n");
 	    sio.eprintf("[INFO] Please write filename of reference frame in %s.\n",
 			Refframe_conffile);
 	    sio.eprintf("--------------- example1 ----------------\n");
-	    sio.eprintf("20240101_FRAME_????.tiff\n");
-	    sio.eprintf("0001\n");
+	    sio.eprintf("20240101-??????_FRAME_????.tiff\n");
+	    sio.eprintf("20240101-221234_FRAME_0001.tiff\n");
 	    sio.eprintf("--------------- example2 ----------------\n");
 	    sio.eprintf("FRAME_0001.tiff\n");
 	    sio.eprintf("-----------------------------------------\n");
@@ -632,13 +631,10 @@ int main( int argc, char *argv[] )
 	}
 	refframe = f_in.getline();			/* 1st line */
 	refframe.trim();
-	pos_q = refframe.strchr('?');
-	if ( 0 <= pos_q ) {
-	    size_t len_q = refframe.strspn(pos_q, '?');
+	if ( 0 <= refframe.strchr('?') || 0 <= refframe.strchr('*') ) {
 	    filename_frames = refframe;
-	    refindex = f_in.getline();			/* 2nd line */
-	    refindex.trim();
-	    refframe.replace( pos_q, len_q, refindex.cstr());
+	    refframe = f_in.getline();			/* 2nd line */
+	    refframe.trim();
 	}
 
 	f_in.close();
