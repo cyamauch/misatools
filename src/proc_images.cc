@@ -151,10 +151,10 @@ int main( int argc, char *argv[] )
 	}
     }
 
-        
+    /* check dark file */
     if ( f_in.open("r", filename_dark) < 0 ) {
-	sio.eprintf("[ERROR] Not found: '%s'\n",filename_dark);
-	goto quit;
+	sio.eprintf("[NOTICE] Not found: '%s'\n",filename_dark);
+	softdark = 0.0;
     }
     else {
 	int sztype;
@@ -284,7 +284,9 @@ int main( int argc, char *argv[] )
 	    else sio.printf("Found a float(32-bit) dark image\n");
 	    img_dark_buf *= dark_factor;
 	}
-	img_in_buf -= img_dark_buf;
+	if ( 0 < img_dark_buf.length() ) {
+	    img_in_buf -= img_dark_buf;
+	}
 	ptr = img_in_buf.array_ptr();
 	for ( j=0 ; j < img_in_buf.length() ; j++ ) {
 	    if ( ptr[j] < 0 ) ptr[j] = 0.0;
