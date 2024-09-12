@@ -62,18 +62,17 @@ static int check_a_file( const char *filename )
     int return_status = -1;	/* file type */
     FILE *fp = NULL;
     char suffix_case[PATH_MAX];
-    int i, dot_idx;
+    size_t i, dot_idx = 0;
 
     char line[8];
 
     if ( filename == NULL ) goto quit;
     if ( strlen(filename) == 0 ) goto quit;
 
-    dot_idx = -1;
     for ( i=0 ; filename[i] != '\0' ; i++ ) {
 	if ( filename[i] == '.' ) dot_idx = i;
     }
-    if ( 0 <= dot_idx ) {
+    if ( filename[dot_idx] == '.' ) {
 	for ( i=0 ; i < PATH_MAX ; i++ ) {
 	    suffix_case[i] = filename[dot_idx + i];
 	    if ( suffix_case[i] == '\0' ) break;
@@ -98,8 +97,8 @@ static int check_a_file( const char *filename )
 	}
     }
 
-    fclose(fp);
  quit:
+    if ( fp != NULL ) fclose(fp);
     return return_status;
 }
 
@@ -476,20 +475,31 @@ static int create_tiff_filename( const char *filename_in,
     int return_status = -1;
     size_t i, dot_idx = 0;
     char basename[PATH_MAX] = {'\0'};
+    char suffix_case[PATH_MAX] = {'\0'};
 
     if ( filename_in == NULL ) goto quit;
     
-    for ( i = 0 ; filename_in[i] != '\0' ; i++ ) {
-        if ( PATH_MAX <= i ) break;
+    for ( i = 0 ; i < PATH_MAX ; i++ ) {
 	basename[i] = filename_in[i];
+        if ( basename[i] == '\0' ) break;
         if ( filename_in[i] == '.' ) dot_idx = i;
     }
-    if ( basename[dot_idx] == '.' ) basename[dot_idx] = '\0';
-    snprintf(filename_out_buf, buf_len, "%s%s", basename, ".tiff");
+    if ( basename[dot_idx] == '.' ) {
+	basename[dot_idx] = '\0';
+	for ( i=0 ; i < PATH_MAX ; i++ ) {
+	    suffix_case[i] = filename_in[dot_idx + i];
+	    if ( suffix_case[i] == '\0' ) break;
+	    if ( 'A' <= suffix_case[i] && suffix_case[i] <= 'Z' ) {
+		suffix_case[i] += 0x20;		/* to lower case */
+	    }
+	}
+    }
 
-    /* for TIFF input */
-    if ( strcmp(filename_in, filename_out_buf) == 0 ) {
-	snprintf(filename_out_buf, buf_len, "%s%s", basename, ".tiff.tiff");
+    if ( strcmp(suffix_case, ".tiff") == 0 ) {
+	snprintf(filename_out_buf, buf_len, "%s%s", basename, ".tif");
+    }
+    else {
+	snprintf(filename_out_buf, buf_len, "%s%s", basename, ".tiff");
     }
 
     return_status = 0;
