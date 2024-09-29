@@ -697,27 +697,29 @@ const command_list Cmd_list[] = {
         {CMD_LOUPE_ZOOM,        "Zoom factor of loupe +/-  [l][L]"},
 #define CMD_SAVE 17
         {CMD_SAVE,              "Save Offset Info          [Enter]"},
-#define CMD_DELETE 18
+#define CMD_SAVE_ALL 18
+        {CMD_SAVE_ALL,          "Save Offset for All files [A]"},
+#define CMD_DELETE 19
         {CMD_DELETE,            "Delete Offset Info        [Del]"},
-#define CMD_CLR_OFF 19
+#define CMD_CLR_OFF 20
         {CMD_CLR_OFF,           "Clear Currnt Offset       [0]"},
-#define CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM 20
+#define CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM 21
         {CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM,    "N comp Dark Synthesis +/- [y][Y]"},
-#define CMD_SIGCLIP_CNT_PM 21
+#define CMD_SIGCLIP_CNT_PM 22
         {CMD_SIGCLIP_CNT_PM,    "N iterations Sig-Clip +/- [i][I]"},
-#define CMD_SIGCLIP_PM 22
+#define CMD_SIGCLIP_PM 23
         {CMD_SIGCLIP_PM,        "Val of Sigma-Clip +/-     [v][V]"},
-#define CMD_SIGCLIP_SKYLV 23
+#define CMD_SIGCLIP_SKYLV 24
         {CMD_SIGCLIP_SKYLV,     "Sky-lv Sigma-Clip on/off  [s]"},
-#define CMD_SIGCLIP_COMET 24
+#define CMD_SIGCLIP_COMET 25
         {CMD_SIGCLIP_COMET,     "Comet Sigma-Clip on/off   [m]"},
-#define CMD_DITHER 25
+#define CMD_DITHER 26
         {CMD_DITHER,            "Dither on/off for saving  [d]"},
-#define CMD_STACK 26
+#define CMD_STACK 27
         {CMD_STACK,             "Start Stacking"},
-#define CMD_STACK_SILENT 27
+#define CMD_STACK_SILENT 28
         {CMD_STACK_SILENT,      "Start Stacking without preview"},
-#define CMD_EXIT 28
+#define CMD_EXIT 29
         {CMD_EXIT,              "Exit                     [q][ESC]"},
         {0, NULL}		/* EOL */
 };
@@ -964,7 +966,7 @@ int main( int argc, char *argv[] )
 	int refresh_loupe = 0;
 	bool refresh_winsize = false;
         bool refresh_winname = false;
-	bool save_offset = false;
+	int save_offset = 0;
 	bool delete_offset = false;
 
 	int f_id = -1;
@@ -1072,6 +1074,7 @@ int main( int argc, char *argv[] )
 	    else if ( ev_btn == 'm' ) cmd_id = CMD_SIGCLIP_COMET;
 	    else if ( ev_btn == 'd' ) cmd_id = CMD_DITHER;
 	    else if ( ev_btn == 13 ) cmd_id = CMD_SAVE;
+	    else if ( ev_btn == 'A' ) cmd_id = CMD_SAVE_ALL;
 	    else if ( ev_btn == 127 ) cmd_id = CMD_DELETE;
 	    else if ( ev_btn == '0' ) cmd_id = CMD_CLR_OFF;
 	    /* ESC key or 'q' */
@@ -1283,7 +1286,11 @@ int main( int argc, char *argv[] )
 		refresh_image = 2;
 	    }
 	    else if ( cmd_id == CMD_SAVE ) {
-		save_offset = true;
+		save_offset = 1;
+		refresh_list = true;
+	    }
+	    else if ( cmd_id == CMD_SAVE_ALL ) {
+		save_offset = 2;
 		refresh_list = true;
 	    }
 	    else if ( cmd_id == CMD_DELETE ) {
@@ -1337,7 +1344,7 @@ int main( int argc, char *argv[] )
 
 	/* Handle offset files */
 
-	if ( delete_offset == true || save_offset == true ) {
+	if ( delete_offset == true || save_offset != 0 ) {
 	  
 	    stdstreamio f_out;
 	    tstring offset_file;
@@ -1351,7 +1358,7 @@ int main( int argc, char *argv[] )
 		sio.printf("Deleted: [%s]\n", offset_file.cstr());
 	    }
 
-	    if ( save_offset == true ) {
+	    if ( save_offset == 1 ) {
 	        if ( f_out.open("w", offset_file.cstr()) < 0 ) {
 		    sio.eprintf("[ERROR] Cannot save!\n");
 		}
@@ -1361,6 +1368,27 @@ int main( int argc, char *argv[] )
 		    flg_saved[sel_file_id] = true;
 		    sio.printf("Saved: [%s]\n", offset_file.cstr());
 		}
+	    }
+	    else if ( save_offset == 2 ) {	/* save offset to all files */
+		size_t j;
+		for ( j=0 ; j < filenames.length() ; j++ ) {
+		    if ( filenames[j] != refframe &&
+			 flg_saved[j] != true ) {
+			get_offset_filename(filenames[j].cstr(), &offset_file);
+			if ( f_out.open("w", offset_file.cstr()) < 0 ) {
+			    sio.eprintf("[ERROR] Cannot save!\n");
+			}
+			else {
+			    f_out.printf("%ld %ld\n", offset_x, offset_y);
+			    f_out.close();
+			    flg_saved[j] = true;
+			    sio.printf("Saved offset (%ld,%ld) for %s\r",
+				       offset_x, offset_y, filenames[j].cstr());
+			    sio.flush();
+			}
+		    }
+		}
+		sio.printf("\n");
 	    }
 
 	}
