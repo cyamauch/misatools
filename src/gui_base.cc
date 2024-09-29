@@ -1,5 +1,6 @@
 #include "gui_base.h"
 
+#include <sli/stdstreamio.h>
 #include <eggx.h>
 
 using namespace sli;
@@ -138,8 +139,10 @@ int get_command_list_info( const command_list cmd_list[],
 int gopen_file_selector( const sli::tarray_tstring &filenames,
 			 bool status_field )
 {
+    stdstreamio sio;
     int win_filesel = -1;
     size_t maxlen_filename, i;
+    long win_height;
 
     /* get maxlen_filename */
     maxlen_filename = 0;
@@ -151,14 +154,20 @@ int gopen_file_selector( const sli::tarray_tstring &filenames,
     if ( maxlen_filename == 0 ) {
 	goto quit;
     }
+
+    win_height = get_fontsize() * (filenames.length());
+    if ( 32000 < win_height ) {
+	sio.eprintf("[ERROR] Too many files\n");
+	goto quit;
+    }
     
     if ( status_field == true ) {
 	win_filesel = gopen((get_fontsize()/2) * (maxlen_filename + 6 + 4),
-			get_fontsize() * (filenames.length()));
+			    win_height);
     }
     else {
 	win_filesel = gopen((get_fontsize()/2) * (maxlen_filename + 2),
-			get_fontsize() * (filenames.length()));
+			    win_height);
     }
     gsetbgcolor(win_filesel,"#404040");
     gclr(win_filesel);

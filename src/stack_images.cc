@@ -139,9 +139,141 @@ static int read_offset_file( const tarray_tstring &filenames, int sel_file_id,
     return ret_status;
 }
 
+/*
+ * Experimental code:
+ *
+ * The current file is compared with the file n ahead,
+ * dark composite is performed, and it is returned.
+ *
+ * The green channel is used for brightness comparisons.
+ *
+ */
+static bool load_tiff_into_float_and_compare(
+		      const tarray_tstring &filenames,
+		      const mdarray_bool &flg_saved,
+		      long idx_ref_img, long idx_img,
+		      long offset_idx_compared, bool skylv_sigma_clip,
+		      mdarray_float *ret_img_buf )
+{
+    stdstreamio sio;
+    bool load_tiff_ok = false;
+    if ( load_tiff_into_float(filenames[idx_img].cstr(), 65536.0,
+			      ret_img_buf, NULL, NULL, NULL) < 0 ) {
+	sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
+    }
+    else {
+	mdarray_float img_buf_1(false);
+	mdarray_float img_compared_buf(false);
+	long idx_compared;
+	if ( offset_idx_compared == 0 ) {
+	    load_tiff_ok = true;
+	    goto quit;
+	}
+	if ( idx_img + offset_idx_compared < 0 ) {
+	    goto quit;
+	}
+	if ( idx_img + offset_idx_compared < 0 ) {
+	    goto quit;
+	}
+	idx_compared = idx_img + offset_idx_compared;
+	/* */
+	if ( idx_compared < (long)filenames.length() &&
+	     flg_saved[idx_compared] == true ) {
+	    if ( load_tiff_into_float(
+			filenames[idx_compared].cstr(), 65536.0,
+			&img_buf_1, NULL, NULL, NULL) < 0 ) {
+		sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
+	    }
+	    else {
+		long offset_x_0 = 0, offset_y_0 = 0;
+		long offset_x_1 = 0, offset_y_1 = 0;
+		if ( idx_img != idx_ref_img &&
+		     read_offset_file(filenames, idx_img,
+				      &offset_x_0, &offset_y_0) < 0 ) {
+		    sio.eprintf("[ERROR] read_offset_file() failed.\n");
+		}
+		if ( idx_compared != idx_ref_img &&
+		     read_offset_file(filenames, idx_compared,
+				      &offset_x_1, &offset_y_1) < 0 ) {
+		    sio.eprintf("[ERROR] read_offset_file() failed.\n");
+		}
+		img_compared_buf = (*ret_img_buf);		/* copy */
+
+		img_compared_buf.subtract(img_buf_1,	/* subtract */
+					  offset_x_1 - offset_x_0,
+					  offset_y_1 - offset_y_0,
+					  0);
+		{
+		    const float *p_cmp = img_compared_buf.array_ptr(0,0,1 /* green */);
+		    size_t j,k, xylen;
+
+		    double median_0[3] = {0.0, 0.0, 0.0};
+		    double median_1[3] = {0.0, 0.0, 0.0};
+
+		    if ( skylv_sigma_clip == true ) {
+			mdarray_float img_tmp_buf_1d(false);
+
+			ret_img_buf->copy(&img_tmp_buf_1d,
+				      0, ret_img_buf->x_length(),
+				      0, ret_img_buf->y_length(),
+				      0, 1);
+			median_0[0] = md_median(img_tmp_buf_1d);
+			ret_img_buf->copy(&img_tmp_buf_1d,
+				      0, ret_img_buf->x_length(),
+				      0, ret_img_buf->y_length(),
+				      1, 1);
+			median_0[1] = md_median(img_tmp_buf_1d);
+			ret_img_buf->copy(&img_tmp_buf_1d,
+				      0, ret_img_buf->x_length(),
+				      0, ret_img_buf->y_length(),
+				      2, 1);
+			median_0[2] = md_median(img_tmp_buf_1d);
+
+			img_buf_1.copy(&img_tmp_buf_1d,
+				   0, img_buf_1.x_length(),
+				   0, img_buf_1.y_length(),
+				   0, 1);
+			median_1[0] = md_median(img_tmp_buf_1d);
+			img_buf_1.copy(&img_tmp_buf_1d,
+				     0, img_buf_1.x_length(),
+				     0, img_buf_1.y_length(),
+				     1, 1);
+			median_1[1] = md_median(img_tmp_buf_1d);
+			img_buf_1.copy(&img_tmp_buf_1d,
+				     0, img_buf_1.x_length(),
+				     0, img_buf_1.y_length(),
+				     2, 1);
+			median_1[2] = md_median(img_tmp_buf_1d);
+		    }
+
+		    xylen = ret_img_buf->x_length() * ret_img_buf->y_length();
+
+		    /* compared GREEN ch */
+		    for ( j=0 ; j < 3 ; j++ ) {
+			float *p0 = ret_img_buf->array_ptr(0,0,j);
+			const float *p1 = img_compared_buf.array_ptr(0,0,j);
+			double diff = - median_0[j] + median_1[j];
+			double diff_cmp = - median_0[1] + median_1[1];	/* GREEN */
+			for ( k=0 ; k < xylen ; k++ ) {
+			    if ( 0 < (p_cmp[k] + diff_cmp) ) {
+				p0[k] = - (p1[k] - p0[k]);
+				p0[k] -= diff;
+			    }
+			}
+		    }
+		}
+		load_tiff_ok = true;
+	    }
+	}
+    }
+
+ quit:
+    return load_tiff_ok;
+}
 
 static int do_stack_and_save( const tarray_tstring &filenames,
 			      int ref_file_id, const mdarray_bool &flg_saved,
+			      int n_comp_dark_synth,
 			      int count_sigma_clip, const int sigma_rgb[], 
 			      bool skylv_sigma_clip, bool comet_sigma_clip, 
 			      bool flag_dither, bool flag_preview,
@@ -187,9 +319,18 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 
     /* load reference ... needs for ICC data */
     sio.printf("Stacking [%s]\n", filenames[ref_file_id].cstr());
+
     if ( load_tiff_into_float(filenames[ref_file_id].cstr(), 65536.0,
 			      &img_buf, NULL, &icc_buf, NULL) < 0 ) {
 	sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
+	goto quit;
+    }
+
+    if ( load_tiff_into_float_and_compare(
+			filenames, flg_saved, ref_file_id, ref_file_id,
+			n_comp_dark_synth, skylv_sigma_clip,
+			&img_buf ) == false ) {
+	sio.eprintf("[ERROR] load_tiff_into_float_and_compare() failed\n");
 	goto quit;
     }
 
@@ -228,17 +369,24 @@ static int do_stack_and_save( const tarray_tstring &filenames,
         if ( flg_saved[i] == true ) n_plus ++;
     }
     
-    ii = 2;
+    ii = 1;
     for ( i=0 ; i < filenames.length() ; i++ ) {
         if ( flg_saved[i] == true ) {
-	    sio.printf("Stacking [%s]\n", filenames[i].cstr());
-	    if ( load_tiff_into_float(filenames[i].cstr(), 65536.0,
-				      &img_buf, NULL, NULL, NULL) < 0 ) {
-		sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
-	    }
-	    else {
+	    bool load_tiff_ok;
+
+	    load_tiff_ok = load_tiff_into_float_and_compare(
+			filenames, flg_saved, ref_file_id, i,
+			n_comp_dark_synth, skylv_sigma_clip,
+			&img_buf );
+
+	    if ( load_tiff_ok == true ) {
 		//double max_val;
 		long offset_x = 0, offset_y = 0;
+
+		ii ++;
+
+		sio.printf("Stacking [%s]\n", filenames[i].cstr());
+
 		if ( read_offset_file(filenames, i,
 				      &offset_x, &offset_y) < 0 ) {
 		    sio.eprintf("[ERROR] read_offset_file() failed.\n");
@@ -247,11 +395,11 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 		stacked_buf1_sum.add(img_buf, offset_x, offset_y, 0); /* STACK! */
 		stacked_buf1_sum2.add(img_buf * img_buf, offset_x, offset_y, 0); /* STACK pow() */
 
-		if ( flag_preview == true || ii == 1 + n_plus ) {
+		if ( flag_preview == true ) {
 		    //max_val = md_max(stacked_buf1_sum);
 		    //img_buf.paste(stacked_buf1_sum * (65535.0 / max_val));
 		    img_buf = stacked_buf1_sum;
-		    img_buf *= (1.0/(double)ii);
+		    img_buf *= (1.0/(double)(ii));
 		    /* display stacked image */
 		    display_image(win_image, 0, 0, img_buf, 2,
 			display_bin, display_ch, contrast_rgb, false, tmp_buf);
@@ -259,11 +407,19 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 
 		winname(win_image, "Stacking %zd/%zd", ii, (size_t)(1+n_plus));
 
-		ii ++;
 	    }
 	}
     }
-    count_buf1 = (int)(1+n_plus);
+
+    n_plus = ii - 1;
+
+    count_buf1 = (int)(1 + n_plus);
+
+    /* display stacked image */
+    img_buf = stacked_buf1_sum;
+    img_buf *= (1.0/(double)ii);
+    display_image(win_image, 0, 0, img_buf, 2,
+		  display_bin, display_ch, contrast_rgb, false, tmp_buf);
 
     stacked_buf_result_ptr = &stacked_buf1_sum;
     count_buf_result_ptr = &count_buf1;
@@ -334,20 +490,35 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 	/*
 	 *  main of sigma-clipping
 	 */
-	ii = 1;
+	ii = 0;
 	for ( i=0 ; i < filenames.length() ; i++ ) {
 	    if ( (int)i == ref_file_id || flg_saved[i] == true ) {
-		sio.printf("Stacking with Sigma-Clipping [%s]\n", filenames[i].cstr());
+		bool load_tiff_ok = false;
+
+		load_tiff_ok = load_tiff_into_float_and_compare(
+			filenames, flg_saved, ref_file_id, i,
+			n_comp_dark_synth, skylv_sigma_clip,
+			&img_buf );
+
+		/*
 		if ( load_tiff_into_float(filenames[i].cstr(), 65536.0,
 					  &img_buf, NULL, NULL, NULL) < 0 ) {
 		    sio.eprintf("[ERROR] load_tiff_into_float() failed\n");
 		}
-	        else {
+		else {
+		    load_tiff_ok = true;
+		}
+		*/
+	        if ( load_tiff_ok == true ) {
 		    unsigned char *p5 = flag_buf.array_ptr();
 		    size_t j;
 		    double target_median[3] = {1.0, 1.0, 1.0};
 		    //double max_val;
 		    long offset_x = 0, offset_y = 0;
+
+		    ii ++;
+
+		    sio.printf("Stacking with Sigma-Clipping [%s]\n", filenames[i].cstr());
 
 		    if ( (int)i != ref_file_id ) {
 			if ( read_offset_file(filenames, i,
@@ -432,7 +603,6 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 
 		    winname(win_image, "Stacking with sigma-clipping %zd/%zd", ii, (size_t)(1+n_plus));
 
-		    ii ++;
 		}
 	    }
 	}
@@ -531,21 +701,23 @@ const command_list Cmd_list[] = {
         {CMD_DELETE,            "Delete Offset Info        [Del]"},
 #define CMD_CLR_OFF 19
         {CMD_CLR_OFF,           "Clear Currnt Offset       [0]"},
-#define CMD_SIGCLIP_CNT_PM 20
+#define CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM 20
+        {CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM,    "N comp Dark Synthesis +/- [y][Y]"},
+#define CMD_SIGCLIP_CNT_PM 21
         {CMD_SIGCLIP_CNT_PM,    "N iterations Sig-Clip +/- [i][I]"},
-#define CMD_SIGCLIP_PM 21
+#define CMD_SIGCLIP_PM 22
         {CMD_SIGCLIP_PM,        "Val of Sigma-Clip +/-     [v][V]"},
-#define CMD_SIGCLIP_SKYLV 22
+#define CMD_SIGCLIP_SKYLV 23
         {CMD_SIGCLIP_SKYLV,     "Sky-lv Sigma-Clip on/off  [s]"},
-#define CMD_SIGCLIP_COMET 23
+#define CMD_SIGCLIP_COMET 24
         {CMD_SIGCLIP_COMET,     "Comet Sigma-Clip on/off   [m]"},
-#define CMD_DITHER 24
+#define CMD_DITHER 25
         {CMD_DITHER,            "Dither on/off for saving  [d]"},
-#define CMD_STACK 25
+#define CMD_STACK 26
         {CMD_STACK,             "Start Stacking"},
-#define CMD_STACK_SILENT 26
+#define CMD_STACK_SILENT 27
         {CMD_STACK_SILENT,      "Start Stacking without preview"},
-#define CMD_EXIT 27
+#define CMD_EXIT 28
         {CMD_EXIT,              "Exit                     [q][ESC]"},
         {0, NULL}		/* EOL */
 };
@@ -585,6 +757,7 @@ int main( int argc, char *argv[] )
     int loupe_x = Loupe_pos_out;
     int loupe_y = Loupe_pos_out;
 
+    int n_comp_dark_synth = 0;
     int count_sigma_clip = 0;
     bool skylv_sigma_clip = true;
     bool comet_sigma_clip = false;
@@ -871,6 +1044,14 @@ int main( int argc, char *argv[] )
 		cmd_id = CMD_LOUPE_ZOOM;
 		ev_btn = 3;
 	    }
+	    else if ( ev_btn == 'y' ) {
+		cmd_id = CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'Y' ) {
+		cmd_id = CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM;
+		ev_btn = 3;
+	    }
 	    else if ( ev_btn == 'i' ) {
 		cmd_id = CMD_SIGCLIP_CNT_PM;
 		ev_btn = 1;
@@ -912,6 +1093,7 @@ int main( int argc, char *argv[] )
 	    img_display.init(false);
 	    img_buf.init(false);
 	    if ( do_stack_and_save( filenames, ref_file_id, flg_saved,
+				    n_comp_dark_synth,
 				    count_sigma_clip, sigma_rgb, 
 				    skylv_sigma_clip, comet_sigma_clip, 
 				    flag_dither, flag_preview,
@@ -1027,6 +1209,14 @@ int main( int argc, char *argv[] )
 		loupe_zoom -= 2;
 		refresh_loupe = 1;
 	    }
+	}
+	else if ( cmd_id == CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM && ev_btn == 1 ) {
+	    n_comp_dark_synth ++;
+	    refresh_winname = true;
+	}
+	else if ( cmd_id == CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM && ev_btn == 3 ) {
+	    if ( 0 < n_comp_dark_synth ) n_comp_dark_synth --;
+	    refresh_winname = true;
 	}
 	else if ( cmd_id == CMD_SIGCLIP_CNT_PM && ev_btn == 1 ) {
 	    count_sigma_clip ++;
@@ -1290,10 +1480,10 @@ int main( int argc, char *argv[] )
 	}
 
 	if ( refresh_winname == true ) {
-	    winname(win_image, "Sigma-Clipping: "
+	    winname(win_image, "N-comp_dark_synth=%d  Sigma-Clipping: "
 	        "[N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
 	    	"dither = %d",
-		count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
+		n_comp_dark_synth, count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 		(int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
 	}
 
