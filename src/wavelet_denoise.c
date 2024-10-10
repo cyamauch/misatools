@@ -28,7 +28,7 @@ static void hat_transform (float *temp, float *base, int st, int size, int sc)
 }
 
 static void wavelet_denoise( unsigned colors /* 3 for RGB color */, 
-			     unsigned short iwidth, unsigned short iheight,
+			     int iwidth, int iheight,
 			     float threshold[] /* for r,g,b */,
 			     float *image_io_buf,
 			     float *fimg /* (size*3 + iheight + iwidth) * sizeof *fimg */
@@ -65,7 +65,7 @@ static void wavelet_denoise( unsigned colors /* 3 for RGB color */,
     float *image;
     image = image_io_buf + (iwidth * iheight) * c;
     for (i=0; i < size; i++)
-      fimg[i] = 256 * sqrt(image[i] /* << scale */);
+      fimg[i] = 256.0 * sqrt(image[i] /* << scale */);
     for (hpass=lev=0; lev < 5; lev++) {
       lpass = size*((lev & 1)+1);
       for (row=0; row < iheight; row++) {
@@ -89,7 +89,7 @@ static void wavelet_denoise( unsigned colors /* 3 for RGB color */,
       hpass = lpass;
     }
     for (i=0; i < size; i++)
-      image[i] = CLIP(SQR(fimg[i]+fimg[lpass+i])/0x10000);
+      image[i] = /* CLIP( */ SQR(fimg[i]+fimg[lpass+i])/65536.0 /* ) */;
   }
 
 #if 0

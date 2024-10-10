@@ -122,6 +122,7 @@ int main( int argc, char *argv[] )
 	int tiff_szt = 0;
 	tstring filename, filename_out;
 	float *ptr;
+	float min_value = 0.0;
 	size_t j;
 
 	filename = filenames_in[i];
@@ -137,6 +138,25 @@ int main( int argc, char *argv[] )
 
 	img_work_buf.resize( img_in_buf.x_length() * img_in_buf.y_length() * 3
 			     + img_in_buf.x_length() + img_in_buf.y_length() );
+
+	/* replace NaN/Inf values ... */
+	ptr = img_in_buf.array_ptr();
+	for ( j=0 ; j < img_in_buf.length() ; j++ ) {
+	    if ( isfinite(ptr[j]) != 0 ) {
+		min_value = ptr[j];
+		break;
+	    }
+	}
+	for ( ; j < img_in_buf.length() ; j++ ) {
+	    if ( isfinite(ptr[j]) != 0 ) {
+		if ( ptr[j] < min_value ) min_value = ptr[j];
+	    }
+	}
+	for ( j=0 ; j < img_in_buf.length() ; j++ ) {
+	    if ( isfinite(ptr[j]) == 0 ) {
+		ptr[j] = min_value;
+	    }
+	}
 
 	wavelet_denoise( 3, img_in_buf.x_length(), img_in_buf.y_length(),
 			 threshold, img_in_buf.array_ptr(),
