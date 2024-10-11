@@ -8,6 +8,7 @@
 #include <sli/mdarray_statistics.h>
 
 #include "tiff_funcs.h"
+#include "image_funcs.h"
 
 using namespace sli;
 
@@ -30,7 +31,7 @@ static int compar_fnc( const void *_a, const void *_b )
 
 static int do_align( const char *in_filename,
 		     long z_select, long object_diameter,
-		     const long crop_prms[], bool binning )
+		     const long crop_prms[], int scale, bool binning )
 {
     stdstreamio sio, f_in;
 
@@ -57,6 +58,17 @@ static int do_align( const char *in_filename,
 			  &icc_buf, camera_calibration1 ) < 0 ) {
         sio.eprintf("[ERROR] load_tiff() failed\n");
 	goto quit;
+    }
+
+    if ( 1 < scale ) {
+
+	if ( scale_image( scale, &img_buf0 ) < 0 ) {
+	    sio.eprintf("[ERROR] scale_image() failed\n");
+	    goto quit;
+	}
+
+	object_diameter *= scale;
+
     }
     width = img_buf0.x_length();
     height = img_buf0.y_length();
@@ -361,7 +373,7 @@ int main( int argc, char *argv[] )
     long crop_prms[4] = {-1,-1,-1,-1};
     
     tstring line_buf;
-    int arg_cnt;
+    int arg_cnt, scale = 1;
     const char *rgb_str[3] = {"Red","Green","Blue"};
     
     int return_status = -1;
@@ -370,14 +382,20 @@ int main( int argc, char *argv[] )
 	sio.eprintf("Estimate center of object and output result as image\n");
 	sio.eprintf("\n");
         sio.eprintf("[USAGE]\n");
-	sio.eprintf("$ %s [-b r,g or b] [-c param] [-h] diameter_of_object(pixels) filename.tiff\n",argv[0]);
+	sio.eprintf("$ %s [-b r,g or b] [-s scale] [-c param] [-h] diameter_of_object(pixels) filename.tiff\n",argv[0]);
 	sio.eprintf("\n");
 	sio.eprintf("-b r,g or b ... Band (channel) selection. (default: g).\n");
+	sio.eprintf("-s scale    ... Scaling factor (integer). Effective for estimating center.\n");
 	sio.eprintf("-c [x,y,]width,height ... Crop images. Center when x and y are omitted.\n");
+	sio.eprintf("                          Cropping will perform after scaling.\n");
 	sio.eprintf("-h          ... Half-size (binning) image is written.\n");
+	sio.eprintf("\n");
+	sio.eprintf("Note that diameter_of_object is the size on original image (before rescaling).\n");
 	sio.eprintf("\n");
 	sio.eprintf("example of G-channel, object diameter of 128-pixels and binning:\n");
 	sio.eprintf("$ %s -h -b g 128 file1.tiff file2.tiff ...\n",argv[0]);
+	sio.eprintf("example of G-channel, object diameter of 128-pixels and 2x rescaling:\n");
+	sio.eprintf("$ %s -b g -s 2 128 file1.tiff file2.tiff ...\n",argv[0]);
 	goto quit;
     }
  
@@ -387,6 +405,16 @@ int main( int argc, char *argv[] )
 	line_buf = argv[arg_cnt];
 	if ( line_buf == "-h" ) {
 	    binning = true;
+	    arg_cnt ++;
+	}
+	else if ( line_buf == "-s" ) {
+	    arg_cnt ++;
+	    line_buf = argv[arg_cnt];
+	    scale = line_buf.atoi();
+	    if ( scale < 0 ) {
+		sio.eprintf("[ERROR] Invalid scale: %g\n", scale);
+		goto quit;
+	    }
 	    arg_cnt ++;
 	}
 	else if ( line_buf == "-b" ) {
@@ -433,7 +461,7 @@ int main( int argc, char *argv[] )
     while ( arg_cnt < argc ) {
 	const char *filename_in = argv[arg_cnt];
 	if ( do_align(filename_in,
-		      z_select, object_diameter, crop_prms, binning) < 0 ) {
+	      z_select, object_diameter, crop_prms, scale, binning) < 0 ) {
 	    sio.eprintf("[ERROR] do_align() failed\n");
 	    goto quit;
 	}

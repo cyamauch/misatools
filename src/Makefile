@@ -41,8 +41,8 @@ merge_flat: merge_flat.cc tiff_funcs.o
 proc_images: proc_images.cc tiff_funcs.o
 	$(CCC) proc_images.cc tiff_funcs.o -ltiff
 
-align_center: align_center.cc tiff_funcs.o
-	$(CCC) align_center.cc tiff_funcs.o -ltiff
+align_center: align_center.cc tiff_funcs.o image_funcs.o
+	$(CCC) align_center.cc tiff_funcs.o image_funcs.o -ltiff
 
 stack_images: stack_images.cc tiff_funcs.o display_image.o gui_base.o loupe_funcs.o
 	$(CCC) stack_images.cc tiff_funcs.o display_image.o gui_base.o loupe_funcs.o -leggx -lX11 -ltiff
