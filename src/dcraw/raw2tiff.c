@@ -1795,26 +1795,31 @@ int main( int argc, char *argv[] )
     int matrix_type = Matrix_NONE;
     
     if ( argc < 3 ) {
-	fprintf(stderr,"Read and demosaic 16-bit RAW/FITS with bayer filter and convert RGB TIFF.\n");
+	fprintf(stderr,"Read and demosaic 16-bit RAW/FITS/TIFF with bayer filter and convert RGB TIFF.\n");
 	fprintf(stderr,"Convert of FITS with 16-bit int and 32-bit float RGB cube is also supported.\n");
 	fprintf(stderr,"\n");
         fprintf(stderr,"[USAGE]\n");
-        fprintf(stderr,"$ %s [-f] [-d] [-P file] [-c param] bit_used rawfile1 rawfile2 ...\n",argv[0]);
-        fprintf(stderr,"$ %s [-f] [-d] [-P file] [-c param] bit_used_R,bit_used_G,bit_used_B rawfile1 ...\n",argv[0]);
+        fprintf(stderr,"$ %s [-h] [-d] [-m] [-c param] [-P file] bit_used rawfile1 rawfile2 ...\n",argv[0]);
+        fprintf(stderr,"$ %s [-h] [-d] [-m] [-c param] [-P file] bit_used_R,bit_used_G,bit_used_B rawfile1 ...\n",argv[0]);
 	fprintf(stderr,"\n");
 	fprintf(stderr,"-h ... Output half size images (only for bayer input)\n");
-	fprintf(stderr,"-d ... Do not demosaic bayer (ignored with -h option)\n");
-	fprintf(stderr,"-m ... Monochrome mode (Do not demosaic bayer)\n");
+	fprintf(stderr,"-d ... Output Color images without bayer demosaic (ignored with -h option)\n");
+	fprintf(stderr,"-m ... Output Monochrome images without bayer demosaic\n");
+	fprintf(stderr,"-c [x,y,]width,height ... Crop images. Center when x and y are omitted.\n");
+	fprintf(stderr,"                          Cropping will be performd after resizing by -h arg.\n");
 	fprintf(stderr,"-rggb ... Set 'RGGB' matrix type\n");
 	fprintf(stderr,"-grbg ... Set 'GRBG' matrix type\n");
-	fprintf(stderr,"-m ... Monochrome mode (Do not demosaic bayer)\n");
 	fprintf(stderr,"-P file ... Fix the dead pixels listed in this file (RAW only)\n");
-	fprintf(stderr,"-c [x,y,]width,height ... Crop images. Center when x and y are omitted\n");
 	fprintf(stderr,"bit_used ... 9 to 16.  Set 14 for lossless 14-bit data\n");
+        fprintf(stderr,"\n");
         fprintf(stderr,"[EXAMPLE]\n");
         fprintf(stderr,"$ %s 13,14,13 DSC_0001.NEF DSC_0002.NEF DSC_0003.NEF\n", argv[0]);
         fprintf(stderr,"$ %s 16 ASIImg_frame0001.fit ASIImg_frame0002.fit\n", argv[0]);
         fprintf(stderr,"$ %s 32 M74_32bit_float_RGB-cube.fits\n", argv[0]);
+        fprintf(stderr,"$ %s 16 Saturn_00001.tif\n", argv[0]);
+        fprintf(stderr,"\n");
+        fprintf(stderr,"Note that output='foo.tiff' for input='foo.tif' and\n");
+	fprintf(stderr,"          output='foo.tif' for input='foo.tiff'.\n");
 	goto quit;
     }
 
