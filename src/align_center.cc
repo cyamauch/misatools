@@ -367,13 +367,14 @@ int main( int argc, char *argv[] )
 {
     stdstreamio sio;
     
+    int scale = 1;
     long z_select = 1;			/* 0..R  1..G  2..B */
     long object_diameter = 128;		/* diameter of object (pixels) */
     bool binning = false;
     long crop_prms[4] = {-1,-1,-1,-1};
     
     tstring line_buf;
-    int arg_cnt, scale = 1;
+    int arg_cnt;
     const char *rgb_str[3] = {"Red","Green","Blue"};
     
     int return_status = -1;
@@ -414,8 +415,8 @@ int main( int argc, char *argv[] )
 	    arg_cnt ++;
 	    line_buf = argv[arg_cnt];
 	    scale = line_buf.atoi();
-	    if ( scale < 0 ) {
-		sio.eprintf("[ERROR] Invalid scale: %g\n", scale);
+	    if ( scale < 1 ) {
+		sio.eprintf("[ERROR] Invalid scale: %d\n", scale);
 		goto quit;
 	    }
 	    arg_cnt ++;

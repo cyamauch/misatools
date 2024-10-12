@@ -11,6 +11,7 @@
 #include <unistd.h>
 
 #include "tiff_funcs.h"
+#include "image_funcs.h"
 #include "display_image.h"
 #include "gui_base.h"
 
@@ -148,7 +149,10 @@ int main( int argc, char *argv[] )
     const char *conf_file_display = "display_2.txt";
 
     stdstreamio sio, f_in;
+    int arg_cnt;
+
     tstring filename;
+    int scale = 1;
     mdarray in_image_r_buf(UCHAR_ZT,false);
     mdarray in_image_g_buf(UCHAR_ZT,false);
     mdarray in_image_b_buf(UCHAR_ZT,false);
@@ -181,14 +185,37 @@ int main( int argc, char *argv[] )
 	sio.eprintf("\n");
 	sio.eprintf("[USAGE]\n");
 	sio.eprintf("$ %s input_filename.tiff\n", argv[0]);
+	sio.eprintf("$ %s -s scale input_filename.tiff\n", argv[0]);
+	sio.eprintf("\n");
+	sio.eprintf("-s scale ... Scaling factor (1 < scale ; integer) of output image\n");
 	goto quit;
     }
+
+    arg_cnt = 1;
+
+    while ( arg_cnt < argc ) {
+	tstring argstr;
+	argstr = argv[arg_cnt];
+	if ( argstr == "-s" ) {
+	    arg_cnt ++;
+	    argstr = argv[arg_cnt];
+	    scale = argstr.atoi();
+	    if ( scale < 1 ) {
+		sio.eprintf("[ERROR] Invalid scale: %d\n", scale);
+		goto quit;
+	    }
+	    arg_cnt ++;
+	}
+	else {
+	    break;
+	}
+    }
+
+    filename = argv[arg_cnt];
 
     load_display_params( conf_file_display, contrast_rgb );
 
     update_display_gain_rb( contrast_rgb, &display_gain_r, &display_gain_b );
-    
-    filename = argv[1];
 
     if ( f_in.open("r", filename.cstr()) < 0 ) {
 	sio.eprintf("[ERROR] cannot open file: %s\n", filename.cstr());
@@ -210,6 +237,22 @@ int main( int argc, char *argv[] )
 	sio.eprintf("[ERROR] unexpected image type\n");
 	goto quit;
     }
+
+    if ( 1 < scale ) {
+	if ( scale_image( scale, &in_image_b_buf ) < 0 ) {
+	    sio.eprintf("[ERROR] scale_image() failed\n");
+	    goto quit;
+	}
+	if ( scale_image( scale, &in_image_g_buf ) < 0 ) {
+	    sio.eprintf("[ERROR] scale_image() failed\n");
+	    goto quit;
+	}
+	if ( scale_image( scale, &in_image_r_buf ) < 0 ) {
+	    sio.eprintf("[ERROR] scale_image() failed\n");
+	    goto quit;
+	}
+    }
+
     width = in_image_r_buf.x_length();
     height = in_image_r_buf.y_length();
     

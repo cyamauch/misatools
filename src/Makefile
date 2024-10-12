@@ -38,8 +38,8 @@ make_flat: make_flat.cc tiff_funcs.o
 merge_flat: merge_flat.cc tiff_funcs.o
 	$(CCC) merge_flat.cc tiff_funcs.o -ltiff
 
-proc_images: proc_images.cc tiff_funcs.o
-	$(CCC) proc_images.cc tiff_funcs.o -ltiff
+proc_images: proc_images.cc tiff_funcs.o image_funcs.o
+	$(CCC) proc_images.cc tiff_funcs.o image_funcs.o -ltiff
 
 align_center: align_center.cc tiff_funcs.o image_funcs.o
 	$(CCC) align_center.cc tiff_funcs.o image_funcs.o -ltiff
@@ -47,8 +47,8 @@ align_center: align_center.cc tiff_funcs.o image_funcs.o
 stack_images: stack_images.cc tiff_funcs.o display_image.o gui_base.o loupe_funcs.o
 	$(CCC) stack_images.cc tiff_funcs.o display_image.o gui_base.o loupe_funcs.o -leggx -lX11 -ltiff
 
-align_rgb: align_rgb.cc tiff_funcs.o display_image.o gui_base.o
-	$(CCC) align_rgb.cc tiff_funcs.o display_image.o gui_base.o -leggx -lX11 -ltiff
+align_rgb: align_rgb.cc tiff_funcs.o image_funcs.o display_image.o gui_base.o
+	$(CCC) align_rgb.cc tiff_funcs.o image_funcs.o display_image.o gui_base.o -leggx -lX11 -ltiff
 
 determine_sky: determine_sky.cc tiff_funcs.o display_image.o
 	$(CCC) determine_sky.cc tiff_funcs.o display_image.o -leggx -lX11 -ltiff

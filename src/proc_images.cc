@@ -5,6 +5,7 @@
 #include <sli/mdarray_statistics.h>
 
 #include "tiff_funcs.h"
+#include "image_funcs.h"
 
 using namespace sli;
 
@@ -44,6 +45,7 @@ int main( int argc, char *argv[] )
     double softdark = 0.0;
     double softsky = 0.0;
     double softbias = 0.0;
+    int scale = 1;
     int arg_cnt;
     size_t i;
     
@@ -53,13 +55,14 @@ int main( int argc, char *argv[] )
 	sio.eprintf("Process target frames\n");
 	sio.eprintf("\n");
         sio.eprintf("[USAGE]\n");
-	sio.eprintf("$ %s [-8] [-16] [-t] [-d param] [-f param] [-fi param] [-s sky.tiff] img_0.tiff img_1.tiff ...\n", argv[0]);
+	sio.eprintf("$ %s [-8] [-16] [-t] [-b param] [-d param] [-f param] [-fi param] img_0.tiff img_1.tiff ...\n", argv[0]);
 	sio.eprintf("\n");
 	sio.eprintf("-8 ... If set, output 8-bit processed images for 8-bit original images\n");
 	sio.eprintf("-16 .. If set, output 16-bit processed images\n");
 	sio.eprintf("-t ... If set, not using dither to output 8/16-bit images\n");
 	sio.eprintf("-r ... If set, output raw RGB without applying daylight multipliers\n");
-	sio.eprintf("-s param ... Set softbias value. Default is 0.0\n");
+	sio.eprintf("-s scale ... Scaling factor (1 < scale ; integer) of output image\n");
+	sio.eprintf("-b param ... Set softbias value. Default is 0.0\n");
 	sio.eprintf("-d param ... Set dark factor to param. Default is 1.0.\n");
 	sio.eprintf("-f param ... Set flat factor to param. Default is 1.0.\n");
 	sio.eprintf("-fi param ... Set flat index factor (flat ^ x) to param. Default is 1.0.\n");
@@ -93,6 +96,16 @@ int main( int argc, char *argv[] )
 	    arg_cnt ++;
 	}
 	else if ( argstr == "-s" ) {
+	    arg_cnt ++;
+	    argstr = argv[arg_cnt];
+	    scale = argstr.atoi();
+	    if ( scale < 1 ) {
+		sio.eprintf("[ERROR] Invalid scale: %d\n", scale);
+		goto quit;
+	    }
+	    arg_cnt ++;
+	}
+	else if ( argstr == "-b" ) {
 	    arg_cnt ++;
 	    argstr = argv[arg_cnt];
 	    softbias = argstr.atof();
@@ -348,6 +361,12 @@ int main( int argc, char *argv[] )
 		if ( ptr[j] < 0 ) ptr[j] = 0.0;
 		else if ( 65535.0 < ptr[j] ) ptr[j] = 65535.0;
 	    }
+	    if ( 1 < scale ) {
+		if ( scale_image( scale, &img_in_buf ) < 0 ) {
+		    sio.eprintf("[ERROR] scale_image() failed\n");
+		    goto quit;
+		}
+	    }
 	    sio.printf("Writing '%s' [16bit/ch] ", filename_out.cstr());
 	    if ( flag_dither == true ) sio.printf("using dither ...\n");
 	    else sio.printf("NOT using dither ...\n");
@@ -366,6 +385,12 @@ int main( int argc, char *argv[] )
 		if ( ptr[j] < 0 ) ptr[j] = 0.0;
 		else if ( 255.0 < ptr[j] ) ptr[j] = 255.0;
 	    }
+	    if ( 1 < scale ) {
+		if ( scale_image( scale, &img_in_buf ) < 0 ) {
+		    sio.eprintf("[ERROR] scale_image() failed\n");
+		    goto quit;
+		}
+	    }
 	    sio.printf("Writing '%s' [8bit/ch] ", filename_out.cstr());
 	    if ( flag_dither == true ) sio.printf("using dither ...\n");
 	    else sio.printf("NOT using dither ...\n");
@@ -379,6 +404,12 @@ int main( int argc, char *argv[] )
 	else {	/* output float tiff */
 	    make_tiff_filename(filename.cstr(), "proc", "float",
 			       &filename_out);
+	    if ( 1 < scale ) {
+		if ( scale_image( scale, &img_in_buf ) < 0 ) {
+		    sio.eprintf("[ERROR] scale_image() failed\n");
+		    goto quit;
+		}
+	    }
 	    sio.printf("Writing '%s' [32-bit_float/ch]\n", filename_out.cstr());
 	    if ( save_float_to_tiff(img_in_buf, icc_buf, camera_calibration1,
 				     65536.0, filename_out.cstr()) < 0 ) {
@@ -386,6 +417,11 @@ int main( int argc, char *argv[] )
 		goto quit;
 	    }
 	}
+
+	if ( 1 < scale ) {
+	    img_in_buf.init();
+	}
+
     }
 
     
