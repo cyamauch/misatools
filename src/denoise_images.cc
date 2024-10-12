@@ -20,6 +20,7 @@ int main( int argc, char *argv[] )
 {
     stdstreamio sio, f_in;
     tarray_tstring filenames_in;
+    tstring suffix_denoised;
     mdarray_float img_in_buf(false);
     mdarray_float img_work_buf(false);
     mdarray_uchar icc_buf(false);
@@ -29,6 +30,7 @@ int main( int argc, char *argv[] )
     bool flag_output_16bit = false;
     bool flag_dither = true;
     float threshold[3] = {0,0,0};	/* for R,G and B each */
+    bool flag_threshold = false;
 
     int arg_cnt;
     size_t i;
@@ -51,17 +53,18 @@ int main( int argc, char *argv[] )
         sio.eprintf("Apply wavelet-denoise to images\n");
 	sio.eprintf("\n");
         sio.eprintf("[USAGE]\n");
-	sio.eprintf("$ %s -s threshold img_0.tiff img_1.tiff ...\n", argv[0]);
-	sio.eprintf("$ %s -s threshold_r,threshold_g,threshold_b img_0.tiff img_1.tiff ...\n", argv[0]);
+	sio.eprintf("$ %s [-8] [-16] [-t] -l threshold img_0.tiff img_1.tiff ...\n", argv[0]);
+	sio.eprintf("$ %s [-8] [-16] [-t] -l threshold_r,threshold_g,threshold_b img_0.tiff img_1.tiff ...\n", argv[0]);
 	sio.eprintf("-8 ... If set, output 8-bit processed images for 8-bit original images\n");
 	sio.eprintf("-16 .. If set, output 16-bit processed images\n");
-	sio.eprintf("-s param ... Threshold of wavelet-denoise\n");
+	sio.eprintf("       If neither '-8' nor '-16' is set, output 32-bit float processed images\n");
+	sio.eprintf("-l param ... Threshold of wavelet-denoise\n");
 	sio.eprintf("-t ... If set, dither is not used to output 8/16-bit images\n");
 	sio.eprintf("\n");
 	sio.eprintf("NOTE: Set large threshold for noisy images\n");
 	sio.eprintf("\n");
 	sio.eprintf("[EXAMPLE]\n");
-	sio.eprintf("$ %s -s 300,300,600 foo.tiff\n", argv[0]);
+	sio.eprintf("$ %s -16 -l 300,300,600 foo.tiff\n", argv[0]);
 	goto quit;
     }
 
@@ -84,7 +87,7 @@ int main( int argc, char *argv[] )
 	    flag_dither = false;
 	    arg_cnt ++;
 	}
-	else if ( argstr == "-s" ) {
+	else if ( argstr == "-l" ) {
 	    tarray_tstring arr_threshold_str;
 	    arg_cnt ++;
 	    arr_threshold_str.split(argv[arg_cnt],",",true);
@@ -104,14 +107,28 @@ int main( int argc, char *argv[] )
 	    else {
 	        threshold[2] = threshold[1];
 	    }
+	    if ( threshold[0] == threshold[1] &&
+		 threshold[0] == threshold[2] ) {
+		suffix_denoised.printf("denoised%g",(double)threshold[0]);
+	    }
+	    else {
+		suffix_denoised.printf("denoised%g-%g-%g",
+		       (double)threshold[0],(double)threshold[1],(double)threshold[2]);
+	    }
+	    flag_threshold = true;
 	    /* */
 	    sio.printf("Using threshold(r,g,b): %g,%g,%g\n",
-		       threshold[0],threshold[1],threshold[2]);
+		       (double)threshold[0],(double)threshold[1],(double)threshold[2]);
 	    arg_cnt ++;
 	}
 	else {
 	    break;
 	}
+    }
+
+    if ( flag_threshold == false ) {
+	sio.eprintf("[ERROR] Set -l param arg\n");
+	goto quit;
     }
 
     filenames_in.erase(0, arg_cnt);	/* erase */
@@ -170,7 +187,7 @@ int main( int argc, char *argv[] )
 	/* check min, max and write a processed file */
 	ptr = img_in_buf.array_ptr();
 	if ( flag_output_16bit == true ) {
-	    make_tiff_filename(filename.cstr(), "denoised", "16bit",
+	    make_tiff_filename(filename.cstr(), suffix_denoised.cstr(), "16bit",
 			       &filename_out);
 	    for ( j=0 ; j < img_in_buf.length() ; j++ ) {
 		if ( ptr[j] < 0 ) ptr[j] = 0.0;
@@ -187,7 +204,7 @@ int main( int argc, char *argv[] )
 	    }
 	}
 	else if ( tiff_szt == 1 && flag_output_8bit == true ) {
-	    make_tiff_filename(filename.cstr(), "denoised", "8bit",
+	    make_tiff_filename(filename.cstr(), suffix_denoised.cstr(), "8bit",
 			       &filename_out);
 	    for ( j=0 ; j < img_in_buf.length() ; j++ ) {
 		ptr[j] /= 256.0;
@@ -205,7 +222,7 @@ int main( int argc, char *argv[] )
 	    }
 	}
 	else {
-	    make_tiff_filename(filename.cstr(), "denoised", "float",
+	    make_tiff_filename(filename.cstr(), suffix_denoised.cstr(), "float",
 			       &filename_out);
 	    sio.printf("Writing '%s' [32-bit_float/ch]\n", filename_out.cstr());
 	    if ( save_float_to_tiff(img_in_buf, icc_buf, camera_calibration1, 

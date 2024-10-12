@@ -55,10 +55,11 @@ int main( int argc, char *argv[] )
 	sio.eprintf("Process target frames\n");
 	sio.eprintf("\n");
         sio.eprintf("[USAGE]\n");
-	sio.eprintf("$ %s [-8] [-16] [-t] [-b param] [-d param] [-f param] [-fi param] img_0.tiff img_1.tiff ...\n", argv[0]);
+	sio.eprintf("$ %s [-8] [-16] [-t] [-s scale] [-b param] [-d param] [-f param] [-fi param] img_0.tiff img_1.tiff ...\n", argv[0]);
 	sio.eprintf("\n");
 	sio.eprintf("-8 ... If set, output 8-bit processed images for 8-bit original images\n");
-	sio.eprintf("-16 .. If set, output 16-bit processed images\n");
+	sio.eprintf("-16 .. If set, output 16-bit processed images.\n");
+	sio.eprintf("       If neither '-8' nor '-16' is set, output 32-bit float processed images\n");
 	sio.eprintf("-t ... If set, not using dither to output 8/16-bit images\n");
 	sio.eprintf("-r ... If set, output raw RGB without applying daylight multipliers\n");
 	sio.eprintf("-s scale ... Scaling factor (1 < scale ; integer) of output image\n");
