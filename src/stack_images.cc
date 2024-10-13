@@ -28,8 +28,9 @@ const char *Refframe_conffile = "refframe.txt";
 
 
 static int load_sigclip_params( const char *filename,
+			int *n_comp_dark_synth_p,
 			int *count_sigma_clip_p, int sigma_rgb[], 
-			bool *std_sigma_clip_p, bool *comet_sigma_clip_p )
+			bool *skylv_sigma_clip_p, bool *comet_sigma_clip_p )
 {
     int return_status = -1;
     stdstreamio sio, f_in;
@@ -37,10 +38,11 @@ static int load_sigclip_params( const char *filename,
     if ( f_in.open("r", filename) < 0 ) {
 	goto quit;
     }
-    line = f_in.getline();
-    line.trim();
-    if ( 0 < line.length() ) {
-	tarray_tstring elms;
+    while ( (line = f_in.getline()) != NULL ) {
+	line.trim();
+	if ( 0 < line.length() ) {
+	    tarray_tstring elms;
+	/*
 	elms.split(line.cstr()," ",false);
 	if ( elms.length() == 6 ) {
 	    int v;
@@ -56,12 +58,47 @@ static int load_sigclip_params( const char *filename,
 	    if ( sigma_rgb[2] < 0 ) sigma_rgb[2] = 0;
 
 	    v = elms[4].atoi();
-	    if ( v != 0 ) *std_sigma_clip_p = true;
-	    else *std_sigma_clip_p = false;
+	    if ( v != 0 ) *skylv_sigma_clip_p = true;
+	    else *skylv_sigma_clip_p = false;
 
 	    v = elms[5].atoi();
 	    if ( v != 0 ) *comet_sigma_clip_p = true;
 	    else *comet_sigma_clip_p = false;
+	}
+	*/
+	    elms.split(line.cstr()," =",false);
+	    if ( elms[0].strcmp("n_comp_dark_synth") == 0 ) {
+		int v = elms[1].atoi();
+		if ( v != 0 ) *n_comp_dark_synth_p = true;
+		else *n_comp_dark_synth_p = false;
+	    }
+	    else if ( elms[0].strcmp("count_sigma_clip") == 0 ) {
+		int v = elms[1].atoi();
+		if ( v != 0 ) *comet_sigma_clip_p = true;
+		else *comet_sigma_clip_p = false;
+	    }
+	    else if ( elms[0].strcmp("skylv_sigma_clip") == 0 ) {
+		int v = elms[1].atoi();
+		if ( v != 0 ) *skylv_sigma_clip_p = true;
+		else *skylv_sigma_clip_p = false;
+	    }
+	    else if ( elms[0].strcmp("comet_sigma_clip") == 0 ) {
+		int v = elms[1].atoi();
+		if ( v != 0 ) *comet_sigma_clip_p = true;
+		else *comet_sigma_clip_p = false;
+	    }
+	    else if ( elms[0].strcmp("sigma_r") == 0 ) {
+		sigma_rgb[0] = elms[1].atoi();
+		if ( sigma_rgb[0] < 0 ) sigma_rgb[0] = 0;
+	    }
+	    else if ( elms[0].strcmp("sigma_g") == 0 ) {
+		sigma_rgb[1] = elms[1].atoi();
+		if ( sigma_rgb[1] < 0 ) sigma_rgb[1] = 0;
+	    }
+	    else if ( elms[0].strcmp("sigma_b") == 0 ) {
+		sigma_rgb[2] = elms[1].atoi();
+		if ( sigma_rgb[2] < 0 ) sigma_rgb[2] = 0;
+	    }
 	}
     }
     f_in.close();
@@ -88,8 +125,9 @@ static int get_offset_filename( const char *target_filename,
 }
 
 static int save_sigclip_params( const char *filename,
+				int n_comp_dark_synth,
 				int count_sigma_clip, const int sigma_rgb[],
-				bool std_sigma_clip, bool comet_sigma_clip )
+				bool skylv_sigma_clip, bool comet_sigma_clip )
 {
     int return_status = -1;
     stdstreamio sio, f_out;
@@ -97,10 +135,20 @@ static int save_sigclip_params( const char *filename,
 	sio.eprintf("[ERROR] Cannot write data to %s\n", filename);
 	goto quit;
     }
+    /*
     f_out.printf("%d %d %d %d %d %d\n",
 		 count_sigma_clip,
 		 sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
-		 (int)std_sigma_clip, (int)comet_sigma_clip);
+		 (int)skylv_sigma_clip, (int)comet_sigma_clip);
+    */
+    f_out.printf("n_comp_dark_synth = %d\n",n_comp_dark_synth);
+    f_out.printf("count_sigma_clip = %d\n",count_sigma_clip);
+    f_out.printf("skylv_sigma_clip = %d\n",(int)skylv_sigma_clip);
+    f_out.printf("comet_sigma_clip = %d\n",(int)comet_sigma_clip);
+    f_out.printf("sigma_r = %d\n",sigma_rgb[0]);
+    f_out.printf("sigma_g = %d\n",sigma_rgb[1]);
+    f_out.printf("sigma_b = %d\n",sigma_rgb[2]);
+
     f_out.close();
     return_status = 0;
  quit:
@@ -312,8 +360,8 @@ static int do_stack_and_save( const tarray_tstring &filenames,
 	count_sigma_clip = 0;
     }
 
-    sio.printf("Sigma-Clipping: [N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
-    	       "Dither=%d\n",
+    sio.printf("sigma-clipping: [N_iterations=%d,  value=(%d,%d,%d),  sky-level=%d,  comet=%d]  "
+	       "dither=%d\n",
 	       count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 	       (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
 
@@ -727,6 +775,7 @@ const command_list Cmd_list[] = {
 int main( int argc, char *argv[] )
 {
     const char *conf_file_display = "display_1.txt";
+    const char *conf_file_sigclip = "sigclip_1.txt";
 
     stdstreamio sio, f_in;
     pipestreamio p_in;
@@ -778,7 +827,7 @@ int main( int argc, char *argv[] )
     int return_status = -1;
 
     load_display_params(conf_file_display, contrast_rgb);
-    load_sigclip_params("sigclip_0.txt",
+    load_sigclip_params(conf_file_sigclip, &n_comp_dark_synth,
 			&count_sigma_clip, sigma_rgb, &skylv_sigma_clip, &comet_sigma_clip);
 
     for ( arg_cnt=1 ; arg_cnt < argc ; arg_cnt++ ) {
@@ -935,20 +984,22 @@ int main( int argc, char *argv[] )
     display_image(win_image, 0, 0, ref_img_buf, 2,
 		  display_bin, display_ch, contrast_rgb, true, &tmp_buf);
 
-    winname(win_image, "Imave Viewer  "
-	    "zoom = %3.2f  contrast = ( %d, %d, %d )  "
-	    "sigma-clipping: [N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
-	    "dither = %d",
+    winname(win_image, 
+	    "zoom=%3.2f  contrast=(%d,%d,%d)  "
+	    "N-comp_dark_synth=%d  "
+	    "sigma-clipping: [N_iterations=%d,  value=(%d,%d,%d),  sky-level=%d,  comet=%d]  "
+	    "dither=%d",
 	    (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
 	    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
+	    (int)n_comp_dark_synth, 
 	    count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 	    (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
     
-    sio.printf("Initial Parameters:  "
-	    "contrast = ( %d, %d, %d )  "
-	    "sigma-clipping: [N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
-	    "dither = %d\n",
-	    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
+    sio.printf("Initial Parameters:\n"
+	    " N-comp_dark_synth=%d\n"
+	    " sigma-clipping: [N_iterations=%d,  value=(%d,%d,%d),  sky-level=%d,  comet=%d]\n"
+	    " dither=%d\n",
+	    (int)n_comp_dark_synth, 
 	    count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 	    (int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
     
@@ -1215,46 +1266,48 @@ int main( int argc, char *argv[] )
 	}
 	else if ( cmd_id == CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM && ev_btn == 1 ) {
 	    n_comp_dark_synth ++;
+	    save_sigclip_params(conf_file_sigclip, n_comp_dark_synth, count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
 	    refresh_winname = true;
 	}
 	else if ( cmd_id == CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM && ev_btn == 3 ) {
 	    if ( 0 < n_comp_dark_synth ) n_comp_dark_synth --;
+	    save_sigclip_params(conf_file_sigclip, n_comp_dark_synth, count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
 	    refresh_winname = true;
 	}
 	else if ( cmd_id == CMD_SIGCLIP_CNT_PM && ev_btn == 1 ) {
 	    count_sigma_clip ++;
-	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
+	    save_sigclip_params(conf_file_sigclip, n_comp_dark_synth, count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
 	    refresh_winname = true;
 	}
 	else if ( cmd_id == CMD_SIGCLIP_CNT_PM && ev_btn == 3 ) {
 	    if ( 0 < count_sigma_clip ) count_sigma_clip --;
-	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
+	    save_sigclip_params(conf_file_sigclip, n_comp_dark_synth, count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
 	    refresh_winname = true;
 	}
 	else if ( cmd_id == CMD_SIGCLIP_PM && ev_btn == 1 ) {
 	    sigma_rgb[0] ++;
 	    sigma_rgb[1] ++;
 	    sigma_rgb[2] ++;
-	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
+	    save_sigclip_params(conf_file_sigclip, n_comp_dark_synth, count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
 	    refresh_winname = true;
 	}
 	else if ( cmd_id == CMD_SIGCLIP_PM && ev_btn == 3 ) {
 	    if ( 0 < sigma_rgb[0] ) sigma_rgb[0] --;
 	    if ( 0 < sigma_rgb[1] ) sigma_rgb[1] --;
 	    if ( 0 < sigma_rgb[2] ) sigma_rgb[2] --;
-	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
+	    save_sigclip_params(conf_file_sigclip, n_comp_dark_synth, count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
 	    refresh_winname = true;
 	}
 	else if ( cmd_id == CMD_SIGCLIP_SKYLV ) {
 	    if ( skylv_sigma_clip == true ) skylv_sigma_clip = false;
 	    else skylv_sigma_clip = true;
-	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
+	    save_sigclip_params(conf_file_sigclip, n_comp_dark_synth, count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
 	    refresh_winname = true;
 	}
 	else if ( cmd_id == CMD_SIGCLIP_COMET ) {
 	    if ( comet_sigma_clip == true ) comet_sigma_clip = false;
 	    else comet_sigma_clip = true;
-	    save_sigclip_params("sigclip_0.txt", count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
+	    save_sigclip_params(conf_file_sigclip, n_comp_dark_synth, count_sigma_clip, sigma_rgb, skylv_sigma_clip, comet_sigma_clip);
 	    refresh_winname = true;
 	}
 	else if ( cmd_id == CMD_DITHER ) {
@@ -1508,10 +1561,10 @@ int main( int argc, char *argv[] )
 	}
 
 	if ( refresh_winname == true ) {
-	    winname(win_image, "N-comp_dark_synth=%d  Sigma-Clipping: "
-	        "[N_iterations=%d,  value=( %d, %d, %d ),  sky-level=%d,  comet=%d]  "
-	    	"dither = %d",
-		n_comp_dark_synth, count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
+	    winname(win_image, "N-comp_dark_synth=%d  sigma-clipping: "
+	        "[N_iterations=%d,  value=(%d,%d,%d),  sky-level=%d,  comet=%d]  "
+		"dither=%d",
+		(int)n_comp_dark_synth, count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
 		(int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
 	}
 
