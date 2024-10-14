@@ -751,23 +751,25 @@ const command_list Cmd_list[] = {
         {CMD_DELETE,            "Delete Offset Info        [Del]"},
 #define CMD_CLR_OFF 20
         {CMD_CLR_OFF,           "Clear Currnt Offset       [0]"},
-#define CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM 21
+#define CMD_DISPLAY_PARAMS 21
+        {CMD_DISPLAY_PARAMS,    "Display parameters        [p]"},
+#define CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM 22
         {CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM,    "N comp Dark Synthesis +/- [y][Y]"},
-#define CMD_SIGCLIP_CNT_PM 22
+#define CMD_SIGCLIP_CNT_PM 23
         {CMD_SIGCLIP_CNT_PM,    "N iterations Sig-Clip +/- [i][I]"},
-#define CMD_SIGCLIP_PM 23
+#define CMD_SIGCLIP_PM 24
         {CMD_SIGCLIP_PM,        "Val of Sigma-Clip +/-     [v][V]"},
-#define CMD_SIGCLIP_SKYLV 24
+#define CMD_SIGCLIP_SKYLV 25
         {CMD_SIGCLIP_SKYLV,     "Sky-lv Sigma-Clip on/off  [s]"},
-#define CMD_SIGCLIP_COMET 25
+#define CMD_SIGCLIP_COMET 26
         {CMD_SIGCLIP_COMET,     "Comet Sigma-Clip on/off   [m]"},
-#define CMD_DITHER 26
+#define CMD_DITHER 27
         {CMD_DITHER,            "Dither on/off for saving  [d]"},
-#define CMD_STACK 27
+#define CMD_STACK 28
         {CMD_STACK,             "Start Stacking"},
-#define CMD_STACK_SILENT 28
+#define CMD_STACK_SILENT 29
         {CMD_STACK_SILENT,      "Start Stacking without preview"},
-#define CMD_EXIT 29
+#define CMD_EXIT 30
         {CMD_EXIT,              "Exit                     [q][ESC]"},
         {0, NULL}		/* EOL */
 };
@@ -1097,6 +1099,10 @@ int main( int argc, char *argv[] )
 		cmd_id = CMD_LOUPE_ZOOM;
 		ev_btn = 3;
 	    }
+	    else if ( ev_btn == 'p' ) {
+		cmd_id = CMD_DISPLAY_PARAMS;
+		ev_btn = 1;
+	    }
 	    else if ( ev_btn == 'y' ) {
 		cmd_id = CMD_COMPARATIVE_DARK_SYNTHESIS_CNT_PM;
 		ev_btn = 1;
@@ -1139,6 +1145,10 @@ int main( int argc, char *argv[] )
 	if ( cmd_id == CMD_EXIT ) {
 	    break;
 	}
+	else if ( cmd_id == CMD_SAVE_ALL ) {
+	    save_offset = 2;
+	    refresh_list = true;
+	}
 	else if ( cmd_id == CMD_STACK || cmd_id == CMD_STACK_SILENT ) {
 	    /* preview on/off */
 	    bool flag_preview = true;
@@ -1163,6 +1173,16 @@ int main( int argc, char *argv[] )
 		    sel_file_id = -1;
 		}
 	    }
+	}
+	else if ( cmd_id == CMD_DISPLAY_PARAMS ) {
+	    sio.printf("Current Parameters:\n"
+		" N-comp_dark_synth=%d\n"
+		" sigma-clipping: [N_iterations=%d,  value=(%d,%d,%d),  sky-level=%d,  comet=%d]\n"
+		" dither=%d\n",
+		(int)n_comp_dark_synth, 
+		count_sigma_clip, sigma_rgb[0], sigma_rgb[1], sigma_rgb[2],
+		(int)skylv_sigma_clip, (int)comet_sigma_clip, (int)flag_dither);
+	    refresh_winname = true;
 	}
 	else if ( cmd_id == CMD_DISPLAY_RGB ) {
 	    display_ch = 0;
@@ -1342,10 +1362,6 @@ int main( int argc, char *argv[] )
 		save_offset = 1;
 		refresh_list = true;
 	    }
-	    else if ( cmd_id == CMD_SAVE_ALL ) {
-		save_offset = 2;
-		refresh_list = true;
-	    }
 	    else if ( cmd_id == CMD_DELETE ) {
 		delete_offset = true;
 		refresh_list = true;
@@ -1401,17 +1417,20 @@ int main( int argc, char *argv[] )
 	  
 	    stdstreamio f_out;
 	    tstring offset_file;
-	    get_offset_filename(filenames[sel_file_id].cstr(),
-				&offset_file);
-	    //sio.printf("[%s]\n", offset_file.cstr());
 
 	    if ( delete_offset == true ) {
+		get_offset_filename(filenames[sel_file_id].cstr(),
+				    &offset_file);
+		//sio.printf("[%s]\n", offset_file.cstr());
 	        unlink(offset_file.cstr());
 		flg_saved[sel_file_id] = false;
 		sio.printf("Deleted: [%s]\n", offset_file.cstr());
 	    }
 
 	    if ( save_offset == 1 ) {
+		get_offset_filename(filenames[sel_file_id].cstr(),
+				    &offset_file);
+		//sio.printf("[%s]\n", offset_file.cstr());
 	        if ( f_out.open("w", offset_file.cstr()) < 0 ) {
 		    sio.eprintf("[ERROR] Cannot save!\n");
 		}
@@ -1425,8 +1444,7 @@ int main( int argc, char *argv[] )
 	    else if ( save_offset == 2 ) {	/* save offset to all files */
 		size_t j;
 		for ( j=0 ; j < filenames.length() ; j++ ) {
-		    if ( filenames[j] != refframe &&
-			 flg_saved[j] != true ) {
+		    if ( (int)j != ref_file_id && flg_saved[j] != true ) {
 			get_offset_filename(filenames[j].cstr(), &offset_file);
 			if ( f_out.open("w", offset_file.cstr()) < 0 ) {
 			    sio.eprintf("[ERROR] Cannot save!\n");
