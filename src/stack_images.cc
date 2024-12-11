@@ -69,13 +69,11 @@ static int load_sigclip_params( const char *filename,
 	    elms.split(line.cstr()," =",false);
 	    if ( elms[0].strcmp("n_comp_dark_synth") == 0 ) {
 		int v = elms[1].atoi();
-		if ( v != 0 ) *n_comp_dark_synth_p = true;
-		else *n_comp_dark_synth_p = false;
+		*n_comp_dark_synth_p = v;
 	    }
 	    else if ( elms[0].strcmp("count_sigma_clip") == 0 ) {
 		int v = elms[1].atoi();
-		if ( v != 0 ) *comet_sigma_clip_p = true;
-		else *comet_sigma_clip_p = false;
+		*count_sigma_clip_p = v;
 	    }
 	    else if ( elms[0].strcmp("skylv_sigma_clip") == 0 ) {
 		int v = elms[1].atoi();
