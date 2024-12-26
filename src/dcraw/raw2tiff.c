@@ -512,7 +512,7 @@ static int create_tiff_filename( const char *filename_in,
  */
 static int bayer_to_half( int bayer_matrix,	       /* bayer type       */
 			  int bayer_direct,            /* not interp if non0 */
-			  const uint32 shift_for_scale[],
+			  const int bit_used[],
 			  FILE *pp,		       /* input stream     */
 			  const unsigned char *in_img_buf, /* input img buf */
 			  TIFF *tiff_out,	       /* output TIFF inst */
@@ -522,10 +522,6 @@ static int bayer_to_half( int bayer_matrix,	       /* bayer type       */
 			  uint32 width_out, uint32 height_out,
 			  float fits_pix_info[], bool byte_swap )
 {
-    const uint32 shift_for_scale_r = shift_for_scale[0];
-    const uint32 shift_for_scale_g = shift_for_scale[1];
-    const uint32 shift_for_scale_b = shift_for_scale[2];
-
     const float fits_bzero = fits_pix_info[0];
     const float fits_bscale = fits_pix_info[1];
     
@@ -534,6 +530,21 @@ static int bayer_to_half( int bayer_matrix,	       /* bayer type       */
     uint32 i;
     unsigned char *strip_buf_in = NULL;
     uint16 *strip_buf_out = NULL;
+
+    uint32 shift_for_scale[3];
+    uint32 shift_for_scale_r;
+    uint32 shift_for_scale_g;
+    uint32 shift_for_scale_b;
+
+    for ( i=0 ; i < 3 ; i++ ) {
+	if ( 0 < bit_used[i] && bit_used[i] < 16 )
+	    shift_for_scale[i] = 16 - bit_used[i];
+	else
+	    shift_for_scale[i] = 0;
+    }
+    shift_for_scale_r = shift_for_scale[0];
+    shift_for_scale_g = shift_for_scale[1];
+    shift_for_scale_b = shift_for_scale[2];
 
     if ( 1 < bayer_direct ) bayer_matrix = Matrix_NONE;   /* Monochrome Mode */
     
@@ -731,7 +742,7 @@ static int bayer_to_half( int bayer_matrix,	       /* bayer type       */
  */
 static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 			  int bayer_direct,            /* not interp if non0 */
-			  const uint32 shift_for_scale[],
+			  const int bit_used[],
 			  FILE *pp,		       /* input stream     */
 			  const unsigned char *in_img_buf,
 			  TIFF *tiff_out,	       /* output TIFF inst */
@@ -741,10 +752,6 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 			  uint32 width_out, uint32 height_out,
 			  float fits_pix_info[], bool byte_swap )
 {
-    const uint32 shift_for_scale_r = shift_for_scale[0];
-    const uint32 shift_for_scale_g = shift_for_scale[1];
-    const uint32 shift_for_scale_b = shift_for_scale[2];
-
     const float fits_bzero = fits_pix_info[0];
     const float fits_bscale = fits_pix_info[1];
     
@@ -763,6 +770,21 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 
     float interp_0_25 = 0.25;
     float interp_0_5 = 0.5;
+
+    uint32 shift_for_scale[3];
+    uint32 shift_for_scale_r;
+    uint32 shift_for_scale_g;
+    uint32 shift_for_scale_b;
+
+    for ( i=0 ; i < 3 ; i++ ) {
+	if ( 0 < bit_used[i] && bit_used[i] < 16 )
+	    shift_for_scale[i] = 16 - bit_used[i];
+	else
+	    shift_for_scale[i] = 0;
+    }
+    shift_for_scale_r = shift_for_scale[0];
+    shift_for_scale_g = shift_for_scale[1];
+    shift_for_scale_b = shift_for_scale[2];
 
     if ( 1 < bayer_direct ) bayer_matrix = Matrix_NONE;   /* Monochrome Mode */
 
@@ -1154,7 +1176,7 @@ static int bayer_to_full( int bayer_matrix,	       /* bayer type       */
 /*
  *  e.g., 6000x4000 FITS RGB cube => 6000x4000 RGB tiff output
  */
-static int rgbcube_to_full( const uint32 shift_for_scale[],
+static int rgbcube_to_full( const int bit_used[],
 		       FILE *pp,		       /* input stream     */
 		       TIFF *tiff_out,	       /* output TIFF inst */
 		       uint32 width, uint32 height, /* w/h of output    */
@@ -1284,6 +1306,14 @@ static int rgbcube_to_full( const uint32 shift_for_scale[],
     if ( byps == 2 && fits_bitpix == 16 ) {
 	uint32 line_cnt_out;
 	const uint16 *img_buf_uint16_ptr[3];
+	uint32 shift_for_scale[3];
+	for ( i=0 ; i < 3 ; i++ ) {
+	    if ( 0 < bit_used[i] && bit_used[i] < 16 )
+		shift_for_scale[i] = 16 - bit_used[i];
+	    else
+		shift_for_scale[i] = 0;
+	}
+
 	img_buf_uint16_ptr[0] = (const uint16 *)cube_buf_in;
 	img_buf_uint16_ptr[1] = img_buf_uint16_ptr[0] + (width * height_out);
 	img_buf_uint16_ptr[2] = img_buf_uint16_ptr[1] + (width * height_out);
@@ -1316,6 +1346,38 @@ static int rgbcube_to_full( const uint32 shift_for_scale[],
     else if ( byps == 4 && fits_bitpix == -32 ) {
 	uint32 line_cnt_out;
 	const float *img_buf_float_ptr[3];
+	int flag_limit16 = 0;
+	float v_min=0.0, v_max=0.0, v_off=0.0, v_scale=1.0;
+
+	/* for now */
+	for ( i=0 ; i < 3 ; i++ ) {
+	    if ( 0 < bit_used[i] && bit_used[i] <= 16 ) flag_limit16 = 1;
+	}
+
+	img_buf_float_ptr[0] = (const float *)cube_buf_in;
+	img_buf_float_ptr[1] = img_buf_float_ptr[0] + (width * height_out);
+	img_buf_float_ptr[2] = img_buf_float_ptr[1] + (width * height_out);
+
+	if ( flag_limit16 != 0 ) {
+	    v_min = img_buf_float_ptr[0][x_out + 0];
+	    v_max = img_buf_float_ptr[0][x_out + 0];
+	    for ( i=0 ; i < height_out ; i++ ) {
+		size_t j;
+		for ( j=0 ; j < 3 ; j++ ) {
+		    uint32 k;
+		    for ( k=0 ; k < width_out ; k++ ) {
+			float v = img_buf_float_ptr[j][x_out + k];
+			if ( v < v_min ) v_min = v;
+			if ( v_max < v ) v_max = v;
+		    }
+		    img_buf_float_ptr[j] += width;		/* in */
+		}
+	    }
+	    v_off   = 0.0 - v_min;
+	    v_scale = 1.0 / (v_max - v_min);
+	    fprintf(stderr,"[INFO] v_off=%g v_scale=%g\n", v_off, v_scale);
+	}
+
 	img_buf_float_ptr[0] = (const float *)cube_buf_in;
 	img_buf_float_ptr[1] = img_buf_float_ptr[0] + (width * height_out);
 	img_buf_float_ptr[2] = img_buf_float_ptr[1] + (width * height_out);
@@ -1329,7 +1391,10 @@ static int rgbcube_to_full( const uint32 shift_for_scale[],
 		uint32 k;
 		ix = j;
 		for ( k=0 ; k < width_out ; k++ ) {
-		    strip_buf_out_float_ptr[ix] = img_buf_float_ptr[j][x_out + k];
+		    float v = img_buf_float_ptr[j][x_out + k];
+		    v += v_off;
+		    v *= v_scale;
+		    strip_buf_out_float_ptr[ix] = v;
 		    ix += 3;				/* out */
 		}
 		img_buf_float_ptr[j] += width;		/* in */
@@ -1389,9 +1454,6 @@ static int raw_to_tiff( const char *filename_in,
     FILE *pp = NULL;
     TIFF *tiff_in = NULL;
     TIFF *tiff_out = NULL;
-    const uint32 shift_for_scale[3] = { 16 - bit_used[0],
-					16 - bit_used[1],
-					16 - bit_used[2] };
     float camera_calibration1[12];				/* for TIFF tag */
     float *camera_basic_info = camera_calibration1 + 0;		/* [5] */
     float *daylight_multipliers = camera_calibration1 + 5;	/* [3] */
@@ -1734,7 +1796,7 @@ static int raw_to_tiff( const char *filename_in,
 	else {
 	    TIFFSetField(tiff_out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
 	}
-        if ( rgbcube_to_full( shift_for_scale,
+        if ( rgbcube_to_full( bit_used,
 		     pp, tiff_out,
 		     width, height,
 		     byps, spp,
@@ -1747,7 +1809,7 @@ static int raw_to_tiff( const char *filename_in,
     else if ( half_size_image == false ) {	/* full size image */
 	TIFFSetField(tiff_out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
         if ( bayer_to_full( bayer_matrix, bayer_direct,
-			    shift_for_scale,
+			    bit_used,
 			    pp, tiff_in_img_buf, tiff_out,
 			    width, height,
 			    byps, spp,
@@ -1760,7 +1822,7 @@ static int raw_to_tiff( const char *filename_in,
     else {					/* half size image */
 	TIFFSetField(tiff_out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
         if ( bayer_to_half( bayer_matrix, bayer_direct,
-			    shift_for_scale,
+			    bit_used,
 			    pp, tiff_in_img_buf, tiff_out,
 			    width, height,
 			    byps, spp,
@@ -1811,11 +1873,13 @@ int main( int argc, char *argv[] )
 	fprintf(stderr,"-grbg ... Set 'GRBG' matrix type\n");
 	fprintf(stderr,"-P file ... Fix the dead pixels listed in this file (RAW only)\n");
 	fprintf(stderr,"bit_used ... 9 to 16.  Set 14 for lossless 14-bit data\n");
+	fprintf(stderr,"             Set 16 to rescale values [0.0...1.0] for float FITS RGB cube.\n");
+	fprintf(stderr,"             Set 32 for float FITS RGB cube without rescaling.\n");
         fprintf(stderr,"\n");
         fprintf(stderr,"[EXAMPLE]\n");
         fprintf(stderr,"$ %s 13,14,13 DSC_0001.NEF DSC_0002.NEF DSC_0003.NEF\n", argv[0]);
         fprintf(stderr,"$ %s 16 ASIImg_frame0001.fit ASIImg_frame0002.fit\n", argv[0]);
-        fprintf(stderr,"$ %s 32 M74_32bit_float_RGB-cube.fits\n", argv[0]);
+        fprintf(stderr,"$ %s 16 M74_32bit_float_RGB-cube.fits\n", argv[0]);
         fprintf(stderr,"$ %s 16 Saturn_00001.tif\n", argv[0]);
         fprintf(stderr,"\n");
         fprintf(stderr,"Note that output='foo.tiff' for input='foo.tif' and\n");
@@ -1877,7 +1941,8 @@ int main( int argc, char *argv[] )
 	    }
 	    safe_strncpy(tmpbuf,64, argv[arg_cnt] + off,spn);
 	    bit_used[i] = atoi(tmpbuf);
-	    if ( bit_used[i] < 9 || 16 < bit_used[i] ) bit_used[i] = 16;
+	    if ( bit_used[i] < 9 ) bit_used[i] = 16;
+	    else if ( 16 < bit_used[i] ) bit_used[i] = 0;
 	    if ( argv[arg_cnt][off + spn] == ',' ) {
 		off += spn + 1;
 	    }
