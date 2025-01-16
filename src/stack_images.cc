@@ -1593,7 +1593,7 @@ int main( int argc, char *argv[] )
 	    display_loupe( command_win_rec.win_id,
 			   0, command_win_rec.reserved_y0,
 			   refresh_loupe, *disp_img_p, tiff_szt, ev_x, ev_y,
-			   loupe_zoom, contrast_rgb, display_ch,
+			   loupe_zoom, 0, contrast_rgb, display_ch,
 			   gcfnc, &loupe_buf, 
 			   &loupe_x, &loupe_y, &tmp_buf_loupe);
 	}

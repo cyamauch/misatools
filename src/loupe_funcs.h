@@ -16,7 +16,7 @@ int display_loupe( int win_cmd, int pos_x, int pos_y,
 	   int refresh_loupe,
 	   const sli::mdarray &img_buf, int tiff_szt,
 	   double ev_x, double ev_y,
-	   int loupe_zoom, int contrast_rgb[],
+	   int loupe_zoom, int circle_radius, int contrast_rgb[],
 	   int display_ch, int gcfnc, sli::mdarray *loupe_buf_p,
 	   int *loupe_x_p, int *loupe_y_p,
 	   sli::mdarray_uchar *tmp_buf_loupe_p );

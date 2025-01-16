@@ -92,13 +92,14 @@ int update_loupe_buf( const mdarray &src_img_buf,
 
     ret_status = 0;
  quit:
-    return ret_status;}
+    return ret_status;
+}
 
 int display_loupe( int win_cmd, int pos_x, int pos_y,
 		   int refresh_loupe,
 		   const mdarray &img_buf, int tiff_szt,
 		   double ev_x, double ev_y,
-		   int loupe_zoom, int contrast_rgb[],
+		   int loupe_zoom, int circle_radius, int contrast_rgb[],
 		   int display_ch, int gcfnc, mdarray *loupe_buf_p,
 		   int *loupe_x_p, int *loupe_y_p,
 		   mdarray_uchar *tmp_buf_loupe_p )
@@ -116,10 +117,10 @@ int display_loupe( int win_cmd, int pos_x, int pos_y,
     layer(win_cmd, 0, 2);
     copylayer(win_cmd, 1, 2);
     drawstr(win_cmd, get_font_margin(), this_y0 + digit_y_pos,
-	    get_fontsize(), 0, "zoom=%d", loupe_zoom);
+	    get_fontsize(), 0, "zoom=%d radius=%d", loupe_zoom, circle_radius);
     if ( *loupe_x_p != Loupe_pos_out ) {
 	drawstr(win_cmd,
-		get_font_margin() + 9 * (get_fontsize()/2), this_y0 + digit_y_pos,
+		get_font_margin() + 19 * (get_fontsize()/2), this_y0 + digit_y_pos,
 		get_fontsize(), 0, "x=%d y=%d", *loupe_x_p, *loupe_y_p);
 	drawstr(win_cmd,
 		get_font_margin(),
@@ -147,6 +148,10 @@ int display_loupe( int win_cmd, int pos_x, int pos_y,
 		 cross_x, this_y0 + loupe_y_pos + cross_y - hole);
 	drawline(win_cmd, cross_x, this_y0 + loupe_y_pos + cross_y + hole,
 		 cross_x, this_y0 + loupe_y_pos + loupe_buf_p->y_length() - 1);
+	if ( 0 < circle_radius ) {
+	    drawcirc(win_cmd, cross_x, this_y0 + loupe_y_pos + cross_y,
+		     circle_radius * loupe_zoom, circle_radius * loupe_zoom);
+	}
 	newgcfunction(win_cmd, GXcopy);
 	newrgbcolor(win_cmd, 0xff,0xff,0xff);
     }

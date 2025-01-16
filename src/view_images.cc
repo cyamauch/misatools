@@ -48,6 +48,23 @@ typedef struct _aphoto {
     double obj_cnt[3];
 } aphoto;
 
+typedef struct _area_pos_info {
+    long s_id;
+    long x;
+    long y;
+    double r;
+    double org_red;
+    double org_green;
+    double org_blue;
+} area_pos_info;
+
+typedef struct _area_rgb_info {
+    long s_id;
+    double red;
+    double green;
+    double blue;
+} area_rgb_info;
+
 static int init_aphoto( aphoto *rec_p )
 {
     rec_p->obj_x = -32000;
@@ -249,6 +266,165 @@ static void append_aphoto_log( const char *filename, int tiff_szt,
     return;
 }
 
+/* for qsort() arg */
+static int compar_fnc_pos( const void *_a, const void *_b )
+{
+    const area_pos_info *a = (const area_pos_info *)_a;
+    const area_pos_info *b = (const area_pos_info *)_b;
+    /* read radius vals */
+    if ( a->r < b->r ) return 1;
+    else if ( b->r < a->r ) return -1;
+    else return 0;
+}
+
+static int compar_fnc_rgb( const void *_a, const void *_b )
+{
+    const area_rgb_info *a = (const area_rgb_info *)_a;
+    const area_rgb_info *b = (const area_rgb_info *)_b;
+    /* read green vals */
+    if ( a->green < b->green ) return -1;
+    else if ( b->green < a->green ) return 1;
+    else return 0;
+}
+
+static void perform_correct_psf( int radius_psf, int psf_corr_shape,
+				 double ev_x, double ev_y, mdarray *img_buf,
+				 mdarray *area_pos_arr, mdarray *area_rgb_arr )
+{
+    size_t i, ix, len_pix, len_box = radius_psf * 2 + 1;
+    area_pos_info *area_pos_arr_ptr;
+    area_rgb_info *area_rgb_arr_ptr;
+    double max_green = NAN;
+    double new_ev_x = NAN, new_ev_y = NAN;
+    stdstreamio sio;
+
+    /* get maximum green value and its position */
+    for ( i=0 ; i < len_box ; i++ ) {
+	long y = (long)ev_y - radius_psf + i;
+	size_t j;
+	for ( j=0 ; j < len_box ; j++ ) {
+	    long x = (long)ev_x - radius_psf + j;
+	    double v = img_buf->dvalue(x, y, 1);
+	    double r = sqrt( (j-radius_psf)*(j-radius_psf) + (i-radius_psf)*(i-radius_psf) );
+	    if ( r <= (double)radius_psf ) {
+		if ( isfinite(v) != 0 ) {
+		    if ( isfinite(max_green) == 0 ) {
+			max_green = v;
+			new_ev_x = x;
+			new_ev_y = y;
+		    }
+		    else {
+			if ( max_green < v ) {
+			    max_green = v;
+			    new_ev_x = x;
+			    new_ev_y = y;
+			}
+		    }
+		}
+	    }
+	}
+    }
+
+    sio.printf("new_ev_x, new_ev_y = %g, %g\n", new_ev_x, new_ev_y);
+
+    if ( isfinite(max_green) == 0 ) return;
+
+    area_pos_arr->resize( len_box * len_box );
+    area_pos_arr->clean();
+    area_pos_arr_ptr = (area_pos_info *)area_pos_arr->data_ptr();
+    area_rgb_arr->resize( len_box * len_box );
+    area_rgb_arr->clean();
+    area_rgb_arr_ptr = (area_rgb_info *)area_rgb_arr->data_ptr();
+
+    ix = 0;
+    for ( i=0 ; i < len_box ; i++ ) {
+	long y = (long)new_ev_y - radius_psf + i;
+	size_t j;
+	for ( j=0 ; j < len_box ; j++ ) {
+	    long x = (long)new_ev_x - radius_psf + j;
+	    double r = sqrt( (j-radius_psf)*(j-radius_psf) + (i-radius_psf)*(i-radius_psf) );
+	    double green_val = area_rgb_arr_ptr[ix].green;
+	    if ( r <= (double)radius_psf && isfinite(green_val) != 0 ) {
+		double vibration = 0.01 * (double)rand() / (double)(RAND_MAX);
+		area_pos_arr_ptr[ix].x = x;
+		area_pos_arr_ptr[ix].y = y;
+		area_pos_arr_ptr[ix].r = r + vibration;
+		area_rgb_arr_ptr[ix].red = img_buf->dvalue(x, y, 0);
+		area_rgb_arr_ptr[ix].green = img_buf->dvalue(x, y, 1);
+		area_rgb_arr_ptr[ix].blue = img_buf->dvalue(x, y, 2);
+		/* for mix and UNDO */
+		area_pos_arr_ptr[ix].org_red = area_rgb_arr_ptr[ix].red;
+		area_pos_arr_ptr[ix].org_green = area_rgb_arr_ptr[ix].green;
+		area_pos_arr_ptr[ix].org_blue = area_rgb_arr_ptr[ix].blue;
+		/* register non-0 value into s_id to indicate valid data */
+		area_pos_arr_ptr[ix].s_id = ix + 1;
+		area_rgb_arr_ptr[ix].s_id = ix + 1;
+		ix ++;
+	    }
+	}
+    }
+    len_pix = ix;
+
+    /* sort by radius */
+    qsort(area_pos_arr_ptr, len_pix,
+	  sizeof(*area_pos_arr_ptr), &compar_fnc_pos);
+    /* sort by green val */
+    qsort(area_rgb_arr_ptr, len_pix,
+	  sizeof(*area_rgb_arr_ptr), &compar_fnc_rgb);
+
+    /* set pixels */
+    for ( i=0 ; i < len_pix ; i++ ) {
+	double radius = (double)radius_psf;
+	double r = area_pos_arr_ptr[i].r;
+	double f = pow(r/radius, psf_corr_shape);
+	double v;
+	v = area_rgb_arr_ptr[i].red * (1.0 - f) +
+	    area_pos_arr_ptr[i].org_red * f;
+	img_buf->assign( v, area_pos_arr_ptr[i].x, area_pos_arr_ptr[i].y, 0 );
+	v = area_rgb_arr_ptr[i].green * (1.0 - f) +
+	    area_pos_arr_ptr[i].org_green * f;
+	img_buf->assign( v, area_pos_arr_ptr[i].x, area_pos_arr_ptr[i].y, 1 );
+	v = area_rgb_arr_ptr[i].blue * (1.0 - f) +
+	    area_pos_arr_ptr[i].org_blue * f;
+	img_buf->assign( v, area_pos_arr_ptr[i].x, area_pos_arr_ptr[i].y, 2 );
+    }
+
+    return;
+}
+
+static void undo_correct_psf( mdarray *img_buf,
+			      mdarray *area_pos_arr, mdarray *area_rgb_arr )
+{
+    area_pos_info *area_pos_arr_ptr;
+    size_t i, len_pix;
+
+    if ( area_pos_arr->length() == 0 ) return;
+
+    area_pos_arr_ptr = (area_pos_info *)area_pos_arr->data_ptr();
+
+    for ( i=0 ; 0 < area_pos_arr_ptr[i].s_id ; i++ ) {
+	/* count only */
+    }
+    len_pix = i;
+
+    if ( len_pix < 1 ) return;
+
+    /* set pixels */
+    for ( i=0 ; i < len_pix ; i++ ) {
+	img_buf->assign( area_pos_arr_ptr[i].org_red,
+			 area_pos_arr_ptr[i].x, area_pos_arr_ptr[i].y, 0 );
+	img_buf->assign( area_pos_arr_ptr[i].org_green,
+			 area_pos_arr_ptr[i].x, area_pos_arr_ptr[i].y, 1 );
+	img_buf->assign( area_pos_arr_ptr[i].org_blue,
+			 area_pos_arr_ptr[i].x, area_pos_arr_ptr[i].y, 2 );
+    }
+
+    area_pos_arr->clean();
+    area_rgb_arr->clean();
+
+    return;
+}
+
 
 const command_list Cmd_list[] = {
 #define CMD_DISPLAY_TARGET 1
@@ -275,23 +451,27 @@ const command_list Cmd_list[] = {
         {CMD_CONT_B,            "Blue Contrast +/-              [b][B]"},
 #define CMD_LOUPE_ZOOM 12
         {CMD_LOUPE_ZOOM,        "Zoom factor of loupe +/-       [l][L]"},
-#define CMD_IMSTAT 13
+#define CMD_RADIUS_PSF 13
+        {CMD_RADIUS_PSF,        "Radius of area for PSF corr.   [p][P]"},
+#define CMD_SHAPE_PSF 14
+        {CMD_SHAPE_PSF,         "Shape of PSF corr.             [o][O]"},
+#define CMD_IMSTAT 15
         {CMD_IMSTAT,            "Image statistics               [s]"},
-#define CMD_APHOTO 14
-        {CMD_APHOTO,            "Aperture Photometry / Reuse Ap [p][P]"},
-#define CMD_SAVE_SLOG 15
+#define CMD_APHOTO 16
+        {CMD_APHOTO,            "Aperture Photometry / Reuse Ap [a][A]"},
+#define CMD_SAVE_SLOG 17
         {CMD_SAVE_SLOG,         "Save Log of Statistics         [Enter]"},
-#define CMD_AUTO_ZOOM 16
+#define CMD_AUTO_ZOOM 18
         {CMD_AUTO_ZOOM,         "Auto zoom on/off for loading   [z]"},
-#define CMD_DITHER 17
+#define CMD_DITHER 19
         {CMD_DITHER,            "Dither on/off for saving       [d]"},
-#define CMD_SAVE_8BIT 18
+#define CMD_SAVE_8BIT 20
         {CMD_SAVE_8BIT,         "Save as 8-bit TIFF"},
-#define CMD_SAVE_16BIT 19
+#define CMD_SAVE_16BIT 21
         {CMD_SAVE_16BIT,        "Save as 16-bit TIFF"},
-#define CMD_SAVE_FLOAT 20
+#define CMD_SAVE_FLOAT 22
         {CMD_SAVE_FLOAT,        "Save as 32-bit float TIFF"},
-#define CMD_EXIT 21
+#define CMD_EXIT 23
         {CMD_EXIT,              "Exit                          [q][ESC]"},
         {0, NULL}		/* EOL */
 };
@@ -316,7 +496,12 @@ int main( int argc, char *argv[] )
     mdarray_uchar tmp_buf_img(false);	/* tmp buffer for displaying */
     mdarray_uchar tmp_buf_loupe(false);	/* tmp buffer for displaying */
     int tiff_szt = 0;
-    
+
+    mdarray area_pos_arr( sizeof(area_pos_info), false );	/* PSF correction */
+    mdarray area_rgb_arr( sizeof(area_rgb_info), false );
+    int radius_psf = 0;
+    int psf_corr_shape = 4;
+
     int display_type = 0;		/* flag to display image type */
     int display_ch = 0;			/* 0=RGB 1=R 2=G 3=B */
     int display_bin = 1;		/* binning factor for display */
@@ -341,6 +526,8 @@ int main( int argc, char *argv[] )
     bool flag_dither = true;
 
     const char *names_ch[] = {"RGB", "Red", "Green", "Blue"};
+
+    unsigned int rnd_seed = 0;
     
     size_t i;
     int arg_cnt;
@@ -439,6 +626,17 @@ int main( int argc, char *argv[] )
 	goto quit;
     }
 
+    /* set random seed */
+    i = 0;
+    while ( filenames[sel_file_id].cchr(i) != '\0' ) {
+	rnd_seed += (unsigned int)(filenames[sel_file_id].cchr(i)) << (rnd_seed % 25);
+	rnd_seed -= (unsigned int)(filenames[sel_file_id].cchr(i)) << (rnd_seed % 19);
+	rnd_seed += (unsigned int)(filenames[sel_file_id].cchr(i)) << (rnd_seed % 11);
+	rnd_seed -= (unsigned int)(filenames[sel_file_id].cchr(i)) << (rnd_seed % 5);
+	i++;
+    }
+    srand(rnd_seed);
+
     display_bin = get_bin_factor_for_display(img_buf.x_length(),
 					     img_buf.y_length(), true);
     if ( display_bin < 0 ) {
@@ -456,10 +654,10 @@ int main( int argc, char *argv[] )
 
     winname(win_image, "Imave Viewer  "
 	    "zoom = %3.2f  contrast = ( %d, %d, %d )  "
-	    "auto_zoom = %d  dither = %d",
+	    "auto_zoom = %d  dither = %d  psf_corr_shape = %d",
 	    (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
 	    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
-	    (int)flag_auto_zoom, (int)flag_dither);
+	    (int)flag_auto_zoom, (int)flag_dither, psf_corr_shape);
 
     
     /*
@@ -556,12 +754,28 @@ int main( int argc, char *argv[] )
 		cmd_id = CMD_LOUPE_ZOOM;
 		ev_btn = 3;
 	    }
-	    else if ( ev_btn == 's' ) cmd_id = CMD_IMSTAT;
 	    else if ( ev_btn == 'p' ) {
-		cmd_id = CMD_APHOTO;
+		cmd_id = CMD_RADIUS_PSF;
 		ev_btn = 1;
 	    }
 	    else if ( ev_btn == 'P' ) {
+		cmd_id = CMD_RADIUS_PSF;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == 'o' ) {
+		cmd_id = CMD_SHAPE_PSF;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'O' ) {
+		cmd_id = CMD_SHAPE_PSF;
+		ev_btn = 3;
+	    }
+	    else if ( ev_btn == 's' ) cmd_id = CMD_IMSTAT;
+	    else if ( ev_btn == 'a' ) {
+		cmd_id = CMD_APHOTO;
+		ev_btn = 1;
+	    }
+	    else if ( ev_btn == 'A' ) {
 		cmd_id = CMD_APHOTO;
 		ev_btn = 3;
 	    }
@@ -680,6 +894,30 @@ int main( int argc, char *argv[] )
 	    if ( 4 < loupe_zoom ) {
 		loupe_zoom -= 2;
 		refresh_loupe = 1;
+	    }
+	}
+	else if ( cmd_id == CMD_RADIUS_PSF && ev_btn == 1 ) {
+	    if ( radius_psf < 24 ) {
+		radius_psf += 1;
+		refresh_loupe = 1;
+	    }
+	}
+	else if ( cmd_id == CMD_RADIUS_PSF && ev_btn == 3 ) {
+	    if ( 0 < radius_psf ) {
+		radius_psf -= 1;
+		refresh_loupe = 1;
+	    }
+	}
+	else if ( cmd_id == CMD_SHAPE_PSF && ev_btn == 1 ) {
+	    if ( psf_corr_shape < 20 ) {
+		psf_corr_shape += 1;
+		refresh_winname = true;
+	    }
+	}
+	else if ( cmd_id == CMD_SHAPE_PSF && ev_btn == 3 ) {
+	    if ( 0 < psf_corr_shape ) {
+		psf_corr_shape -= 1;
+		refresh_winname = true;
 	    }
 	}
 	else if ( cmd_id == CMD_AUTO_ZOOM ) {
@@ -970,6 +1208,23 @@ int main( int argc, char *argv[] )
 		    }
 		}
 	    }
+	    /* PSF correction  */
+	    else if ( 0 < radius_psf && ev_win == win_image ) {
+		cmd_id = 0;
+		if ( ev_type == ButtonPress && ev_btn == 1 ) {
+		    sio.printf("perform psf corr.: %d %g %g\n",radius_psf,ev_x,ev_y);
+		    /* perform */
+		    perform_correct_psf(radius_psf, psf_corr_shape, ev_x, ev_y, &img_buf,
+					&area_pos_arr, &area_rgb_arr);
+		    refresh_image = 1;
+		}
+		else if ( ev_type == ButtonPress && ev_btn == 3 ) {
+		    sio.printf("undo psf corr.\n");
+		    /* UNDO */
+		    undo_correct_psf(&img_buf, &area_pos_arr, &area_rgb_arr);
+		    refresh_image = 1;
+		}
+	    }
 
 	}
 
@@ -1010,6 +1265,17 @@ int main( int argc, char *argv[] )
 	    }
 	    else {
 
+		/* set random seed */
+		i = 0;
+		while ( filenames[f_id].cchr(i) != '\0' ) {
+		    rnd_seed += (unsigned int)(filenames[f_id].cchr(i)) << (rnd_seed % 25);
+		    rnd_seed -= (unsigned int)(filenames[f_id].cchr(i)) << (rnd_seed % 19);
+		    rnd_seed += (unsigned int)(filenames[f_id].cchr(i)) << (rnd_seed % 11);
+		    rnd_seed -= (unsigned int)(filenames[f_id].cchr(i)) << (rnd_seed % 5);
+		    i++;
+		}
+		srand(rnd_seed);
+
 		sel_file_id = f_id;
 		//sio.printf("%ld\n", sel_file_id);
 
@@ -1045,20 +1311,20 @@ int main( int argc, char *argv[] )
 			  refresh_winsize, &tmp_buf_img);
 	    winname(win_image, "Image Viewer  "
 		    "channel = %s  zoom = %3.2f  contrast = ( %d, %d, %d )  "
-		    "auto_zoom = %d  dither = %d  ",
+		    "auto_zoom = %d  dither = %d  psf_corr_shape = %d",
 		    names_ch[display_ch], (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
 		    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
-		    (int)flag_auto_zoom, (int)flag_dither);
+		    (int)flag_auto_zoom, (int)flag_dither, psf_corr_shape);
 	    flag_drawed = false;
 	}
 
 	if ( refresh_winname == true ) {
 	    winname(win_image, "Image Viewer  "
 		    "channel = %s  zoom = %3.2f  contrast = ( %d, %d, %d )  "
-		    "auto_zoom = %d  dither = %d  ",
+		    "auto_zoom = %d  dither = %d  psf_corr_shape = %d",
 		    names_ch[display_ch], (double)((display_bin < 0) ? -display_bin : 1.0/display_bin),
 		    contrast_rgb[0], contrast_rgb[1], contrast_rgb[2],
-		    (int)flag_auto_zoom, (int)flag_dither);
+		    (int)flag_auto_zoom, (int)flag_dither, psf_corr_shape);
 	}
 
 	if ( refresh_loupe != 0 || refresh_image != 0 ) {
@@ -1068,7 +1334,7 @@ int main( int argc, char *argv[] )
 	    display_loupe( command_win_rec.win_id,
 			   0, command_win_rec.reserved_y0,
 			   refresh_loupe, img_buf, tiff_szt, ev_x, ev_y,
-			   loupe_zoom, contrast_rgb, display_ch,
+			   loupe_zoom, radius_psf, contrast_rgb, display_ch,
 			   gcfnc, &loupe_buf, 
 			   &loupe_x, &loupe_y, &tmp_buf_loupe);
 	}
