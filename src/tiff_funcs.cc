@@ -43,8 +43,9 @@ int make_tiff_filename( const char *_filename_in,
     const char *str_16[4] = {".16bit.","_16bit.",".16bit_","_16bit_"};
     const char *str_fl[4] = {".float.","_float.",".float_","_float_"};
     stdstreamio sio;
+    tstring str_dot_appended_dot;
     tstring filename_in, bit_str_in;
-    ssize_t pos_dot, ix_8, ix_16, ix_fl, ix_right_most, ix;
+    ssize_t pos_dot, ix_8, ix_16, ix_fl, ix_right_most, ix_appended, ix;
     size_t i;
     bool flag_need_bit_str = true;
 
@@ -76,6 +77,14 @@ int make_tiff_filename( const char *_filename_in,
 	if ( ix_right_most < ix ) ix_right_most = ix;
     }
 
+    if ( appended_str != NULL ) {
+	str_dot_appended_dot.printf(".%s.", appended_str);
+	ix_appended = filename_in.rfind(str_dot_appended_dot.cstr());
+    }
+    else {
+	ix_appended = -1;
+    }
+
     if ( bit_str_in == "8bit" ) {
 	if ( 0 <= ix_8 && ix_8 == ix_right_most ) flag_need_bit_str = false;
     }
@@ -88,12 +97,22 @@ int make_tiff_filename( const char *_filename_in,
     else {
 	sio.eprintf("[WARNING] unexpected bit_str: '%s'\n", bit_str);
     }
-    
-    if ( flag_need_bit_str == true ) {
-	filename_out->appendf(".%s.%s.tiff",appended_str,bit_str);
+
+    if ( appended_str != NULL && ix_appended < 0 ) {
+	if ( flag_need_bit_str == true ) {
+	    filename_out->appendf(".%s.%s.tiff",appended_str,bit_str);
+	}
+	else {
+	    filename_out->appendf(".%s.tiff",appended_str);
+	}
     }
     else {
-	filename_out->appendf(".%s.tiff",appended_str);
+	if ( flag_need_bit_str == true ) {
+	    filename_out->appendf(".%s.tiff",bit_str);
+	}
+	else {
+	    filename_out->append(".tiff");
+	}
     }
     
     return 0;
@@ -932,7 +951,7 @@ int load_tiff_into_separate_buffer( const char *filename_in,
     return ret_status;
 }
 
-
+/* write 8-bit/16-bit tiff data */
 int save_tiff( const mdarray &img_buf_in, int sztype,
 	       const mdarray_uchar &icc_buf_in,
 	       const float camera_calibration1[],	/* [12] */

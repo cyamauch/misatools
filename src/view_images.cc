@@ -325,7 +325,7 @@ static void perform_correct_psf( int radius_psf, int psf_corr_shape,
 	}
     }
 
-    sio.printf("new_ev_x, new_ev_y = %g, %g\n", new_ev_x, new_ev_y);
+    /* sio.printf("new_ev_x, new_ev_y = %g, %g\n", new_ev_x, new_ev_y); */
 
     if ( isfinite(max_green) == 0 ) return;
 
@@ -465,13 +465,11 @@ const command_list Cmd_list[] = {
         {CMD_AUTO_ZOOM,         "Auto zoom on/off for loading   [z]"},
 #define CMD_DITHER 19
         {CMD_DITHER,            "Dither on/off for saving       [d]"},
-#define CMD_SAVE_8BIT 20
-        {CMD_SAVE_8BIT,         "Save as 8-bit TIFF"},
-#define CMD_SAVE_16BIT 21
+#define CMD_SAVE_16BIT 20
         {CMD_SAVE_16BIT,        "Save as 16-bit TIFF"},
-#define CMD_SAVE_FLOAT 22
+#define CMD_SAVE_FLOAT 21
         {CMD_SAVE_FLOAT,        "Save as 32-bit float TIFF"},
-#define CMD_EXIT 23
+#define CMD_EXIT 22
         {CMD_EXIT,              "Exit                          [q][ESC]"},
         {0, NULL}		/* EOL */
 };
@@ -486,12 +484,14 @@ int main( int argc, char *argv[] )
     tstring filename_1st;
     tstring dirname;
     int sel_file_id = 0;
-   
+    bool sel_file_modified_psf = false;	/* flag to indicate modification */
+
     command_win command_win_rec;
     size_t max_len_menu_string;
     int win_filesel, win_image;
 
     mdarray img_buf(UCHAR_ZT,false);	/* buffer for target */
+    mdarray_uchar icc_buf(false);
     mdarray loupe_buf(UCHAR_ZT,false);	/* buffer for loupe */
     mdarray_uchar tmp_buf_img(false);	/* tmp buffer for displaying */
     mdarray_uchar tmp_buf_loupe(false);	/* tmp buffer for displaying */
@@ -621,10 +621,11 @@ int main( int argc, char *argv[] )
 
     sio.printf("Open: %s\n", filenames[sel_file_id].cstr());
     if ( load_tiff(filenames[sel_file_id].cstr(),
-			 &img_buf, &tiff_szt, NULL, NULL) < 0 ) {
+			 &img_buf, &tiff_szt, &icc_buf, NULL) < 0 ) {
         sio.eprintf("[ERROR] load_tiff() failed\n");
 	goto quit;
     }
+    sel_file_modified_psf = false;
 
     /* set random seed */
     i = 0;
@@ -796,6 +797,76 @@ int main( int argc, char *argv[] )
 	if ( cmd_id == CMD_EXIT ) {
 	    break;
 	}
+	else if ( cmd_id == CMD_SAVE_FLOAT ) {
+	    tstring out_filename;
+	    bool flag_save = true;
+	    if ( sel_file_modified_psf == true ) {
+		make_tiff_filename(filenames[sel_file_id].cstr(), "psf-corr",
+				   "float", &out_filename);
+	    }
+	    else {
+		make_tiff_filename(filenames[sel_file_id].cstr(), NULL,
+				   "float", &out_filename);
+	    }
+	    if ( sel_file_modified_psf == false &&
+		 test_tiff_file(out_filename.cstr()) == true ) {
+		flag_save = false;
+	    }
+	    if ( flag_save == true && tiff_szt == -4 ) {
+		sio.printf("Writing '%s' ...\n", out_filename.cstr());
+		if ( save_float_to_tiff(img_buf, icc_buf, NULL,
+					1.0, out_filename.cstr()) < 0 ) {
+		    sio.eprintf("[ERROR] save_float_to_tiff() failed.\n");
+		}
+	    }
+	}
+	else if ( cmd_id == CMD_SAVE_16BIT ) {
+	    tstring out_filename;
+	    bool flag_save = true;
+	    if ( sel_file_modified_psf == true ) {
+		make_tiff_filename(filenames[sel_file_id].cstr(), "psf-corr",
+				   "16bit", &out_filename);
+	    }
+	    else {
+		make_tiff_filename(filenames[sel_file_id].cstr(), NULL,
+				   "16bit", &out_filename);
+	    }
+	    if ( sel_file_modified_psf == false &&
+		 test_tiff_file(out_filename.cstr()) == true ) {
+		flag_save = false;
+	    }
+	    if ( flag_save == true ) {
+		if ( tiff_szt == -4 ) {
+		    mdarray result_img_buf;
+		    double min_v;
+		    sio.printf("Writing '%s' ...\n", out_filename.cstr());
+		    if ( flag_dither == true ) sio.printf("using dither ...\n");
+		    else sio.printf("NOT using dither ...\n");
+		    /* */
+		    result_img_buf = img_buf;
+		    min_v = md_min(result_img_buf);
+		    if ( min_v < 0.0 ){
+			result_img_buf -= min_v;
+			sio.printf("[INFO] abs(min_v = %g) will be used as softbias\n",
+				   min_v);
+		    }
+		    /* */
+		    sio.printf("[INFO] scale will be changed\n");
+		    /* */
+		    if ( save_float_to_tiff48(result_img_buf, icc_buf, NULL,
+			    0.0, 0.0, flag_dither, out_filename.cstr()) < 0 ) {
+			sio.eprintf("[ERROR] save_float_to_tiff48() failed.\n");
+		    }
+		}
+		else if ( tiff_szt == 2 ) {
+		    sio.printf("Writing '%s' ...\n", out_filename.cstr());
+		    if ( save_tiff(img_buf, tiff_szt, icc_buf, NULL,
+				   out_filename.cstr()) < 0 ) {
+			sio.eprintf("[ERROR] save_tiff() failed.\n");
+		    }
+		}
+	    }
+	}
 	else if ( cmd_id == CMD_DISPLAY_RGB ) {
 	    display_ch = 0;
 	    refresh_image = 1;
@@ -897,7 +968,7 @@ int main( int argc, char *argv[] )
 	    }
 	}
 	else if ( cmd_id == CMD_RADIUS_PSF && ev_btn == 1 ) {
-	    if ( radius_psf < 24 ) {
+	    if ( radius_psf < 64 ) {
 		radius_psf += 1;
 		refresh_loupe = 1;
 	    }
@@ -1212,14 +1283,15 @@ int main( int argc, char *argv[] )
 	    else if ( 0 < radius_psf && ev_win == win_image ) {
 		cmd_id = 0;
 		if ( ev_type == ButtonPress && ev_btn == 1 ) {
-		    sio.printf("perform psf corr.: %d %g %g\n",radius_psf,ev_x,ev_y);
+		    /* sio.printf("perform psf corr.: %d %g %g\n",radius_psf,ev_x,ev_y); */
 		    /* perform */
 		    perform_correct_psf(radius_psf, psf_corr_shape, ev_x, ev_y, &img_buf,
 					&area_pos_arr, &area_rgb_arr);
+		    sel_file_modified_psf = true;
 		    refresh_image = 1;
 		}
 		else if ( ev_type == ButtonPress && ev_btn == 3 ) {
-		    sio.printf("undo psf corr.\n");
+		    /* sio.printf("undo psf corr.\n"); */
 		    /* UNDO */
 		    undo_correct_psf(&img_buf, &area_pos_arr, &area_rgb_arr);
 		    refresh_image = 1;
@@ -1259,11 +1331,13 @@ int main( int argc, char *argv[] )
 	    sio.printf("Open: %s\n", filenames[f_id].cstr());
 		    
 	    if ( load_tiff(filenames[f_id].cstr(), 
-				 &img_buf, &tiff_szt, NULL, NULL) < 0 ) {
+				 &img_buf, &tiff_szt, &icc_buf, NULL) < 0 ) {
 	        sio.eprintf("[ERROR] load_tiff() failed\n");
 		sel_file_id = -1;
 	    }
 	    else {
+		sel_file_id = f_id;
+		sel_file_modified_psf = false;
 
 		/* set random seed */
 		i = 0;
@@ -1276,7 +1350,6 @@ int main( int argc, char *argv[] )
 		}
 		srand(rnd_seed);
 
-		sel_file_id = f_id;
 		//sio.printf("%ld\n", sel_file_id);
 
 		if ( flag_auto_zoom == true ) {
