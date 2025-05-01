@@ -14,7 +14,7 @@ BINDIR  = $(PREFIX)/bin
 
 ########
 
-OBJS = max_memory view_images make_dark make_flat merge_flat proc_images align_center stack_images align_rgb determine_sky pseudo_sky make_sky denoise_images
+OBJS = max_memory view_images scale_images make_dark make_flat merge_flat proc_images align_center stack_images align_rgb determine_sky pseudo_sky make_sky denoise_images
 
 all:: $(OBJS)
 
@@ -28,6 +28,9 @@ max_memory: max_memory.c
 
 view_images: view_images.cc file_io.o tiff_funcs.o display_image.o gui_base.o loupe_funcs.o
 	$(CCC) view_images.cc file_io.o tiff_funcs.o display_image.o gui_base.o loupe_funcs.o -leggx -lX11 -ltiff
+
+scale_images: scale_images.cc tiff_funcs.o image_funcs.o
+	$(CCC) scale_images.cc tiff_funcs.o image_funcs.o -ltiff
 
 make_dark: make_dark.cc tiff_funcs.o
 	$(CCC) make_dark.cc tiff_funcs.o -ltiff

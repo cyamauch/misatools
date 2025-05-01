@@ -970,6 +970,7 @@ int save_tiff( const mdarray &img_buf_in, int sztype,
 
     if ( sztype == 1 && img_buf_in.size_type() == UCHAR_ZT ) bps = 8;
     else if ( sztype == 2 && img_buf_in.size_type() == FLOAT_ZT ) bps = 16;
+    else if ( sztype == -4 && img_buf_in.size_type() == FLOAT_ZT ) bps = 32;
     else {
         sio.eprintf("[ERROR] unexpected array type\n");
 	goto quit;
@@ -995,7 +996,12 @@ int save_tiff( const mdarray &img_buf_in, int sztype,
     TIFFSetField(tiff_out, TIFFTAG_PHOTOMETRIC, PHOTOMETRIC_RGB);
     TIFFSetField(tiff_out, TIFFTAG_BITSPERSAMPLE, bps);
     TIFFSetField(tiff_out, TIFFTAG_SAMPLESPERPIXEL, spp);
-    TIFFSetField(tiff_out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
+    if ( sztype == -4 ) {
+	TIFFSetField(tiff_out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_IEEEFP);
+    }
+    else {
+	TIFFSetField(tiff_out, TIFFTAG_SAMPLEFORMAT, SAMPLEFORMAT_UINT);
+    }
     TIFFSetField(tiff_out, TIFFTAG_ROWSPERSTRIP, (uint32)1);
     
     if ( camera_calibration1 != NULL ) {
@@ -1041,7 +1047,7 @@ int save_tiff( const mdarray &img_buf_in, int sztype,
 	}
 
     }
-    else if ( img_buf_in.size_type() == FLOAT_ZT ) {
+    else if ( sztype == 2 && img_buf_in.size_type() == FLOAT_ZT ) {
 
 	mdarray_uchar strip_buf(false);
 	uint16_t *strip_buf_ptr;
@@ -1076,6 +1082,41 @@ int save_tiff( const mdarray &img_buf_in, int sztype,
 	    pix_offset += width;
 	}
 	
+    }
+    else if ( sztype == -4 && img_buf_in.size_type() == FLOAT_ZT ) {
+
+	mdarray_uchar strip_buf(false);
+	float *strip_buf_ptr;
+
+	const float *rgb_img_in_ptr;
+
+	size_t pix_offset, i;
+
+	strip_buf.resize_1d(byps * spp * width);
+	strip_buf_ptr = (float *)strip_buf.data_ptr();
+
+	pix_offset = 0;
+	for ( i=0 ; i < height ; i++ ) {
+	    size_t j, jj, ch;
+
+	    for ( ch=0 ; ch < 3 ; ch++ ) {
+		/* get ptr of each ch */
+		rgb_img_in_ptr = (const float *)img_buf_in.data_ptr_cs(0,0,ch);
+
+		for ( j=0, jj=ch ; j < width ; j++, jj+=3 ) {
+		    strip_buf_ptr[jj] = rgb_img_in_ptr[pix_offset+j];
+		}
+	    }
+
+	    if ( TIFFWriteEncodedStrip(tiff_out, i, strip_buf_ptr,
+				       width * byps * spp) == 0 ) {
+		sio.eprintf("[ERROR] TIFFWriteEncodedStrip() failed\n");
+		goto quit;
+	    }
+
+	    pix_offset += width;
+	}
+
     }
     else {
 	goto quit;

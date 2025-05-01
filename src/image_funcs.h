@@ -6,4 +6,6 @@
 
 int scale_image( int scale, sli::mdarray *img_io );
 
+int bin_image( int factor, sli::mdarray *img_io, int sztype );
+
 #endif	/* _IMAGE_FUNCS_H */
